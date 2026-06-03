@@ -1,0 +1,6 @@
+# Source masters — the served copies live in assets/menu.mp3 and assets/game.mp3
+/Baseline Racket.mp3
+/Baseline Racket (1).mp3
+
+# Tooling / local
+node_modules/
