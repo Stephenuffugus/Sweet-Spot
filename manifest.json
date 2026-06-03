@@ -2,7 +2,7 @@
   "name": "Sweet Spot",
   "short_name": "Sweet Spot",
   "description": "A one-thumb tennis timing game. Nail the sweet spot, build a streak, bank coins.",
-  "id": "/sweet-spot.html",
+  "id": "sweet-spot.html",
   "start_url": "sweet-spot.html",
   "scope": "./",
   "display": "standalone",
