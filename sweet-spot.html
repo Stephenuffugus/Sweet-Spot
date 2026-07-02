@@ -381,6 +381,24 @@ el('exitGame').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropa
 const s=load();if(s)save=Object.assign(save,s);
 bestEl.textContent=save.best;coinsEl.textContent=save.coins;updateMusicBtn();reset();
 
+/* ===== Sky Wolf Studios host-music handshake =====
+   When embedded in the portal jukebox, the studio soundtrack may own the audio.
+   The portal posts {sws:'host-music', on:true} => silence OUR music (studio
+   wins), on:false => play ours. We gate Music.play/ensure on a host flag so the
+   game's own re-asserts (Music.play('game'/'menu') per screen) can't override a
+   host mute. The player's own musicBtn preference (save.music) is untouched. */
+(function(){
+  let hostOn=false;
+  const realPlay=Music.play.bind(Music), realEnsure=Music.ensure.bind(Music);
+  Music.play=function(role){ this.cur=role; if(hostOn) return; return realPlay(role); };
+  Music.ensure=function(){ if(hostOn) return; return realEnsure(); };
+  window.addEventListener('message',e=>{
+    const d=e&&e.data; if(!d||d.sws!=='host-music') return;
+    hostOn=!!d.on;
+    if(hostOn){ Music.stop(); } else { Music.ensure(); }
+  });
+})();
+
 // PWA: register service worker for offline play (no-op if unsupported / file:// )
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
