@@ -72,6 +72,8 @@
   .b-gold:active{transform:translateY(4px);box-shadow:0 2px 0 #b88a00;}
   .b-ghost{background:transparent;color:var(--line);border:3px solid var(--line);box-shadow:0 6px 0 rgba(244,237,224,.25);}
   .b-ghost:active{transform:translateY(4px);box-shadow:0 2px 0 rgba(244,237,224,.25);}
+  .b-exit{font-size:12px;letter-spacing:2px;padding:15px 22px;min-height:44px;margin-top:16px;opacity:.85;border-width:2px;box-shadow:0 4px 0 rgba(244,237,224,.2);}
+  .b-exit:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(244,237,224,.2);}
   #shop h2{font-family:'Archivo Black',sans-serif;font-size:30px;color:var(--gold);text-shadow:2px 2px 0 var(--ink);margin-bottom:4px;}
   #shop .bal{font-size:13px;letter-spacing:2px;margin-bottom:18px;}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:380px;margin-bottom:18px;overflow-y:auto;max-height:52vh;}
@@ -115,6 +117,7 @@
       <button class="b b-gold" id="again">SERVE AGAIN</button>
       <button class="b b-ghost" id="openShop">SHOP</button>
     </div>
+    <button class="b b-ghost b-exit" id="exitGame">&larr; ALL SKY WOLF GAMES</button>
   </div>
 
   <div id="shop" class="panel">
@@ -124,6 +127,26 @@
     <button class="b b-gold" id="closeShop">BACK TO COURT</button>
   </div>
 </div>
+
+<script>
+/* ===== Sky Wolf Studios embed protocol =====
+   The portal (lucidwinds.com/portal/) frames games with ?embed=1 and
+   listens for {sws:'ready'} and {sws:'close'}.
+   Rules when embedded:
+     - NEVER history.back() or navigate location — an iframe with no
+       history entry goes blank (the black-screen bug).
+     - The in-game back/X returns to the game's OWN menu screen.
+     - Only the menu's explicit exit control calls SWS_EXIT(). */
+(function(){
+  var SWS_EMBED=/[?&]embed=1(&|$)/.test(location.search);
+  window.SWS_EMBED=SWS_EMBED;
+  window.SWS_EXIT=function(){
+    if(SWS_EMBED&&parent!==window){try{parent.postMessage({sws:'close'},'*');}catch(e){} return;}
+    location.href='https://lucidwinds.com/portal/';
+  };
+  if(SWS_EMBED&&parent!==window){try{parent.postMessage({sws:'ready'},'*');}catch(e){}}
+})();
+</script>
 
 <script>
 // ---------- CONFIG: all balance/tuning lives here (see handoff §3) ----------
@@ -353,6 +376,7 @@ el('again').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagat
 el('openShop').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();over.classList.remove('show');renderShop();shop.classList.add('show');});
 el('closeShop').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();shop.classList.remove('show');over.classList.add('show');});
 el('musicBtn').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();Music.toggle();});
+el('exitGame').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();window.SWS_EXIT();});
 
 const s=load();if(s)save=Object.assign(save,s);
 bestEl.textContent=save.best;coinsEl.textContent=save.coins;updateMusicBtn();reset();
