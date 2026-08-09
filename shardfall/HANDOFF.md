@@ -1,3 +1,25 @@
+# SHARDFALL — handoff
+
+> **Session 10 rebuilt most of this document's subject matter.** The system-by-system map below is
+> still accurate for the systems it names, but these are new and are not in it. `CLAUDE.md` rules
+> 15-20 are the short version; `design/CURRENT-STATE.md` is the generated numbers.
+>
+> | system | where | what it is |
+> |---|---|---|
+> | the three beats | `upEnemies`, `mkAtk`, `atkReach` | every enemy attack is tell -> live -> **spent**. The recovery window takes `RECOVER_DMG` and cannot act or shoot. The ground marker draws real reach. |
+> | depth curves | `depthHP` / `depthDmg` / `depthMul` | HP scales faster than damage, so deep enemies are tougher rather than deadlier. `depthMul` stays linear for the economy only. |
+> | caps | `ARMOR_MIN_FRAC`, `softCrit`, `softInc` | armour removes at most 78% of a hit, crit damage softens past 4x, the additive pool softens past +300%. |
+> | hazards | `HAZ`, `addHaz`, `upHaz` | area denial as a first-class entity. Boss shockwaves, fire trails, spore clouds, biome vents, and the player's Crucible. Capped at `HAZ_MAX`. |
+> | boss phases | `bossPhase`, `bossOngoing`, `e.pats` | phases ACCUMULATE and colour ongoing behaviour. Seven patterns: slam, volley, spores, firewall, summon, beam, devour. |
+> | the roster | `ENEMIES`, `enemyCost`, `eliteFor` | 26 creatures covering swarm / bruiser / ranged / support / denial / terrain. Elites are rolled from what is FAIR on that creature. |
+> | encounters | `genChunk` | a threat budget per chunk, spent on a group with roles, at most one support unit. Draws only from the `spawn` strand. |
+> | itemisation | `mkItem(base, rarity, ilvl)`, `AFF_TIER_ILVL`, `MODAFF` | item level is depth. Five affix tiers gated by it, twelve behaviour-changing modifier affixes, depth-gated bases, depth-scaled rarity. |
+> | the conditional layer | `condMul`, `onHit`, `onKill` | every "more damage IF", interrupt, stagger, splinter and contagion. Both damage paths call all three. |
+> | run modifiers | `applyRunMods`, `RUNM` | boons and attunements can write contract changes into the attack, not just percentages. |
+> | the descent arc | `BSHAPE`, `calibrateAir`, `ROOMS`, `VENTS` | each band declares its air fraction and the generator solves for it. Room templates, spore/flame vents, forge heat, abyss darkness. |
+> | feel | `hitStop`/`HS`/`TSCALE`, `addShake`, `HURT` | hitstop is a time scale with a full-speed impact frame; shake is capped, squared and distance-attenuated; damage taken shows a directional flare, not a number. |
+> | the long tail | `ECHOES`/`META.echoLv`, `BOUNTIES`/`BSTATE` | an unbounded difficulty ladder earned by escaping, and three per-run objectives that pay on death. |
+
 # SHARDFALL — Engineering Handoff
 
 **State:** playable, ~3000 lines, sessions 1-8 shipped. Renders in a real browser, installs

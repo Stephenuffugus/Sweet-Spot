@@ -44,12 +44,12 @@ A(whole > base, 'increased damage actually increases damage');
 RUNB = RUNB0(); refreshAttacks();
 
 // two support gems must each be their own multiplier
-EQ.melee.sockets[0] = { id: 'addedfire', tier: 1 };   // more 1.30
+EQ.melee.sockets[0] = { id: 'conc', tier: 1 };        // more 1.55
 refreshAttacks(); const one = ATK.melee.dmg;
-A(near(one, base * 1.3, 0.01), 'one support gem applies its `more` multiplier');
+A(near(one, base * 1.55, 0.01), 'one support gem applies its `more` multiplier');
 EQ.melee.sockets[1] = { id: 'heavyimpact', tier: 1 }; // more 1.45
 refreshAttacks();
-A(near(ATK.melee.dmg, base * 1.3 * 1.45, 0.02), 'two support gems multiply with each other');
+A(near(ATK.melee.dmg, base * 1.55 * 1.45, 0.02), 'two support gems multiply with each other');
 
 // The two pools must not contaminate. With supports fixed, adding increased must scale the
 // whole thing by the same ratio it scales a bare weapon by — that is what separates the pools.
@@ -59,7 +59,7 @@ const ratioWith = ATK.melee.dmg / withSupports;
 EQ.melee.sockets = [null, null, null]; refreshAttacks();
 const ratioBare = ATK.melee.dmg / base;
 A(near(ratioWith, ratioBare, 0.001), 'more and increased are independent: base x (1+inc) x more');
-A(near(withSupports, base * 1.3 * 1.45, 0.05), 'supports multiply, they do not join the additive pool');
+A(near(withSupports, base * 1.55 * 1.45, 0.05), 'supports multiply, they do not join the additive pool');
 RUNB = RUNB0(); refreshAttacks();
 
 // ---------- 2. CRIT ----------
@@ -87,7 +87,8 @@ RUNB = RUNB0(); refreshAttacks(); NOCRIT();
 // ---------- 3. FLAT ARMOR ----------
 console.log('\n-- flat armor --');
 A(applyArmor(30, 10) === 20, 'armor subtracts flat');
-A(applyArmor(5, 100) === ARMOR_FLOOR, 'armor can never reduce a hit below the floor');
+A(applyArmor(5, 100) === 5 * ARMOR_MIN_FRAC, 'armor never removes more than its share of a hit');
+A(applyArmor(0.5, 100) === ARMOR_FLOOR, 'and never takes a hit below the absolute floor');
 {
   OFF(); EN.length = 0; NOCRIT();
   const soft = mkE({ arm: 0 }); EN.push(soft); P.mcd = 0; doMelee(); const softDmg = 5000 - soft.hp;
@@ -388,9 +389,15 @@ console.log('\n-- new gems --');
   const armored = mkE({ arm: 20 }); EN.push(armored); P.mcd = 0; doMelee();
   A(armored.arm < 20, 'Sunder shreds armor and it stays shredded');
   // Twin Strike lands two hits
+  // Damage numbers coalesce by position now, so counting them no longer counts HITS. Measure
+  // the thing that actually matters: a twin strike takes 1.6x a bar off (1.0 + 0.6).
+  EN.length = 0; EQ.melee.sockets = [null, null, null]; refreshAttacks();
+  const one = mkE({ hp: 90000, maxhp: 90000 }); EN.push(one); P.mcd = 0; doMelee();
+  const single = 90000 - one.hp;
   EN.length = 0; EQ.melee.sockets = [{ id: 'twin', tier: 1 }, null, null]; refreshAttacks();
-  const tw = mkE(); EN.push(tw); const n0 = DMGN.length; P.mcd = 0; doMelee();
-  A(DMGN.length - n0 >= 2, 'Twin Strike registers two separate hits');
+  const tw = mkE({ hp: 90000, maxhp: 90000 }); EN.push(tw); P.mcd = 0; doMelee();
+  const twin = 90000 - tw.hp;
+  A(twin > single * 1.3, `Twin Strike lands a second hit (${single.toFixed(0)} -> ${twin.toFixed(0)})`);
   // Deep Cut trades hit damage for ailment damage
   EQ.melee.sockets = [{ id: 'serration', tier: 1 }, null, null]; refreshAttacks();
   const plainHit = ATK.melee.dmg, plainAil = ATK.melee.st.bleed;
@@ -490,8 +497,10 @@ console.log('\n-- regressions --');
 {
   // Abilities passed dkey='dmg' into resolveDmg, which adds inc(dkey) AND inc('dmg') — so
   // every point of increased damage counted twice for abilities and once for weapons.
-  OFF(); RUNB = RUNB0(); META.tree = {}; refreshAttacks();
-  EQ.armor = mkItem('robe', 0); EQ.armor.sc = ['b', 'b', 'b'];
+  // Strip the weapons too: gear affixes feed inc('dmg'), and a leftover rare from an earlier
+  // section quietly makes the "before" number non-zero and the ratio wrong.
+  OFF(); RUNB = RUNB0(); META.tree = {}; EQ.melee = null; EQ.ranged = null; refreshAttacks();
+  EQ.armor = mkItem('robe', 0); EQ.armor.affixes = {}; EQ.armor.sc = ['b', 'b', 'b'];
   EQ.armor.sockets = [{ id: 'meteor', tier: 1 }, null, null]; refreshAttacks();
   const a0 = ATK.abil.dmg;
   RUNB.dmg = 1.0; refreshAttacks();

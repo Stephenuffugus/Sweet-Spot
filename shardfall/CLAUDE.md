@@ -62,12 +62,36 @@ thumb, and with a stick, and with a cursor?".
     share a top shape.
 14. **Don't add scope that wasn't asked for.** The owner is explicit about this. Build the
    thing requested, note adjacent opportunities in a comment or a message, don't just do them.
+15. **A fight has THREE beats: `wind` -> `act` -> `rec`.** The tell, the live frames, and the
+   punish window. `mkAtk()` is the only place a table row becomes a live attack — it clamps the
+   windup to `WINDUP_FLOOR` and derives recovery. Never build an enemy without it. The ground
+   marker draws `atkReach()` (range + lunge x act), never `range`; drawing `range` taught the
+   player a lie by up to 3.6x and that is what a whole suite now exists to prevent.
+16. **Conditional damage lives in `condMul()`, on-hit riders in `onHit()`, on-kill in `onKill()`.**
+   `strike()` and `projStrike()` both call all three. A conditional wired into one path only is
+   not a weaker gem — it is a pure downside for every build that uses the other hand. Suite 13
+   asserts melee and ranged pay identically for every conditional.
+17. **Item level decides how good an item may be.** `mkItem(base, rarity, ilvl)`; `ilvl` is depth
+   in metres. Affix tiers gate on it (`AFF_TIER_ILVL`), modifier affixes gate on it, the base
+   pool gates on it, and `rollRarity()` reads it. A drop site that forgets to pass it silently
+   falls back to the player's current depth, which is usually right and occasionally not.
+18. **The rock belongs to the `terrain` strand and to nothing else.** Vaults, secret pockets,
+   room templates and vents are all SHAPE, so they generate from `terrain`; what is inside them
+   is `poi`. A shrine may not carve its own cavity. Suite 14 fingerprints solidity positionally
+   and will catch any strand that starts editing walls.
+19. **Area denial is a `HAZ` entry, not a projectile.** `addHaz()` / `upHaz()`, capped at
+   `HAZ_MAX`. Boss shockwaves, fire trails, spore clouds, biome vents and the player's own
+   Crucible are all the same object.
+20. **`addShake()` and `hitStop()` are the only ways to move the camera or bend time.** Shake is
+   capped at `SHAKE_MAX` (8px), squared, and falls off with distance; ordinary hits do not shake
+   at all. Hitstop is a time SCALE with a full-speed impact frame first and never a hard zero —
+   and `TSCALE` is why input forgiveness (`jbuf`, `coyote`) decays on real time, not sim time.
 
 ## Testing
 
 ```bash
-./test/run.sh          # all node suites (2-9)
-./test/run.sh 9        # one suite
+./test/run.sh          # all node suites (2-15), ~960 assertions
+./test/run.sh 13       # one suite
 node test/browser.js   # real Chromium: boot, input, render, no console errors
 node test/pwa.js       # manifest, service worker, offline reload, save migration
 node test/shots.js     # writes screenshots to test/shots/ — the only way to judge FEEL
@@ -78,8 +102,23 @@ DOM/canvas stub, and runs each suite in its own process. Node only, no deps. The
 PWA suites need Playwright, which lives **outside** the repo (set `PW_DIR` if yours differs) so
 the game stays dependency-free.
 
-**When you add a system, add assertions to a new `test/suite-N.js`.** Copy the shape of
-suite-7 or suite-8. The harness cannot judge *feel* — it catches logic errors, NaN leaks, cap violations
+The suites, and what each one is for:
+
+| suite | covers |
+|---|---|
+| 2-6 | boot, save, world gen, POIs, flight, digging, perf under load |
+| 7 | the stat model, crit, armour, ailments, Focus, gem tiers, the Vault, The Weight |
+| 8 | sprites and the three visual laws (luminance, contrast, top-shape uniqueness) |
+| 9 | the Lattice: glyphs, strand independence, dissonance, the escape |
+| 10 | combat foundations: telegraph honesty, the windup floor, the punish window, the two depth curves, **time-to-kill / time-to-die per class per band** |
+| 11 | the roster: role coverage, healer, warder, artillery, burrower, packs, elite fairness, encounter composition |
+| 12 | itemisation: item level, affix tiers, modifier affixes, base gating, drop volume |
+| 13 | buildcraft: 14 archetypes, no dead gems, conditionals paying identically on both paths, the soup test |
+| 14 | the descent arc, calibrated air fractions, room templates, vents, band identity, strand ownership of the rock |
+| 15 | the Echo ladder, bounties, hitstop shape, shake caps, damage-number coalescing, accessibility |
+
+**When you add a system, add assertions to a new `test/suite-N.js`** and add its number to
+`SUITES` in `run.sh`. Copy the shape of suite-10 or suite-13. The harness cannot judge *feel* — it catches logic errors, NaN leaks, cap violations
 and regressions. It has caught a real bug every session, including `FLY_THRUST` exactly
 equalling gravity, a projectile burning its whole lifetime in three frames, and a hand-built
 test enemy with no `invT` producing NaN.
@@ -108,6 +147,13 @@ Traps that have bitten these tests before, in order of frequency:
   behaviour — menu focus, computed styles, mouse coordinates — belongs in `test/browser.js`.
 - **The game boots to a title screen**, which holds the sim paused on purpose. A test that
   asserts "the loop is running" must call `startRun()` first.
+- **Damage numbers coalesce**, so counting `DMGN` no longer counts hits. Assert on HP deltas.
+- **Gear affixes feed `inc()`**, so a rare left equipped by an earlier section quietly poisons any
+  later ratio test. Clear `EQ` before asserting on the additive pool.
+- **A 40-tile window is not a band.** Air fraction, standing spots and density all have to be
+  sampled across hundreds of tiles of width, or one large cavern reads as 100% air.
+- **Echoes and bounties persist in `META`.** Reset `META.echoLv`, `META.maxEcho` and `META.threat`
+  at the end of a block or every later suite inherits them.
 
 ## Conventions
 

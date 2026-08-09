@@ -1,7 +1,18 @@
 # SHARDFALL — the long plan
 
-**Status:** written at the end of session 8. **Session 9 executed Sprints 1 and 2 and added a
-system that was not in this plan — see §5.5 below.** Everything else stands.
+**Status: session 10 executed Sprints 0, 3, 4, 5, 6, 7, 8 and most of 9, plus a long-tail system
+that was not in this plan (§9 below).** What remains is play, not build. The numbered sprints
+below are kept for their reasoning; each one now carries what actually shipped.
+
+| | before session 10 | after |
+|---|---|---|
+| content | 62 gems · 19 enemies · 12 boons · 22 attunements | **77 gems · 26 enemies · 21 boons · 29 attunements · 12 modifier affixes · 60 affix tiers · 6 room templates · 10 echo rules · 12 bounties** |
+| assertions | 429 across 7 suites | **962 across 14 suites** |
+| the descent | caves 90% air, then flat for 2,800 tiles | **a measured arc: 0.38 → 0.61 → 0.50 → 0.33 → 0.66** |
+| a fight | tell → swing | **tell → swing → punish window, with interrupts** |
+| a 3,000m sword | identical to a 100m sword | **6.4x the item score, 20% chance of a build-defining modifier** |
+| after Threat V | nothing | **an unbounded Echo ladder** |
+
 **Companion files:** `CURRENT-STATE.md` (generated, real numbers), `RESEARCH.md` (evidence,
 sourced), `art-prototype.html` (the visual spec, rendered).
 
@@ -14,17 +25,16 @@ Read this file first. It carries the decisions. `RESEARCH.md` carries the reason
 
 ```bash
 cd shardfall
-./test/run.sh          # 429 assertions across 7 suites — must be green before you touch anything
-node test/browser.js   # 36 checks in real Chromium
-node test/pwa.js       # 24 checks: offline, save migration
-node test/shots.js     # screenshots to test/shots/ — the only way to judge feel
+./test/run.sh          # 962 assertions across 14 suites — must be green before you touch anything
+PW_DIR=<playwright>/node_modules node test/browser.js   # 39 checks in real Chromium
+PW_DIR=... node test/pwa.js      # 24 checks: offline, save migration
+PW_DIR=... node test/shots.js    # screenshots to test/shots/ — the only way to judge feel
 ./design/audit.sh      # regenerate CURRENT-STATE.md from the live tables
 ```
 
-Then read, in order: `CLAUDE.md` (hard rules), this file's §1 and §2, then start Sprint 0.
-
-Do not start by adding content. §2 lists five structural faults, three of them confirmed by
-measurement this session, and every one of them makes new content worth less.
+**The single highest-value thing that can happen next is somebody playing it with a controller
+and writing down what felt bad.** Everything below this line is a plan for making the game
+better; none of it substitutes for that, and it has now been true for ten sessions.
 
 ---
 

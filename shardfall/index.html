@@ -250,8 +250,28 @@ const CAMP_X=Math.floor(WORLD_W/2); // camp centered on surface
 const CRIT_BASE=0.05;    // 5% base crit chance
 const CRIT_MULT=1.8;     // base crit multiplier
 const CRIT_ST=1.5;       // crits apply status at 1.5x potency — crit and ailment builds overlap
+// Crit multiplier is ADDITIVE and softly capped. D4 moved crit out of the multiplicative bucket
+// for exactly this reason: unbounded crit damage is the single biggest damage-soup vector, and it
+// makes every other offensive stat a rounding error once it snowballs (PLAN §4.4).
+// The additive pool is fed by gear affixes, the meta tree, class passives, shrine boons AND
+// in-run attunements. With 12 affixes x 15 tree nodes x 12 boons x 22 attunements all pouring
+// into one number, the honest question is not whether it runs away but when. It softens past
+// +300% so stacking is always worth something and never worth everything.
+const INC_SOFT=3.0, INC_SOFT_RATE=0.35;
+const CRIT_SOFT=4.0;     // beyond this multiplier, further crit damage is worth a quarter
+const CRIT_SOFT_RATE=0.25;
 const ARMOR_FLOOR=1;     // armor can never reduce a hit below this
+// ...and never below this FRACTION of the incoming hit. Unbounded flat subtraction against
+// depth-scaled damage inverts at depth — armour stacking becomes either useless or total. A hit
+// always lands for at least 15%, so armour is a strong-vs-swarms stat and never an off switch.
+const ARMOR_MIN_FRAC=0.22;
 const STACK_MAX=3;       // burn/bleed stack up to 3 instances; chill/shock stay max-only
+// The tell must be longer than a human takes to see it. 250ms is the accepted floor for a simple
+// visual reaction; everything windup-related clamps to this AFTER every multiplier (PLAN §Sprint 0.4).
+const WINDUP_FLOOR=0.26;
+// After the strike lands the enemy is open. `tell -> punish -> reset` is the whole loop; without
+// the third beat there is no window to punish INTO, and combat is just "wait, then hit" (Sprint 0.5).
+const RECOVER_DMG=1.25;  // damage multiplier while an enemy is recovering
 // --- Focus: the ability resource (DESIGN-PLAN §3.2) ---
 const FOCUS_MAX=100, FOCUS_HIT=8, FOCUS_KILL=25, FOCUS_REGEN=2;
 // --- The Weight: anti-camping pressure (DESIGN-PLAN §3.4.2) ---
@@ -441,6 +461,29 @@ const SPR={
   '.o1223333221o.','.o122o33o221o.','..o12o33o21o..','...o13443o1o..',
   '....o3443o....','.....o443o....','......o4o.....','..............',
   '..............','..............']]},
+ // ---- CONTENT WAVE 2: the roles the roster was missing. Each one owns a distinct top
+ // shape in every biome it appears in, which suite 8 asserts rather than trusts. ----
+ delvemite:{r:'dirt',f:[[
+  '...oo....','..o11o...','.o1221o..','o122331o.','o12R331o.','.o12331o.','.oo1o1oo.','..o...o..'],[
+  '...oo....','..o11o...','.o1221o..','o122331o.','o12R331o.','.o12331o.','.o1oo1o..','.o.....o.']]},
+ burrower:{r:'stone',f:[[
+  '.....ooooo.....','...oo11111oo...','..o112233211o..','.o11223333221o.','o1122334433221o','oR2233444433R21','o1223344444321o','.o12334444321o.','.o12233444321o.','..o12233332 1o.','..o1223333 1o..','...oo12221oo...','....o.ooo.o....','.....o...o.....'],[
+  '.....ooooo.....','...oo11111oo...','..o112233211o..','.o11223333221o.','o1122334433221o','oR2233444433R21','o1223344444321o','.o12334444321o.','..o1233444321o.','..o12233332 1o.','...o122333 1o..','...oo1222 oo...','....oo.o.oo....','......o.o......']]},
+ bloomback:{r:'rot',f:[[
+  '..ooo...ooo...ooo..','.o111o.o111o.o111o.','o11221 o12221 o1221','o1223211122232112 1','.o1223333333333221o','..o1223344443322 o.','.o11223344443322 1o','o1122334444443322 1','o1223344444444332 1','o1223344o....o4332 ','o12233444444444332 ','.o1223344444443321o','.o12233444444433 1o','..o122333444333 1o.','..o12233333333 1o..','.o2o3344o..o4433o2o','o.oo4455o..o5544oo.','...oooooo..oooooo..'],[
+  '..ooo...ooo...ooo..','.o111o.o111o.o111o.','o11221 o12221 o1221','o1223211122232112 1','.o1223333333333221o','..o1223344443322 o.','.o11223344443322 1o','o1122334444443322 1','o1223344444444332 1','o1223344o....o4332 ','o12233444444444332 ','.o1223344444443321o','.o12233444444433 1o','..o122333444333 1o.','.o1223333333333 1o.','o2oo3344o..o4433oo2','.o.o4455o..o5544o.o','..ooo.oooo.oooo.oo.']]},
+ hollowed:{r:'bone',f:[[
+  '..o...o...o..','.o1o.o1o.o1o.','o11o o1o o11o','o1122111122 o','.o11222222 1o','.o1223333221o','o112233443221','o1223344433 1','o1223o..o332 ','o1223o..o332 ','o12233443321o','.o1233443321o','.o1233443321o','..o12334432o.','..o1233443 o.','.o12o3443o21o','o22oo444oo22o','oooo.ooo.oooo'],[
+  '..o...o...o..','.o1o.o1o.o1o.','o11o o1o o11o','o1122111122 o','.o11222222 1o','.o1223333221o','o112233443221','o1223344433 1','o1223o..o332 ','o1223o..o332 ','o12233443321o','.o1233443321o','.o1233443321o','..o12334432o.','.o12334433 1o','o12oo444oo21o','.o2o.444.o22o','.ooo.ooo.ooo.']]},
+ chanter:{r:'bone',f:[[
+  '....oooo....B','...o1111o..BB','..o112211oBBB','..o1122 1o.BB','..o11221 o.B.','.o1122331o...','.o1223332o...','o112233321o..','o122333321o..','o12233332 o..','o12233332 o..','.o1223332o...','.o1223332o...','..o122321o...','..o12232o....','...o122o.....','....ooo......','.............'],[
+  '....oooo...B.','...o1111o.BBB','..o112211oBBB','..o1122 1o.BB','..o11221 o.B.','.o1122331o...','.o1223332o...','o112233321o..','o122333321o..','o12233332 o..','o12233332 o..','.o1223332o...','..o122332o...','..o122321o...','...o1223o....','...o122o.....','....ooo......','.............']]},
+ warder:{r:'stone',f:[[
+  'oo..........oo','o1oooooooooo1o','o111111111111o','.o1122222211o.','.o1223333221o.','o11223333322 o','o12233SSS3321o','o1223SBBBS321o','o1223SBBBS321o','o12233SSS3321o','o11223333322 o','.o1223333221o.','.o1122222211o.','o11o333333o11o','o22oo4444oo22o','oooo.oooo.oooo'],[
+  'oo..........oo','o1oooooooooo1o','o111111111111o','.o1122222211o.','.o1223333221o.','o11223333322 o','o12233BBB3321o','o1223BSSSB321o','o1223BSSSB321o','o12233BBB3321o','o11223333322 o','.o1223333221o.','.o1122222211o.','o11o333333o11o','o22oo4444oo22o','oooo.oooo.oooo']]},
+ mortar:{r:'forge',f:[[
+  '.........oooo.','........oE11o.','.......oE111o.','......o1122o..','oooooo1122o...','o111112211o...','o11222222211oo','o12233333322 o','o1223444443321','o1223444443321','o12233333322 o','o11222222211oo','o11o333333o11o','o22oo4444oo22o','oooo.oooo.oooo'],[
+  '.......oooo...','......oE11o...','.....oE111o...','.....o1122o...','ooooo11122o...','o1111122211o..','o11222222211oo','o12233333322 o','o1223444443321','o1223444443321','o12233333322 o','o11222222211oo','o11o333333o11o','o22oo4444oo22o','oooo.oooo.oooo']]},
  // ---- MINIBOSSES: same laws, bigger, with an accent that names them ----
  warden:{r:'dirt',f:[['..o..oooooooooooo..o....','.o1oo1111111111111oo1o..','o112211GG111111GG112211.','o1122111111111111112211.','.o11222222222222222211o.','.o1122233333333332221o..','o11222333444444433322211','o12233344444444443332221','o12233444444444444433221','o1223344o........o443321','o1223344o........o443321','o12233444444444444433221','o1223344444444444443321o','o122334444444444443321o.','o12233444444444443321o..','o1223344444444443321o...','o122334444444443321o....','o1223o4444444o3321o.....','o1233o444444o43321o.....','o2344o4444o443321o......','o3455o44oo4443321o......','o455oo4o..o443321o......','oo45o.o....oo4321o......','.ooo.........ooooo......','........................','........................','........................','........................','........................','........................']]},
  sporemother:{r:'fungal',f:[[
@@ -494,14 +537,58 @@ const TILES={
  8:{c:'#3fc9c1',hard:0,ore:1},     // shard ore
  10:{c:'#41464e',hard:0,secret:1}, // secret wall — mimics stone, breaks to any weapon
 };
+// THE DESCENT ARC. The world used to be one noise field with a density number per band, and the
+// measured result was a caves band that was 90% air — an open void, not caves — and then five
+// bands of near-identical rubble for 2,800 tiles. There was no shape to feel.
+//
+// Each band now declares the fraction of itself that is AIR, and the generator solves for the
+// threshold that produces it (calibrateAir) instead of hoping a magic number lands. `ax`/`ay`
+// stretch the noise so density and CHARACTER are separate knobs: the same 0.42 air reads as
+// winding corridors or as vertical shafts depending on which axis is compressed.
+//
+// The arc is tight -> open -> built -> tight -> vast. Tension and relief alternate, and the last
+// band is both the most open and the most dangerous, which is the note to end on.
+const BSHAPE={
+ surface:{air:0,    ax:1,    ay:1,    n:'the rim'},
+ caves:  {air:0.42, ax:1.45, ay:0.85, n:'tight, winding'},
+ fungal: {air:0.58, ax:0.70, ay:1.60, n:'open caverns and vertical shafts', vent:'spore'},
+ ruins:  {air:0.48, ax:1.00, ay:1.00, n:'built geometry', rooms:0.55},
+ forge:  {air:0.28, ax:1.25, ay:1.15, n:'narrow and hot', heat:30, vent:'flame'},
+ abyss:  {air:0.62, ax:0.85, ay:0.85, n:'vast, dark, sparse', dark:1.28},
+};
+// ROOM TEMPLATES. Spelunky ships a small set and gets enormous variety out of placement; the
+// ruins had none at all, which is why "architectural" was a palette and not a shape. Stamped from
+// the TERRAIN strand, so a room is part of the world's bones: reroll the caches and the chest
+// inside it moves, but the room stays exactly where you learned it was.
+//   #  wall (the band's own stone)   .  air   =  a one-tile ledge you can stand on
+const ROOMS=[
+ // pillared hall — cover against ranged, and a reason to move laterally
+ ['##################','#................#','#..##..##..##..#.#','#..##..##..##..#.#',
+  '#..##..##..##..#.#','#................#','##################'],
+ // two tiers — the flanking room. Archers up top, brutes below.
+ ['################','#..............#','#..==....==....#','#..............#',
+  '####==......====','#..............#','#....====......#','################'],
+ // the well — a vertical shaft with ledges, drops you fast if you are careless
+ ['############','#....##....#','#.==.##.==.#','#....##....#','#.==......=#',
+  '#....##....#','#.==.##.==.#','#....##....#','############'],
+ // the crossing — four ways out, nothing to hide behind
+ ['##########','####..####','####..####','..........','..........',
+  '####..####','####..####','##########'],
+ // collapsed gallery — broken floor, a fall you have to plan
+ ['####################','#..................#','#===..====...====..#','#..................#',
+  '#...====...====....#','#..................#','####################'],
+ // the cell block — small chambers, one at a time, good for a bruiser
+ ['##############','#....#...#...#','#....#...#...#','#..#########.#','#............#',
+  '#.#########..#','#...#...#....#','##############'],
+];
 // biome by tile depth: [maxY, name, groundTile, caveScale, enemyTypes]
 const BIOMES=[
  [SURFACE+10,'surface',1,0.00,['crawler']],
- [400,'caves',2,0.055,['crawler','bat','rockling']],
- [900,'fungal',4,0.06,['spitter','sporeling','stalker','bat']],
- [1600,'ruins',5,0.05,['brute','archer','shieldman']],
- [2400,'forge',6,0.055,['ember','smith','spitter']],
- [WORLD_H,'abyss',7,0.045,['wraith','voidspawn','stalker']],
+ [400,'caves',2,0.055,['crawler','bat','rockling','delvemite','burrower','spitter']],
+ [900,'fungal',4,0.06,['spitter','sporeling','stalker','bat','bloomback','delvemite']],
+ [1600,'ruins',5,0.05,['brute','archer','shieldman','chanter','warder','mortar','burrower']],
+ [2400,'forge',6,0.055,['ember','smith','spitter','mortar','warder','burrower']],
+ [WORLD_H,'abyss',7,0.045,['wraith','voidspawn','stalker','hollowed','chanter']],
 ];
 // ===== GEMS =====
 // THE ONE RULE (DESIGN-PLAN §1.1): support gems and uniques write to `a.more` (multiplicative,
@@ -528,10 +615,10 @@ const GEMS={
  // ---- SUPPORT: every damage change here is `more` ----
  multishot:{t:'sup',for:'ranged', n:'Multishot', col:'g', d:'3 projectiles, 30% less damage',
    mod:a=>{a.count=3;a.more*=0.7}},
- addedfire:{t:'sup',for:'any',    n:'Added Fire', col:'b', d:'+30% more damage',
-   mod:a=>{a.more*=1.3;a.col='#e07a3f'}},
- fasteratk:{t:'sup',for:'any',    n:'Faster Attacks', col:'g', d:'25% faster',
-   mod:a=>{a.cd*=0.75}},
+ addedfire:{t:'sup',for:'any',    n:'Added Fire', col:'b', d:'hits burn, +30% more vs burning',
+   mod:a=>{a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,0.25);a.vsBurn=(a.vsBurn||0)+0.30;a.more*=0.98;a.col='#e07a3f'}},
+ fasteratk:{t:'sup',for:'any',    n:'Faster Attacks', col:'g', d:'25% faster, 10% less damage',
+   mod:a=>{a.cd*=0.75;a.more*=0.90}},
  pierce:   {t:'sup',for:'ranged', n:'Pierce', col:'g', d:'+2 pierce',
    mod:a=>{a.pierce+=2}},
  lifeleech:{t:'sup',for:'any',    n:'Life Leech', col:'r', d:'heal 12% of damage dealt',
@@ -610,8 +697,8 @@ const GEMS={
    mod:a=>{a.cull=Math.max(a.cull||0,0.12);a.more*=0.92}},
  momentum: {t:'sup',for:'any', n:'Momentum', col:'g', d:'damage scales with move speed',
    mod:a=>{a.momentum=(a.momentum||0)+0.75;a.more*=0.85}},
- overload: {t:'sup',for:'any', n:'Overload', col:'r', d:'+80% more damage, +60% cooldown',
-   mod:a=>{a.more*=1.8;a.cd*=1.6}},
+ overload: {t:'sup',for:'any', n:'Overload', col:'r', d:'+80% more damage, +60% cooldown, keeps them down',
+   mod:a=>{a.more*=1.8;a.cd*=1.6;a.stagger=(a.stagger||0)+0.25}},
  precision:{t:'sup',for:'any', n:'Precision', col:'g', d:'+18% crit chance, −15% damage',
    mod:a=>{a.critAdd=(a.critAdd||0)+0.18;a.critMultAdd=(a.critMultAdd||0)+0.15;a.more*=0.85}},
  twin:     {t:'sup',for:'melee',n:'Twin Strike', col:'g', d:'strike twice at 60% each',
@@ -629,6 +716,41 @@ const GEMS={
  sentry:   {t:'abil',for:'armor',n:'Shard Sentry', col:'g', cd:16, fc:60, fx:'sentry', d:'turret fires your ranged attack'},
  decoy:    {t:'abil',for:'armor',n:'Decoy', col:'g', cd:12, fc:35, fx:'decoy', d:'taunt dummy pulls aggro'},
  rupture:  {t:'abil',for:'armor',n:'Rupture', col:'b', cd:10, fc:50, fx:'rupture', d:'detonate all nearby ailments'},
+
+ // ================= CONTENT WAVE 3 =================
+ // The audit question for this wave was "what does this let the skill DO that it could not?".
+ // Anything whose honest answer was "the same thing, harder" stayed out — that is what an affix
+ // is for. Most of these only became possible when enemies gained a third beat: a support that
+ // rewards hitting a SPENT enemy, or one that CANCELS a windup, has nothing to attach to in a
+ // game where the enemy is only ever winding up or swinging.
+ // ---- SUPPORT: conditions you create, rather than numbers you stack ----
+ bracing:  {t:'sup',for:'any', n:'Bracing Blow', col:'r', d:'hits interrupt an enemy mid-windup',
+   mod:a=>{a.interrupt=1;a.stagger=(a.stagger||0)+0.12;a.more*=0.82}},
+ punish:   {t:'sup',for:'any', n:'Punish', col:'g', d:'+65% more damage to a spent enemy',
+   mod:a=>{a.vsSpent=(a.vsSpent||0)+0.65;a.more*=0.92}},
+ kindling: {t:'sup',for:'any', n:'Kindling', col:'b', d:'+35% more damage to burning enemies',
+   mod:a=>{a.vsBurn=(a.vsBurn||0)+0.35;a.more*=0.95}},
+ rimebound:{t:'sup',for:'any', n:'Rimebound', col:'b', d:'+35% more damage to chilled enemies',
+   mod:a=>{a.vsChill=(a.vsChill||0)+0.35;a.more*=0.95}},
+ hunger:   {t:'sup',for:'any', n:'Hunger', col:'r', d:'+40% more damage below half health',
+   mod:a=>{a.vsLow=(a.vsLow||0)+0.40;a.more*=0.90}},
+ splinter: {t:'sup',for:'any', n:'Splinter', col:'g', d:'kills scatter shards',
+   mod:a=>{a.splinter=1;a.more*=0.90}},
+ contagion:{t:'sup',for:'any', n:'Contagion', col:'b', d:'ailments spread on kill',
+   mod:a=>{a.contagion=1;a.more*=0.92}},
+ // ---- AURA ----
+ vigil:    {t:'aura',for:'armor',n:'Vigil', col:'b', d:'+25% damage while untouched for 3s'},
+ reaper:   {t:'aura',for:'armor',n:"Reaper's Eye", col:'r', d:'+20% vs enemies below half health'},
+ tempo:    {t:'aura',for:'armor',n:'Tempo', col:'g', d:'kills stack attack speed, up to 5'},
+ // ---- ABILITY ----
+ crucible: {t:'abil',for:'armor',n:'Crucible', col:'b', cd:13, fc:50, fx:'crucible', d:'lay a burning field'},
+ wardbreak:{t:'abil',for:'armor',n:'Sunder Ward', col:'r', cd:12, fc:45, fx:'wardbreak', d:'strip armor and stagger everything near'},
+ tether:   {t:'abil',for:'armor',n:'Tether', col:'b', cd:15, fc:55, fx:'tether', d:'link enemies — damage one, damage all'},
+ // ---- SKILL ----
+ hail:     {t:'skill',for:'ranged',n:'Hail', col:'g', d:'three arcing shots, they bounce and burst',
+   mod:a=>{a.dmg*=0.85;a.count=3;a.speed*=0.7;a.grav=1;a.bounce=1;a.explode=32;a.cd*=1.15;a.life=2.2;a.col='#8fdc6a'}},
+ rend:     {t:'skill',for:'melee',n:'Rend', col:'r', d:'slow, huge, always interrupts',
+   mod:a=>{a.dmg*=2.3;a.cd*=1.9;a.interrupt=1;a.stagger=(a.stagger||0)+0.35;a.arc=Math.max(a.arc,120);a.kb*=1.5;a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.35)}},
 };
 const SOCK={r:{n:'Might',c:'#e05555'},g:{n:'Finesse',c:'#6ad07a'},b:{n:'Focus',c:'#6f8fe0'}};
 const SOCKC=['r','g','b'];
@@ -638,17 +760,17 @@ const SOCKC=['r','g','b'];
 //   tend = this base's color tendency, used when rarity grants bonus sockets.
 const GEAR={
  sword:{slot:'melee', n:'Sword', dmg:10, range:26, arc:100, cd:.38, kb:120, dig:0, sockets:1, sc:'r', tend:'rrg'},
- axe:  {slot:'melee', n:'Axe',   dmg:16, range:24, arc:80,  cd:.55, kb:180, dig:1, sockets:1, sc:'r', tend:'rrr'},
+ axe:  {slot:'melee', n:'Axe',   dmg:16, range:24, arc:80,  cd:.55, kb:180, dig:1, sockets:1, sc:'r', tend:'rrr', ilvl:80},
  bow:  {slot:'ranged',n:'Bow',   dmg:8,  speed:420,cd:.5,  kb:60,  pierce:0, sockets:1, col:'#d8d0b0', sc:'g', tend:'ggr'},
  wand: {slot:'ranged',n:'Wand',  dmg:7,  speed:340,cd:.34, kb:40,  pierce:0, sockets:2, col:'#9fd0ff', sc:'bb', tend:'bbb'},
  vest: {slot:'armor', n:'Leather Vest', hp:20, arm:2, sockets:1, sc:'g', tend:'rgb'},
- chain:{slot:'armor', n:'Chainmail',    hp:45, arm:6, sockets:1, sc:'r', tend:'rrg'},
- robe: {slot:'armor', n:'Runed Robe',   hp:12, arm:0, sockets:3, fuel:25, sc:'bbb', tend:'bbb'},
- harness:{slot:'armor',n:'Delver Harness',hp:22,arm:3,sockets:2, fuel:70, sc:'gb', tend:'gbr'},
- plate:{slot:'armor', n:'Plate',        hp:80, arm:12, sockets:1, sc:'r', tend:'rrr'},
- greataxe:{slot:'melee',n:'Greataxe', dmg:30, range:32, arc:120, cd:.85, kb:300, dig:2, sockets:2, sc:'rr', tend:'rrr'},
- crossbow:{slot:'ranged',n:'Crossbow',dmg:20, speed:560, cd:.9, kb:120, pierce:1, sockets:2, col:'#c9b48f', sc:'gg', tend:'ggb'},
- shield:{slot:'any',  n:'Shield', dmg:6, range:20, arc:70, cd:.5, kb:260, dig:0, sockets:1, shield:1, arm:8, sc:'r', tend:'rrb'},
+ chain:{slot:'armor', n:'Chainmail',    hp:45, arm:6, sockets:1, sc:'r', tend:'rrg', ilvl:150},
+ robe: {slot:'armor', n:'Runed Robe',   hp:12, arm:0, sockets:3, fuel:25, sc:'bbb', tend:'bbb', ilvl:260},
+ harness:{slot:'armor',n:'Delver Harness',hp:22,arm:3,sockets:2, fuel:70, sc:'gb', tend:'gbr', ilvl:340},
+ plate:{slot:'armor', n:'Plate',        hp:80, arm:12, sockets:1, sc:'r', tend:'rrr', ilvl:900},
+ greataxe:{slot:'melee',n:'Greataxe', dmg:30, range:32, arc:120, cd:.85, kb:300, dig:2, sockets:2, sc:'rr', tend:'rrr', ilvl:900},
+ crossbow:{slot:'ranged',n:'Crossbow',dmg:20, speed:560, cd:.9, kb:120, pierce:1, sockets:2, col:'#c9b48f', sc:'gg', tend:'ggb', ilvl:900},
+ shield:{slot:'any',  n:'Shield', dmg:6, range:20, arc:70, cd:.5, kb:260, dig:0, sockets:1, shield:1, arm:4, sc:'r', tend:'rrb'},
 };
 // UNIQUES — rarity 3. One per base. mod() runs AFTER all gems, so uniques break rules.
 // Damage changes go through `a.more`, same as supports (DESIGN-PLAN §1.1 — one Π pool).
@@ -683,84 +805,160 @@ const UNIQ2={
  harness: {n:'Stormrigger',    d:'+110 fuel, +15% move',  fuel:110, ms:.15},
 };
 function uniqueDef(id,alt){return (alt&&UNIQ2[id])?UNIQ2[id]:UNIQUES[id]}
-// AFFIXES rolled on magic/rare gear: [key,label,min,max,scale]
+// AFFIXES rolled on magic/rare gear: [key,label,min,max,scale,grow]
 // scale 'pct' => stored as a percent that folds into the ADDITIVE pool; 'flat' => added raw.
+//
+// AFFIX TIERS are the spine of the whole item game, and the thing this table did not have. Every
+// affix has five tiers; tier T multiplies the base range by grow^(T-1), and an item can only roll
+// tiers its ITEM LEVEL allows. That single rule is what makes a 3,000m sword meaningfully better
+// than a 100m sword instead of statistically identical to it — which is the entire reason to keep
+// looking at loot after the first ten minutes.
+const AFF_TIER_ILVL=[1,300,800,1500,2400];   // minimum item level for tiers 1..5
+const AFF_TIER_NAME=['','','Greater ','Grand ','Perfect '];
 const AFFIXES=[
- ['dmg','% increased damage',8,25,'pct'], ['hp','+ max HP',8,30,'flat'],
- ['cdr','% attack speed',6,18,'pct'],     ['ms','% move speed',5,15,'pct'],
- ['crit','% crit chance',3,9,'pct'],      ['critMult','% crit damage',12,35,'pct'],
- ['arm','+ armor',2,9,'flat'],            ['sres','% status resist',8,22,'pct'],
- ['greed','% shard drops',10,28,'pct'],   ['fuel','+ fuel',12,40,'flat'],
- ['focus','% focus gain',10,30,'pct'],    ['leech','% life leech',2,5,'pct'],
+ ['dmg','% increased damage',8,25,'pct',1.30], ['hp','max HP',8,30,'flat',1.34],
+ ['cdr','% attack speed',6,18,'pct',1.24],     ['ms','% move speed',5,15,'pct',1.20],
+ ['crit','% crit chance',3,9,'pct',1.26],      ['critMult','% crit damage',12,35,'pct',1.30],
+ ['arm','armor',2,9,'flat',1.32],              ['sres','% status resist',8,22,'pct',1.22],
+ ['greed','% shard drops',10,28,'pct',1.30],   ['fuel','fuel',12,40,'flat',1.30],
+ ['focus','% focus gain',10,30,'pct',1.26],    ['leech','% life leech',2,5,'pct',1.22],
 ];
 const AFF=Object.fromEntries(AFFIXES.map(a=>[a[0],a]));
+// Built step by step rather than by a closed-form power, because rounding a small range (armour
+// is 2-9, leech is 2-5) collapsed adjacent tiers onto the same integers — a "Grand" roll that is
+// numerically identical to a plain one is worse than having no tiers at all.
+function affTierRange(a,t){const g=a[5]||1.3;let lo=a[2],hi=a[3];
+ for(let i=1;i<t;i++){lo=Math.max(lo+1,Math.round(lo*g));hi=Math.max(hi+2,Math.round(hi*g))}
+ return [lo,hi]}
+// The highest tier this item level may roll, and then a weighted draw beneath it — a deep item is
+// USUALLY good rather than ALWAYS perfect, which is what keeps the drop worth reading.
+function affTierFor(ilvl){
+ let max=1;for(let t=0;t<AFF_TIER_ILVL.length;t++)if(ilvl>=AFF_TIER_ILVL[t])max=t+1;
+ let t=max;while(t>1&&chance(0.42))t--;
+ return t}
+// MODIFIER AFFIXES — the other half of itemisation, and the half that was missing entirely.
+// A number cannot change how a build plays; these can. They run through the same `mod(a)` seam as
+// uniques and support gems, so rule 5 still holds: anything that touches damage touches `a.more`.
+// One per item, rare-and-above only, and gated deep so finding one is an event.
+const MODAFF=[
+ {k:'aproj', n:'+1 projectile',              slot:'ranged',ilvl:600, mod:a=>{a.count=(a.count||1)+1;a.more*=0.82}},
+ {k:'apierce',n:'+2 pierce',                 slot:'ranged',ilvl:400, mod:a=>{a.pierce=(a.pierce||0)+2}},
+ {k:'afork', n:'projectiles fork on first hit',slot:'ranged',ilvl:1100,mod:a=>{a.fork=1;a.more*=0.9}},
+ {k:'atwin', n:'strikes twice at 60%',       slot:'melee', ilvl:900, mod:a=>{a.twin=1;a.more*=0.9}},
+ {k:'acleave',n:'+40% attack arc',           slot:'melee', ilvl:400, mod:a=>{if(a.arc)a.arc=Math.min(360,a.arc*1.4)}},
+ {k:'achain',n:'hits chain to 1 more enemy', ilvl:800, mod:a=>{a.chain=(a.chain||0)+1;a.more*=0.94}},
+ {k:'aarea', n:'+30% blast radius',          ilvl:600, mod:a=>{if(a.explode)a.explode*=1.3;a.aoe=1}},
+ {k:'aexec', n:'executes below 6% health',   ilvl:1200,mod:a=>{a.cull=Math.max(a.cull||0,0.06)}},
+ {k:'ableed',n:'hits bleed',                 ilvl:200, mod:a=>{a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,.22)}},
+ {k:'aburn', n:'hits burn',                  ilvl:200, mod:a=>{a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,.25)}},
+ {k:'ashock',n:'hits shock',                 ilvl:700, mod:a=>{a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,1.22)}},
+ {k:'amom',  n:'damage scales with your speed',ilvl:1000,mod:a=>{a.momentum=(a.momentum||0)+0.5}},
+];
+const MODA=Object.fromEntries(MODAFF.map(m=>[m.k,m]));
 // ENEMIES.
-//   atk:{cd,range,wind,act,mul,kb} = TELEGRAPHED melee. The enemy stops, flashes and swells for
-//     `wind` seconds, then damage is live for `act` seconds. Nothing an enemy does damages you
-//     without a tell first (DESIGN-PLAN §4.1) — this is what makes the game readable.
+//   atk:{cd,range,wind,act,rec,kb,lunge} = TELEGRAPHED melee, in three beats:
+//     wind — the enemy stops, flashes and swells. No damage. Clamped to WINDUP_FLOOR.
+//     act  — damage is live, and the enemy LUNGES `lunge` px/s forward for that whole window.
+//            Real reach is therefore range + lunge*act, which is what the ground marker draws
+//            (atkReach). Drawing `range` alone taught the player a lie by up to 3.6x.
+//     rec  — the enemy is spent: it cannot act, it slows to a stop, and it takes RECOVER_DMG.
+//            This is the punish window. Without it the loop is "wait, then hit", not a fight.
+//   Nothing an enemy does damages you without a tell first (DESIGN-PLAN §4.1).
 //   shoot:{cd,dmg,speed,count,spread,col,range,wind,...} = telegraphed ranged.
 //   arm = flat armor: subtracted from each of your hits, so swarms of small hits fall off.
 const ENEMIES={
- crawler:{hp:24,dmg:8, spd:42, w:14,h:12,ai:'walk',c:'#7d5340',shards:2,
-   atk:{cd:1.5,range:24,wind:.34,act:.16,kb:140,lunge:190}},
- bat:    {hp:14,dmg:6, spd:78, w:12,h:10,ai:'fly', c:'#6a5a8f',shards:2,
-   atk:{cd:1.7,range:26,wind:.28,act:.14,kb:90,lunge:300}},
- brute:  {hp:85,dmg:16,spd:34, w:20,h:22,ai:'walk',c:'#8f4040',shards:6,arm:3,
-   atk:{cd:2.1,range:34,wind:.48,act:.20,kb:280,lunge:150}},
- spitter:{hp:30,dmg:6, spd:30, w:14,h:14,ai:'walk',c:'#5f8f5a',shards:4,
-   atk:{cd:2.0,range:22,wind:.34,act:.14,kb:110,lunge:120},
-   shoot:{cd:1.9,dmg:7,speed:210,count:1,spread:0,col:'#8fdc6a',range:300,wind:.40}},
+ crawler:{hp:24,dmg:13,spd:42, w:14,h:12,ai:'walk',c:'#7d5340',shards:2,
+   atk:{cd:1.5,range:24,wind:.34,act:.16,rec:.26,kb:140,lunge:190}},
+ bat:    {hp:14,dmg:10,spd:78, w:12,h:10,ai:'fly', c:'#6a5a8f',shards:2,
+   atk:{cd:1.7,range:26,wind:.28,act:.14,rec:.22,kb:90,lunge:260}},
+ brute:  {hp:85,dmg:20,spd:34, w:20,h:22,ai:'walk',c:'#8f4040',shards:6,arm:3,
+   atk:{cd:2.1,range:34,wind:.48,act:.20,rec:.42,kb:280,lunge:150}},
+ spitter:{hp:30,dmg:11,spd:30, w:14,h:14,ai:'walk',c:'#5f8f5a',shards:4,
+   atk:{cd:2.0,range:22,wind:.34,act:.14,rec:.26,kb:110,lunge:120},
+   shoot:{cd:1.9,dmg:12,speed:210,count:1,spread:0,col:'#8fdc6a',range:300,wind:.40}},
  // ---- CONTENT WAVE: three grunts per biome, each teaching one thing (DESIGN-PLAN §4.2) ----
  // CAVES — teaches dodge
- rockling:{hp:40,dmg:11,spd:52,w:14,h:14,ai:'walk',c:'#7a7f86',shards:3,arm:4,
-   atk:{cd:1.6,range:26,wind:.30,act:.16,kb:200,lunge:420}},          // ambusher: long lunge
+ rockling:{hp:70,dmg:18,spd:52,w:14,h:14,ai:'walk',c:'#7a7f86',shards:3,arm:4,
+   atk:{cd:1.6,range:26,wind:.30,act:.16,rec:.30,kb:200,lunge:260}},  // ambusher: long lunge, long recovery
  // FUNGAL — teaches area denial
- sporeling:{hp:22,dmg:7, spd:44,w:13,h:13,ai:'walk',c:'#9f7ac0',shards:3,burstOnDeath:34,
-   atk:{cd:1.6,range:22,wind:.30,act:.14,kb:120,lunge:170}},          // dies into a cloud
- stalker: {hp:18,dmg:13,spd:118,w:11,h:15,ai:'walk',c:'#c05a8f',shards:4,
-   atk:{cd:1.2,range:24,wind:.22,act:.12,kb:120,lunge:460}},          // fast, fragile, punishing
+ sporeling:{hp:22,dmg:12,spd:44,w:13,h:13,ai:'walk',c:'#9f7ac0',shards:3,burstOnDeath:34,
+   atk:{cd:1.6,range:22,wind:.30,act:.14,rec:.24,kb:120,lunge:170}},  // dies into a cloud
+ stalker: {hp:18,dmg:19,spd:118,w:11,h:15,ai:'walk',c:'#c05a8f',shards:4,
+   atk:{cd:1.2,range:24,wind:.26,act:.12,rec:.18,kb:120,lunge:300}},  // fast, fragile, punishing
  // RUINS — teaches flanking
- archer:  {hp:34,dmg:8, spd:28,w:13,h:16,ai:'walk',c:'#b0a070',shards:5,
-   atk:{cd:2.2,range:22,wind:.36,act:.14,kb:100,lunge:100},
-   shoot:{cd:2.3,dmg:17,speed:390,count:1,spread:0,col:'#ffe9a0',range:520,wind:.55}},
- shieldman:{hp:70,dmg:14,spd:26,w:18,h:20,ai:'walk',c:'#8a8f9a',shards:6,arm:12,front:1,
-   atk:{cd:2.3,range:30,wind:.44,act:.20,kb:260,lunge:150}},          // blocks from the front
+ archer:  {hp:34,dmg:12,spd:28,w:13,h:16,ai:'walk',c:'#b0a070',shards:5,
+   atk:{cd:2.2,range:22,wind:.36,act:.14,rec:.28,kb:100,lunge:100},
+   shoot:{cd:2.3,dmg:20,speed:390,count:1,spread:0,col:'#ffe9a0',range:520,wind:.55}},
+ shieldman:{hp:70,dmg:18,spd:26,w:18,h:20,ai:'walk',c:'#8a8f9a',shards:6,arm:12,front:1,
+   atk:{cd:2.3,range:30,wind:.44,act:.20,rec:.40,kb:260,lunge:150}},  // blocks from the front
  // FORGE — teaches burn management
- ember:   {hp:26,dmg:10,spd:66,w:13,h:13,ai:'walk',c:'#e0703a',shards:4,burstOnDeath:52,burnDeath:1,
-   atk:{cd:1.5,range:22,wind:.26,act:.14,kb:150,lunge:300}},          // detonates on death
- smith:   {hp:150,dmg:24,spd:22,w:24,h:26,ai:'walk',c:'#a05a30',shards:9,arm:16,
-   atk:{cd:2.6,range:38,wind:.58,act:.24,kb:340,lunge:130},
+ ember:   {hp:26,dmg:15,spd:66,w:13,h:13,ai:'walk',c:'#e0703a',shards:4,burstOnDeath:52,burnDeath:1,
+   atk:{cd:1.5,range:22,wind:.26,act:.14,rec:.22,kb:150,lunge:240}},  // detonates on death
+ smith:   {hp:150,dmg:24,spd:22,w:24,h:26,ai:'walk',c:'#a05a30',shards:9,arm:11,
+   atk:{cd:2.6,range:38,wind:.58,act:.24,rec:.50,kb:340,lunge:130},
    shoot:{cd:3.0,dmg:14,speed:200,count:2,spread:.3,col:'#ff8a3f',range:280,wind:.5,stR:{burn:.5}}},
  // ABYSS — teaches everything at once
- wraith:  {hp:48,dmg:18,spd:70,w:14,h:18,ai:'fly',c:'#8f7ad0',shards:8,phase:1,
-   atk:{cd:1.7,range:28,wind:.30,act:.16,kb:180,lunge:340}},          // phases through terrain
- voidspawn:{hp:60,dmg:15,spd:54,w:16,h:16,ai:'walk',c:'#6a4fd0',shards:7,split:2,
-   atk:{cd:1.8,range:26,wind:.32,act:.16,kb:170,lunge:220}},          // splits on death
- voidling:{hp:20,dmg:9, spd:82,w:10,h:10,ai:'walk',c:'#8a6ff0',shards:2,
-   atk:{cd:1.4,range:20,wind:.24,act:.12,kb:100,lunge:240}},          // the halves
+ wraith:  {hp:48,dmg:20,spd:70,w:14,h:18,ai:'fly',c:'#8f7ad0',shards:8,phase:1,
+   atk:{cd:1.7,range:28,wind:.30,act:.16,rec:.26,kb:180,lunge:260},   // phases through terrain
+   shoot:{cd:2.8,dmg:15,speed:200,count:1,spread:0,col:'#a08fff',range:420,wind:.50}},
+ voidspawn:{hp:60,dmg:17,spd:54,w:16,h:16,ai:'walk',c:'#6a4fd0',shards:7,split:2,
+   atk:{cd:1.8,range:26,wind:.32,act:.16,rec:.28,kb:170,lunge:220}},  // splits on death
+ voidling:{hp:20,dmg:12,spd:82,w:10,h:10,ai:'walk',c:'#8a6ff0',shards:2,
+   atk:{cd:1.4,range:20,wind:.26,act:.12,rec:.18,kb:100,lunge:240}},  // the halves
+ // ---- CONTENT WAVE 2: the roles the roster did not have ----
+ // The old roster was fourteen grunts and eleven of them were "run at you and swing". These seven
+ // exist because a fight needs more than one question in it: something that makes the FLOOR
+ // dangerous, something that makes another enemy the priority target, something that punishes
+ // standing still, and something the terrain cannot protect you from.
+ // CAVES — a swarm, and a thing that comes through the wall
+ delvemite:{hp:10,dmg:8, spd:96,w:9,h:8,ai:'walk',c:'#b08a5e',shards:1,pack:4,
+   atk:{cd:1.1,range:16,wind:.26,act:.10,rec:.16,kb:70,lunge:200}},
+ burrower:{hp:55,dmg:20,spd:58,w:15,h:14,ai:'fly',c:'#8a6743',shards:6,burrows:1,
+   atk:{cd:1.9,range:26,wind:.34,act:.16,rec:.30,kb:200,lunge:240}},
+ // FUNGAL — the bruiser the band never had, and it poisons the ground it walks on
+ bloomback:{hp:120,dmg:16,spd:24,w:19,h:18,ai:'walk',c:'#7f9455',shards:8,arm:3,
+   trail:{every:.5,r:26,t:4.5,dmg:.22,st:{bleed:.5},col:'#7f9455',kind:'gas'},
+   atk:{cd:2.4,range:34,wind:.50,act:.20,rec:.44,kb:280,lunge:140}},
+ // RUINS — the two units that make target priority a thing you have to think about
+ chanter:{hp:42,dmg:10,spd:34,w:13,h:18,ai:'walk',c:'#bfb595',shards:8,
+   heal:{cd:2.6,amt:.10,range:180},
+   atk:{cd:2.4,range:24,wind:.38,act:.14,rec:.30,kb:120,lunge:110}},
+ warder:{hp:60,dmg:12,spd:22,w:14,h:16,ai:'walk',c:'#6f7889',shards:8,arm:4,
+   ward:{range:150,arm:6,dr:.25},
+   atk:{cd:2.6,range:26,wind:.44,act:.18,rec:.38,kb:180,lunge:120}},
+ // FORGE — artillery. It does not aim at you, it aims at where you are standing.
+ mortar:{hp:50,dmg:12,spd:16,w:14,h:15,ai:'walk',c:'#c9743a',shards:7,
+   atk:{cd:2.6,range:22,wind:.40,act:.14,rec:.32,kb:120,lunge:100},
+   shoot:{cd:3.2,dmg:22,speed:250,count:1,spread:0,col:'#ff8a3f',range:560,wind:.70,lob:1,grav:1,explode:44}},
+ // ABYSS — a wall with arms
+ hollowed:{hp:140,dmg:24,spd:30,w:15,h:22,ai:'walk',c:'#9c9276',shards:9,arm:7,
+   atk:{cd:2.5,range:36,wind:.54,act:.22,rec:.48,kb:320,lunge:150}},
  // MINIBOSSES (boss:1 => healthbar, guaranteed loot, no cap eviction)
  // ph:[{at,...}] = phase transitions (DESIGN-PLAN §4.3). Crossing an `at` HP fraction triggers
  // a roar + brief invuln, drops shoot cooldown, and unlocks the named extra pattern.
+ // Each `ph` entry ADDS its pattern permanently (see bossPhase -> e.pats). Phase 1 is the base
+ // fight, phase 2 is base+first, phase 3 is base+both — three recognisably different fights, and
+ // the pattern colours ONGOING behaviour rather than firing once and being forgotten.
  warden:  {hp:420, dmg:22,spd:46,w:28,h:30,ai:'walk',c:'#a05a3a',shards:40,boss:1,arm:4,
-   atk:{cd:2.2,range:44,wind:.50,act:.22,kb:320,lunge:260},
+   atk:{cd:2.2,range:44,wind:.50,act:.22,rec:.34,kb:320,lunge:260},
    shoot:{cd:2.4,dmg:12,speed:230,count:3,spread:.30,col:'#e0a03f',range:380,wind:.45},
    ph:[{at:.66,pat:'slam'},{at:.33,pat:'summon'}]},
- sporemother:{hp:520,dmg:18,spd:58,w:30,h:26,ai:'fly',c:'#8f5ac0',shards:55,boss:1,
-   atk:{cd:2.4,range:38,wind:.42,act:.18,kb:200,lunge:280},
+ sporemother:{hp:520,dmg:23,spd:58,w:30,h:26,ai:'fly',c:'#8f5ac0',shards:55,boss:1,
+   atk:{cd:2.4,range:38,wind:.42,act:.18,rec:.30,kb:200,lunge:280},
    shoot:{cd:1.7,dmg:10,speed:180,count:5,spread:.55,col:'#c98fe0',range:420,wind:.40},
    ph:[{at:.66,pat:'spores'},{at:.33,pat:'summon'}]},
- sentinel:{hp:700, dmg:26,spd:40,w:26,h:32,ai:'walk',c:'#b0a070',shards:75,boss:1,arm:10,
-   atk:{cd:2.0,range:42,wind:.44,act:.20,kb:300,lunge:240},
+ sentinel:{hp:700, dmg:25,spd:40,w:26,h:32,ai:'walk',c:'#b0a070',shards:75,boss:1,arm:10,
+   atk:{cd:2.0,range:42,wind:.44,act:.20,rec:.32,kb:300,lunge:240},
    shoot:{cd:1.4,dmg:14,speed:330,count:2,spread:.12,col:'#ffe9a0',range:460,wind:.38},
-   ph:[{at:.66,pat:'volley'},{at:.33,pat:'slam'}]},
- forgelord:{hp:900,dmg:32,spd:44,w:32,h:34,ai:'walk',c:'#d05a30',shards:100,boss:1,arm:8,
-   atk:{cd:2.0,range:46,wind:.46,act:.22,kb:340,lunge:250},
-   shoot:{cd:2.0,dmg:18,speed:250,count:3,spread:.35,col:'#ff8a3f',range:420,explode:40,stR:{burn:.5},wind:.42},
+   ph:[{at:.66,pat:'volley'},{at:.33,pat:'beam'}]},
+ forgelord:{hp:900,dmg:30,spd:44,w:32,h:34,ai:'walk',c:'#d05a30',shards:100,boss:1,arm:8,
+   atk:{cd:2.0,range:46,wind:.46,act:.22,rec:.34,kb:340,lunge:250},
+   shoot:{cd:2.0,dmg:16,speed:250,count:3,spread:.35,col:'#ff8a3f',range:420,explode:40,stR:{burn:.5},wind:.42},
    ph:[{at:.66,pat:'firewall'},{at:.33,pat:'slam'}]},
- voidmaw: {hp:1200,dmg:38,spd:76,w:34,h:30,ai:'fly',c:'#6a4fd0',shards:140,boss:1,arm:6,
-   atk:{cd:1.8,range:40,wind:.36,act:.18,kb:260,lunge:380},
-   shoot:{cd:1.2,dmg:20,speed:300,count:4,spread:.7,col:'#a08fff',range:480,st:{chill:0.6},wind:.34},
-   ph:[{at:.66,pat:'volley'},{at:.33,pat:'spores'}]},
+ voidmaw: {hp:1200,dmg:26,spd:76,w:34,h:30,ai:'fly',c:'#6a4fd0',shards:140,boss:1,arm:6,
+   atk:{cd:1.8,range:40,wind:.36,act:.18,rec:.26,kb:260,lunge:300},
+   shoot:{cd:1.2,dmg:16,speed:300,count:4,spread:.7,col:'#a08fff',range:480,st:{chill:0.6},wind:.34},
+   ph:[{at:.66,pat:'volley'},{at:.33,pat:'devour'}]},
 };
 // STATUS EFFECTS — generic, applies to enemies AND the player.
 //   stack:1 => independent instances up to STACK_MAX, each with its own timer (rewards attack
@@ -771,13 +969,44 @@ const STATUS={
  chill:{n:'Chill',c:'#9fd0ff', dur:2.5, stack:0}, // potency = speed multiplier (lower = slower)
  shock:{n:'Shock',c:'#e6d34a', dur:4.0, stack:0}, // potency = incoming damage multiplier
 };
-// ELITE MODIFIERS — rolled onto grunts at depth. Stack with depthMul.
+// ELITE MODIFIERS — rolled onto grunts at depth. Stack with the depth curves.
+//   `bad` names a property that makes this modifier UNFAIR on that creature and bars the roll.
+//     Vampiric on a ranged enemy heals it from a distance you cannot punish; Swift on something
+//     that already crosses the screen in a lunge is not a modifier, it is a coin flip.
+//   Every entry has to change how the fight is PLAYED, not only what the numbers are — an elite
+//   that is just "same enemy, bigger" is a health bar with a border.
 const ELITES=[
- {id:'swift',   n:'Swift',    c:'#6ad0e0', hp:1.2, dmg:1.1, spd:1.7},
+ {id:'swift',   n:'Swift',    c:'#6ad0e0', hp:1.2, dmg:1.1, spd:1.7, bad:'fast'},
  {id:'armored', n:'Armored',  c:'#9aa0b0', hp:3.0, dmg:1.2, spd:0.8, arm:9},
  {id:'volatile',n:'Volatile', c:'#e07a3f', hp:1.5, dmg:1.3, spd:1.1, boom:56},
- {id:'vampiric',n:'Vampiric', c:'#c04a70', hp:2.0, dmg:1.4, spd:1.0, drain:1},
+ {id:'vampiric',n:'Vampiric', c:'#c04a70', hp:2.0, dmg:1.4, spd:1.0, drain:1, bad:'ranged'},
+ // ---- second wave: modifiers you have to play around rather than out-stat ----
+ // Frenzied inverts the usual ending: the fight gets HARDER as you win it, so committing to the
+ // kill is a real decision instead of the obvious one.
+ {id:'frenzied',n:'Frenzied', c:'#e0a03f', hp:1.6, dmg:1.15,spd:1.0, frenzy:1},
+ // Roiling turns the arena against you over time — you cannot kite it in a circle forever.
+ {id:'roiling', n:'Roiling',  c:'#8fdc6a', hp:1.8, dmg:1.1, spd:0.95,
+   trail:{every:.7,r:24,t:3.5,dmg:.18,st:{bleed:.4},col:'#8fdc6a',kind:'gas'}},
+ // Hexing makes it a status problem: chill slows you into the next hit, shock deepens it.
+ {id:'hexing',  n:'Hexing',   c:'#c98fe0', hp:1.7, dmg:1.0, spd:1.05, hex:{chill:.6,shock:1.3}},
+ // Gilded is the one the PLAYER chooses to take on: much more loot, much more enemy. A risk you
+ // can walk away from is worth more than a reward you cannot refuse.
+ {id:'gilded',  n:'Gilded',   c:'#d8a53f', hp:2.6, dmg:1.2, spd:1.0, arm:4, loot:3.2},
 ];
+// What one of these is WORTH in an encounter, derived from its own stats rather than hand-kept in
+// a parallel table that would drift the moment anything is retuned. `cost` overrides it if a
+// creature is worth more than it looks (a support unit is, which is why it carries a surcharge).
+function enemyCost(ty){const E=ENEMIES[ty];if(E.cost!==undefined)return E.cost;
+ const c=E.hp/40+E.dmg/14+(E.arm||0)/7+(E.shoot?0.8:0)+((E.heal||E.ward)?1.6:0)+(E.pack?E.pack*0.25:0);
+ return Math.max(0.5,Math.round(c*10)/10)}
+// Elites are rolled from what is FAIR on that creature, not from the whole list.
+function eliteFor(E){
+ const ok=ELITES.filter(m=>{
+  if(m.bad==='ranged'&&E.shoot)return false;      // heals itself out of your reach
+  if(m.bad==='fast'&&E.spd>=90)return false;      // already faster than the tell
+  if(m.trail&&E.trail)return false;               // two trails is one trail and a frame cost
+  return true});
+ return ok.length?ok[ri(0,ok.length-1)]:null}
 const BIOME_BOSS={caves:'warden',fungal:'sporemother',ruins:'sentinel',forge:'forgelord',abyss:'voidmaw'};
 // META TREE: 3 branches (Might/Cunning/Sorcery), 5 nodes each. All fx are ADDITIVE (`increased`).
 const TREE=[
@@ -812,6 +1041,16 @@ const BOONS=[
  {id:'zeal',    n:'Zeal',     d:'+50% focus gain',        fx:{focus:.50}},
  {id:'venom',   n:'Venom',    d:'+45% ailment damage',    fx:{ailment:.45}},
  {id:'ward',    n:'Ward',     d:'+35% status resist',     fx:{sres:.35}},
+ // ---- boons that change the attack rather than a number on it ----
+ {id:'emberheart',n:'Emberheart',d:'your hits burn, and burning hurts more', m:{hitBurn:.26,vsBurn:.20}},
+ {id:'rimeheart', n:'Rimeheart', d:'your hits chill, and chilled hurts more',m:{hitChill:.68,vsChill:.25}},
+ {id:'stormheart',n:'Stormheart',d:'your hits shock',                        m:{hitShock:1.25}},
+ {id:'quarry',    n:'Quarry',    d:'+35% damage to a spent enemy',           m:{vsSpent:.35}},
+ {id:'volley',    n:'Volley',    d:'+1 projectile',                          m:{extraProj:1}},
+ {id:'arcing',    n:'Arcing',    d:'your hits chain to one more enemy',      m:{chain:1}},
+ {id:'whetstone', n:'Whetstone', d:'your hits strip 3 armour',               m:{sunder:3}},
+ {id:'harvest',   n:'Harvest',   d:'kills heal you for 3%',                  m:{feast:.03}},
+ {id:'unbroken',  n:'Unbroken',  d:'survive one fatal hit',                  m:{secondWind:1}},
 ];
 // CLASSES — pick at camp. Each is a starting kit + a permanent passive + a free signature gem.
 // fx keys read by classFx(): hp, meleeDmg, rangedDmg, abilCdr, ms, greed, pierce, blockDR, digBonus
@@ -820,7 +1059,7 @@ const BOONS=[
 const CLASSES={
  vanguard:{n:'Vanguard', cost:0,  d:'Sword and shield. Tanky, blocks hard. Earns focus by blocking.',
    kit:{melee:'sword',ranged:'shield',armor:'vest'}, gem:{slot:'melee',id:'cleave'},
-   foc:'block', fx:{hpMul:.25,meleeDmg:.10,blockDR:.5,ms:-.05,arm:5}},
+   foc:'block', fx:{hpMul:.25,meleeDmg:.10,blockDR:.5,ms:-.05,arm:2}},
  marksman:{n:'Marksman', cost:60, d:'Bow specialist. Fragile, hits from range. Crits often.',
    kit:{melee:'sword',ranged:'bow',armor:'vest'}, gem:{slot:'ranged',id:'multishot'},
    foc:'crit', fx:{rangedDmg:.25,pierce:1,ms:.10,hpMul:-.10,crit:.06}},
@@ -917,6 +1156,36 @@ the Abyss, and the wraith is how the Abyss makes that point.`},
   voidspawn:{n:'Void Spawn',d:`Splits when killed. Kill it in the open. Kill it early. Do not
 kill it in a dead end, and do not kill three at once because you were in a hurry.`},
   voidling:{n:'Voidling',d:`The halves. Faster, angrier, and there are now two problems.`},
+  delvemite:{n:'Delvemite',d:`One of them is a nuisance. There is never one of them.
+
+They nest in the old spoil heaps and they have no interest in you at all until the moment they
+collectively do, which is a distinction that has never once helped anybody.`},
+  burrower:{n:'Burrower',d:`It does not go around the rock and it does not go through the rock in
+the way a wraith does. It eats the rock, and the hole stays.
+
+Every veteran has a story about being saved by a tunnel a burrower dug. Every one of those
+stories starts with a burrower.`},
+  bloomback:{n:'Bloomback',d:`Slow enough to walk away from and heavy enough that you will want
+to. The cap is not armour, it is a seedbed, and it sheds the whole way.
+
+The ground behind it is not safe for a while. Neither is the ground in front of it, but that is
+at least an honest problem.`},
+  chanter:{n:'Chanter',d:`Stands at the back and puts the others back together. It has no weapon
+worth the name and it is the most dangerous thing in the room.
+
+Kill the chanter. This is the entire lesson of the ruins and it costs most people a run to learn.`},
+  warder:{n:'Warder',d:`A ruin-machine still running a four-hundred-year-old order to protect
+whatever stands near it. It does not care that what stands near it is now a brute.
+
+The light it throws is the shield. Put the light out.`},
+  mortar:{n:'Mortar',d:`It does not aim at you. It aims at the floor you happen to be standing
+on, which is a different problem and a worse one, because you are usually still there.
+
+The circle on the ground is a courtesy. Take it.`},
+  hollowed:{n:'Hollowed',d:`Delver-shaped, delver-sized, and empty through the middle. Nobody
+likes to say what that means and everybody has thought it.
+
+It hits like the rock it came out of. It is in no hurry.`},
   warden:{n:'The Warden',d:`First thing down here big enough to have a name.
 
 It stands in a room it carved itself and it does not leave, which suggests it is guarding
@@ -1133,7 +1402,10 @@ function dissIdx(){let i=0;DISS_STAGES.forEach((d,k)=>{if(DISSONANCE>=d.at)i=k})
 // cleared. Chunks the player is standing in are kept, or the ground vanishes underfoot.
 function reweave(strand,newSeed){
  WEAVE[strand]=newSeed>>>0;
- WOVEN++;
+ WOVEN++;bTick('weave');
+ // The band thresholds are derived FROM the terrain strand, so rewriting it must re-solve
+ // them or the new world is generated against the old world's shape.
+ if(strand==='terrain')calibrateAir();
  const pcx=Math.floor(P.x/TILE/CHUNK), pcy=Math.floor(P.y/TILE/CHUNK);
  const structural=(strand==='terrain'||strand==='boss');
  for(const [k,c] of CHUNKS){
@@ -1143,10 +1415,11 @@ function reweave(strand,newSeed){
   else{c.spawned=false;c.spawns=genChunk(cx,cy).spawns;c.dirty=true}}
  // POIs and sleeping enemies belonging to dropped chunks go with them.
  if(strand==='poi'){CHESTS.length=0;SHRINES.length=0}
+ if(strand==='terrain')VENTS.length=0;   // vents are part of the shape, and the shape just changed
  if(strand==='spawn'||strand==='boss'){
   for(let i=EN.length-1;i>=0;i--){const e=EN[i];
    if(Math.hypot(e.x-P.x,e.y-P.y)>420)EN.splice(i,1)}}
- shake=Math.max(shake,10);flash(0.3);sfx('shatter');rumble(0.8,0.6,300);
+ addShake(10);flash(0.3);sfx('shatter');rumble(0.8,0.6,300);
  MM=null;   // the minimap is a memory of a world that no longer exists
  return true}
 function addDissonance(n){
@@ -1154,7 +1427,7 @@ function addDissonance(n){
  DISSONANCE=Math.min(140,DISSONANCE+n);
  const after=dissIdx();
  if(after>before){const st=DISS_STAGES[after];
-  toastQ(st.n.toUpperCase());toast(st.d);flash(0.4);shake=Math.max(shake,12);sfx('die');
+  toastQ(st.n.toUpperCase());toast(st.d);flash(0.4);addShake(12);sfx('die');
   discover('diss',st.n,true)}}
 // Dissonance leaks into the world through three specific, stated channels.
 function dissSpeed(){return 1+Math.min(0.5,DISSONANCE/200)}       // Stirring: enemies close faster
@@ -1200,6 +1473,14 @@ const ATTUNE=[
  {id:'scav',   n:'Scavenger',    d:'chests and elites drop more',            m:{scav:1}},
  {id:'second', n:'Second Wind',  d:'once per run, survive a fatal hit',      m:{secondWind:1}},
  {id:'siphon', n:'Siphon',       d:'+4% life leech on everything',           fx:{leech:.04}},
+ // ---- attunements built on the three-beat fight and the ailment layer ----
+ {id:'vengeful',n:'Vengeful',    d:'+30% damage to a spent enemy',           m:{vsSpent:.30}},
+ {id:'kindled', n:'Kindled',     d:'your hits burn',                         m:{hitBurn:.22}},
+ {id:'rimed',   n:'Rimed',       d:'your hits chill',                        m:{hitChill:.72}},
+ {id:'sunderer',n:'Sunderer',    d:'your hits strip 3 armour',               m:{sunder:3}},
+ {id:'linked',  n:'Linked',      d:'your hits chain to one more enemy',      m:{chain:1}},
+ {id:'finisher',n:'Finisher',    d:'+30% damage below half health',          m:{vsLow:.30}},
+ {id:'lastlight',n:'Last Light', d:'below a third health, take 25% less',    m:{lastLight:.25}},
 ];
 // Threat tiers. Each one is a named world rule, not a difficulty slider — you should be able to
 // say what tier 3 does without looking it up.
@@ -1207,10 +1488,78 @@ const THREATS=[
  {n:'None',        d:'The deep as it is.',                             req:0, shard:1.00, rare:1.00},
  {n:'I — Watched', d:'The Weight arrives twice as fast.',              req:1, shard:1.25, rare:1.10, weight:2},
  {n:'II — Armed',  d:'Everything down here has armor.',                req:2, shard:1.55, rare:1.20, arm:6},
- {n:'III — Swift', d:'Enemies move and strike noticeably faster.',     req:3, shard:1.90, rare:1.35, spd:1.25, wind:0.8},
+ // III shortens RECOVERY, not windup. Cutting the tell below human reaction time does not make a
+ // game harder, it makes it unfair — it removes the information the fight is played with. Cutting
+ // the punish window keeps every tell honest and still costs you the fight if you are greedy.
+ {n:'III — Swift', d:'Enemies move faster and recover sooner.',         req:3, shard:1.90, rare:1.35, spd:1.25, rec:0.65},
  {n:'IV — Teeming',d:'Elites are common. Grunts come in numbers.',     req:4, shard:2.35, rare:1.55, elite:2.2, dens:1.6},
- {n:'V — Buried',  d:'Your light is smaller. The dark reaches further.',req:5, shard:2.90, rare:1.80, dark:1.35, elite:2.2, dens:1.6, arm:6, spd:1.25, wind:0.8, weight:2},
+ {n:'V — Buried',  d:'Your light is smaller. The dark reaches further.',req:5, shard:2.90, rare:1.80, dark:1.35, elite:2.2, dens:1.6, arm:6, spd:1.25, rec:0.65, weight:2},
 ];
+// ============ THE LADDER WITH NO TOP ============
+// Threat runs out at five bosses. Everything past that used to be the same run forever, which is
+// the honest answer to "what does hour 40 look like": nothing. An ECHO is what you do afterwards.
+// Each one stacks a NAMED world rule, so Echo 7 is a sentence you can read and plan against
+// rather than a difficulty multiplier you can only feel as unfairness. They repeat past the end
+// of the list and stack with themselves, so the ladder is unbounded by construction.
+const ECHOES=[
+ {n:'Hungry', d:'The Weight arrives sooner.',            weight:1.6},
+ {n:'Thick',  d:'Everything down here is tougher.',      hp:1.30},
+ {n:'Crowded',d:'There is more of it.',                  dens:1.30},
+ {n:'Keen',   d:'Everything hits harder.',               dmg:1.15},
+ {n:'Warded', d:'Everything carries armour.',            arm:6},
+ {n:'Brittle',d:'You are made of less.',                 php:0.86},
+ {n:'Swift',  d:'The dark moves faster.',                spd:1.14},
+ {n:'Hollow', d:'What dies here leaves a wound behind.', wound:1},
+ {n:'Silent', d:'No ground markers. Read the creature.', nomark:1},
+ {n:'Rich',   d:'And it is worth far more.',             shard:1.35, rare:1.25},
+];
+// The active rule set is simply the first N entries, wrapping. Multiplicative keys multiply,
+// additive keys add, flags stay flags — one loop, no per-echo branching.
+function echoes(){
+ const n=Math.max(0,META.echoLv|0),o={};
+ for(let i=0;i<n;i++){const E=ECHOES[i%ECHOES.length];
+  for(const k in E){if(k==='n'||k==='d')continue;
+   if(k==='arm')o.arm=(o.arm||0)+E.arm;
+   else if(k==='wound'||k==='nomark')o[k]=1;
+   else o[k]=(o[k]||1)*E[k]}}
+ return o}
+let ECHO={};
+function refreshEcho(){ECHO=echoes()}
+function echoList(){
+ const n=Math.max(0,META.echoLv|0),seen={},out=[];
+ for(let i=0;i<n;i++){const E=ECHOES[i%ECHOES.length];
+  seen[E.n]=(seen[E.n]||0)+1}
+ for(const k in seen)out.push(k+(seen[k]>1?' x'+seen[k]:''));
+ return out}
+// ============ BOUNTIES ============
+// Three objectives a run, drawn fresh, paid on death whether you meant to do them or not. They
+// are the cheapest possible answer to "why start run N+1": they make a run about something
+// other than depth, and they are the only reward in the game you can plan a route around.
+const BOUNTIES=[
+ {id:'deep',   n:'Reach 900m',                pay:90,  goal:1,  test:s=>runDepth>=900},
+ {id:'deeper', n:'Reach 1,800m',              pay:180, goal:1,  test:s=>runDepth>=1800},
+ {id:'elites', n:'Kill 4 elites',             pay:120, goal:4,  count:'elite'},
+ {id:'boss',   n:'Fell a warden',             pay:200, goal:1,  count:'boss'},
+ {id:'chests', n:'Open 6 sealed places',      pay:100, goal:6,  count:'chest'},
+ {id:'burn',   n:'Kill 25 while they burn',   pay:110, goal:25, count:'burn'},
+ {id:'punish', n:'Land 20 hits on spent foes',pay:130, goal:20, count:'punish'},
+ {id:'nohit',  n:'Reach 600m without a hit',  pay:220, goal:1,  test:s=>runDepth>=600&&!s.hurt},
+ {id:'swarm',  n:'Kill 60 of anything',       pay:90,  goal:60, count:'kill'},
+ {id:'sigil',  n:'Rewrite a strand',          pay:150, goal:1,  count:'weave'},
+ {id:'rare',   n:'Find 3 rare items',         pay:120, goal:3,  count:'rare'},
+ {id:'thrifty',n:'Reach 1,200m without a shrine',pay:170,goal:1,test:s=>runDepth>=1200&&!s.shrine},
+];
+let BOUNTY=[],BSTATE={};
+function rollBounties(){
+ const pool=BOUNTIES.slice(),pick=[];
+ for(let i=0;i<3&&pool.length;i++)pick.push(pool.splice(ri(0,pool.length-1),1)[0]);
+ BOUNTY=pick;BSTATE={hurt:0,shrine:0};
+ for(const b of pick)BSTATE[b.id]=0}
+function bTick(kind,n){
+ if(!BOUNTY.length)return;
+ for(const b of BOUNTY)if(b.count===kind)BSTATE[b.id]=(BSTATE[b.id]||0)+(n||1)}
+function bDone(b){return b.test?!!b.test(BSTATE):(BSTATE[b.id]||0)>=b.goal}
+function bountyPayout(){let t=0;for(const b of BOUNTY)if(bDone(b))t+=b.pay;return t}
 const DEFAULT_GEAR_POOL=['sword','bow','vest'];
 const DEFAULT_GEM_POOL=['cleave','multishot','addedfire'];
 const UNLOCKS=[
@@ -1284,6 +1633,22 @@ const UNLOCKS=[
  {id:'sentry',    n:'Shard Sentry (ability)',  cost:130},
  {id:'decoy',     n:'Decoy gem (ability)',     cost:85},
  {id:'rupture',   n:'Rupture gem (ability)',   cost:120},
+ // ---- content wave 3: the conditional layer. Priced as build-definers. ----
+ {id:'bracing',   n:'Bracing Blow (interrupt)',cost:130},
+ {id:'punish',    n:'Punish support',          cost:125},
+ {id:'kindling',  n:'Kindling support',        cost:100},
+ {id:'rimebound', n:'Rimebound support',       cost:100},
+ {id:'hunger',    n:'Hunger support',          cost:115},
+ {id:'splinter',  n:'Splinter support',        cost:110},
+ {id:'contagion', n:'Contagion support',       cost:120},
+ {id:'vigil',     n:'Vigil aura',              cost:90},
+ {id:'reaper',    n:"Reaper's Eye aura",       cost:90},
+ {id:'tempo',     n:'Tempo aura',              cost:105},
+ {id:'crucible',  n:'Crucible gem (ability)',  cost:110},
+ {id:'wardbreak', n:'Sunder Ward (ability)',   cost:120},
+ {id:'tether',    n:'Tether gem (ability)',    cost:135},
+ {id:'hail',      n:'Hail gem',                cost:105},
+ {id:'rend',      n:'Rend gem',                cost:120},
 ];
 // ============ RNG + NOISE + THE LATTICE ============
 // The world is not generated from one seed. It is generated from SIX — one per STRAND — and
@@ -1350,6 +1715,25 @@ deriveWeave(SEED);
 // ============ WORLD / CHUNKS ============
 const CHUNKS=new Map(); // "cx,cy" -> {tiles:Uint8Array, cv:canvas, dirty, spawned, spawns:[]}
 function biomeAt(ty){for(const b of BIOMES){if(ty<b[0])return b}return BIOMES[BIOMES.length-1]}
+// Solve each band's carve threshold for its declared air fraction, by sampling its own noise at
+// its own frequency and taking the quantile. Hand-tuned thresholds cannot survive a change to the
+// frequency or the octave mix; this cannot go stale, because it re-derives itself.
+// It reads the TERRAIN strand and nothing else, so rerolling the caches never moves a wall.
+let AIRCAL={};
+function calibrateAir(){
+ AIRCAL={};
+ for(let i=0;i<BIOMES.length;i++){
+  const b=BIOMES[i],name=b[1],S=BSHAPE[name];
+  if(!S||!S.air||!b[3]){AIRCAL[name]=-1;continue}
+  const y0=i?BIOMES[i-1][0]:SURFACE, y1=b[0], span=Math.max(1,y1-y0), cs=b[3];
+  const vals=[];
+  for(let k=0;k<1024;k++){
+   const tx=(k*181)%WORLD_W, ty=y0+((k*97)%span);
+   vals.push(noise2(tx*cs*S.ax,ty*cs*S.ay))}
+  vals.sort((p,q)=>p-q);
+  AIRCAL[name]=vals[Math.min(vals.length-1,Math.floor(S.air*vals.length))]}
+ return AIRCAL}
+calibrateAir();   // once at load; re-solved whenever the terrain strand changes
 function surfH(tx){return Math.floor(SURFACE+noise2(tx*0.02,7.7)*14-7)}
 function genChunk(cx,cy){
  // Per-chunk RNG. The global stream is shared with combat, loot and render, and chunks are
@@ -1377,8 +1761,9 @@ function genChunk(cx,cy){
      const B=biomeAt(ty);
      v=B[2];
      // cave carve — density grows a touch with depth
-     const cs=B[3];
-     if(cs>0){const n=noise2(tx*cs,ty*cs);const th=0.52-Math.min(0.10,ty/WORLD_H*0.12);if(n<th)v=0}
+     const cs=B[3],S=BSHAPE[B[1]]||{ax:1,ay:1};
+     if(cs>0){const th=AIRCAL[B[1]];
+      if(th>=0&&noise2(tx*cs*S.ax,ty*cs*S.ay)<th)v=0}
      if(ty<h+3&&v!==0)v=1; // topsoil
      if(v!==0){
       if(hashS('ore',tx*3+1,ty*3+2)<0.012)v=8;              // shard ore — the `ore` strand
@@ -1392,39 +1777,91 @@ function genChunk(cx,cy){
  // enemy spawns: on air tiles above solid, away from camp
  const B0=biomeAt(cy*CHUNK+CHUNK/2), types=B0[4];
  if(cy*CHUNK> SURFACE-4){
-  const n=Math.round(rS('spawn',1,3)*(threat().dens||1));
-  for(let i=0;i<n;i++){const lx=rS('spawn',2,CHUNK-3),ly=rS('spawn',2,CHUNK-3);
-   if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
-    const tx=cx*CHUNK+lx,ty=cy*CHUNK+ly;
-    if(Math.abs(tx-CAMP_X)>20||ty>SURFACE+20)spawns.push({x:tx*TILE,y:ty*TILE,type:types[rS('spawn',0,types.length-1)]})
-   }}
+  const SH=BSHAPE[B0[1]]||{};
+  // ---- ROOMS ----
+  if(SH.rooms&&hashS('terrain',cx*29+3,cy*29+11)<SH.rooms){
+   const R=ROOMS[Math.floor(hashS('terrain',cx*31+5,cy*31+7)*ROOMS.length)%ROOMS.length];
+   const rh=R.length,rw=R[0].length;
+   if(rw<CHUNK-2&&rh<CHUNK-2){
+    const lx=rS('terrain',1,CHUNK-rw-1),ly=rS('terrain',1,CHUNK-rh-1);
+    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
+     const ch=R[y][x],idx=(ly+y)*CHUNK+lx+x;
+     if(ch==='#'||ch==='=')t[idx]=B0[2];else if(ch==='.')t[idx]=0}}}
+  // ---- VENTS ---- a fixed feature of the band that makes the FLOOR the thing you read.
+  // Structural, so it comes from the terrain strand and survives a cache reroll.
+  if(SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<0.42){
+   for(let tr=0;tr<12;tr++){const lx=rS('terrain',2,CHUNK-3),ly=rS('terrain',2,CHUNK-3);
+    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
+     spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'vent',vent:SH.vent});break}}}
+  // ---- ENCOUNTER COMPOSITION ----
+  // A uniform draw over the roster produces mush: three of the same grunt as often as anything,
+  // a healer with nothing to heal, and no shape to any fight. Each chunk gets a THREAT BUDGET
+  // and spends it instead, so a group is either one big thing or several small ones, repeats
+  // are progressively discouraged, and there is never more than one support unit to focus.
+  // Everything here draws from the `spawn` strand ONLY — the Lattice depends on it.
+  const depthM=Math.max(0,cy*CHUNK+CHUNK/2-SURFACE);
+  let budget=(3.0+depthM/900*2.8)*(threat().dens||1)*(ECHO.dens||1);
+  const used={};let supports=0,placed=0,guard=0;
+  while(budget>0.9&&placed<8&&guard++<40){
+   const cand=[];
+   for(const ty of types){const E=ENEMIES[ty],c=enemyCost(ty);
+    if(c>budget+0.4)continue;
+    if((E.heal||E.ward)&&supports>=1)continue;
+    cand.push({ty,c,w:1/(1+(used[ty]||0)*1.8)})}
+   if(!cand.length)break;
+   let tot=0;for(const c of cand)tot+=c.w;
+   let r=rS('spawn',0,9999)/10000*tot,pick=cand[cand.length-1];
+   for(const c of cand){r-=c.w;if(r<=0){pick=c;break}}
+   // A standing spot is air above solid. In a 90%-air cavern that is rare, and in a solid seam
+   // it is rare the other way — so a failed search must retry the WHOLE draw, not abandon the
+   // encounter. Bailing out here is what silently emptied the world of monsters once already.
+   let put=null;
+   for(let tr=0;tr<26&&!put;tr++){const lx=rS('spawn',2,CHUNK-3),ly=rS('spawn',2,CHUNK-3);
+    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0)put={lx,ly}}
+   if(!put)continue;
+   const pk=(ENEMIES[pick.ty].pack||1)+((threat().dens||1)>1&&ENEMIES[pick.ty].pack?1:0);
+   if(placed+pk>8)continue;      // a pack is several bodies; it cannot straddle the cap
+   budget-=pick.c;used[pick.ty]=(used[pick.ty]||0)+1;placed+=pk;
+   if(ENEMIES[pick.ty].heal||ENEMIES[pick.ty].ward)supports++;
+   const tx=cx*CHUNK+put.lx,ty=cy*CHUNK+put.ly;
+   if(Math.abs(tx-CAMP_X)<=20&&ty<=SURFACE+20)continue;
+   // PACK creatures are written into the chunk as a GROUP, not expanded at spawn time, so the
+   // chunk's spawn list is an honest description of what will be standing there — which is what
+   // the encounter budget is accounting for, and what the Lattice fingerprints.
+   for(let q=0;q<pk;q++)
+    spawns.push({x:tx*TILE+(q?rS('spawn',-26,26):0),y:ty*TILE-(q?rS('spawn',0,10):0),type:pick.ty})
+  }
   // treasure chest POI: rare, needs a floor cavity
   if(hashS('poi',cx*7+5,cy*7+3)<0.12){
    for(let tr=0;tr<14;tr++){const lx=rS('poi',2,CHUNK-3),ly=rS('poi',2,CHUNK-3);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0&&t[(ly-1)*CHUNK+lx]===0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'chest'});break}}}
-  // SHRINE POI: open cavity, grants a run boon
-  if(hashS('poi',cx*11+2,cy*11+9)<0.16){
-   for(let tr=0;tr<14;tr++){const lx=rS('poi',3,CHUNK-4),ly=rS('poi',3,CHUNK-4);
-    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
-     for(let c=-1;c<=1;c++)t[ly*CHUNK+lx+c]=0,t[(ly-1)*CHUNK+lx+c]=0;
+  // SHRINE POI: needs a cavity that is already there. It used to carve its own, which made
+  // the cache strand an editor of the rock.
+  if(hashS('poi',cx*11+2,cy*11+9)<0.18){
+   for(let tr=0;tr<22;tr++){const lx=rS('poi',3,CHUNK-4),ly=rS('poi',3,CHUNK-4);
+    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0&&t[(ly-1)*CHUNK+lx]===0
+      &&t[ly*CHUNK+lx-1]===0&&t[ly*CHUNK+lx+1]===0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'shrine'});break}}}
   // SEALED VAULT: hard-walled room w/ chest inside. Needs a digger (axe) or Fireball to crack.
-  if(hashS('poi',cx*13+7,cy*13+4)<0.10){
-   const rw=rS('poi',9,13),rh=rS('poi',6,8),lx=rS('poi',3,CHUNK-rw-3),ly=rS('poi',3,CHUNK-rh-3);
+  // The ROOM is terrain — it is a built place, part of the shape of the world. Only what is
+  // inside it belongs to the cache strand.
+  if(hashS('terrain',cx*13+7,cy*13+4)<0.10){
+   const rw=rS('terrain',9,13),rh=rS('terrain',6,8),lx=rS('terrain',3,CHUNK-rw-3),ly=rS('terrain',3,CHUNK-rh-3);
    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     const edge=(x===0||y===0||x===rw-1||y===rh-1);
     t[(ly+y)*CHUNK+lx+x]=edge?5:0}
    spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});
    if(cS('poi',.5))spawns.push({x:(cx*CHUNK+lx+2)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});}
-  // SECRET CACHE: sealed pocket whose wall is a secret tile (breaks to ANY weapon)
-  if(hashS('poi',cx*19+3,cy*19+8)<0.14){
-   const rw=5,rh=4,lx=rS('poi',4,CHUNK-rw-4),ly=rS('poi',4,CHUNK-rh-4);
+  // SECRET CACHE: sealed pocket whose wall is a secret tile (breaks to ANY weapon). Same rule —
+  // the pocket is terrain, the thing in it is cache.
+  if(hashS('terrain',cx*19+3,cy*19+8)<0.14){
+   const rw=5,rh=4,lx=rS('terrain',4,CHUNK-rw-4),ly=rS('terrain',4,CHUNK-rh-4);
    let buried=true;
    for(let y=-1;y<=rh;y++)for(let x=-1;x<=rw;x++){if(t[(ly+y)*CHUNK+lx+x]===0)buried=false}
    if(buried){
     for(let y=0;y<rh;y++)for(let x=0;x<rw;x++)t[(ly+y)*CHUNK+lx+x]=0;
-    const side=cS('poi',.5)?-1:rw;
+    const side=cS('terrain',.5)?-1:rw;
     for(let y=0;y<rh;y++)t[(ly+y)*CHUNK+lx+side]=10;
     spawns.push({x:(cx*CHUNK+lx+2)*TILE,y:(cy*CHUNK+ly+rh-1)*TILE,type:'chest'})}}
   // BOSS ARENA: one miniboss per biome band, deterministic per chunk
@@ -1488,6 +1925,8 @@ const SAVE_VER=2;
 let META={ver:SAVE_VER,shards:0,unlocks:{},tree:{},cls:'vanguard',classes:{vanguard:1},
  loadout:{melee:'sword',ranged:'bow',armor:'vest'},anchors:{surface:1},startBiome:'surface',
  vault:[],bosses:{},runs:0,bestDepth:0,audio:1,threat:0,maxThreat:0,
+ // The ladder with no top. echoLv is what you are playing; maxEcho is what you have earned.
+ echoLv:0,maxEcho:0,
  // Codex discovery. Pages exist from the start but stay sealed until you earn them, so the
  // lore is a reward for playing rather than a wall of text on the title screen.
  seen:{en:{},item:{},biome:{},frag:{},cls:{},sigil:{},diss:{}},set:null,
@@ -1550,12 +1989,34 @@ function gemId(g){return !g?null:(typeof g==='string'?g:g.id)}
 function gemTier(g){return (!g||typeof g==='string')?1:(g.tier||1)}
 function gemOf(g){const i=gemId(g);return i?GEMS[i]:null}
 function treeFx(key){let v=0;for(const n of TREE)if(META.tree[n.id]&&n.fx[key])v+=n.fx[key];return v}
-function gearPool(){return DEFAULT_GEAR_POOL.concat(Object.keys(GEAR).filter(g=>META.unlocks[g]&&!DEFAULT_GEAR_POOL.includes(g)))}
+function gearPool(ilvl){const all=DEFAULT_GEAR_POOL.concat(Object.keys(GEAR).filter(g=>META.unlocks[g]&&!DEFAULT_GEAR_POOL.includes(g)));
+ if(ilvl===undefined)return all;
+ const ok=all.filter(g=>baseAllowed(g,ilvl));return ok.length?ok:DEFAULT_GEAR_POOL}
 function gemPool(){return DEFAULT_GEM_POOL.concat(Object.keys(GEMS).filter(g=>META.unlocks[g]&&!DEFAULT_GEM_POOL.includes(g)))}
 
 // ============ ITEMS ============
 let itemUid=1;
-function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
+// ITEM LEVEL is depth, in metres, and it is the only number that decides how good an item is
+// allowed to be. Everything else — affix tiers, modifier affixes, which bases can appear, how
+// often a rare shows up — reads through it.
+function ilvlAt(y){return Math.max(1,Math.round(depthOf(y)))}
+// Rarity is rolled from DEPTH and THREAT rather than being a constant at each drop site, so the
+// deep world visibly pays better instead of paying the same in bigger piles.
+function rollRarity(ilvl,bonus){
+ const t=(threat().rare||1)*(ECHO.rare||1), g=1+Math.min(0.6,inc('greed')*0.35);
+ const d=Math.min(1,ilvl/2600);
+ const pU=(0.006+d*0.055)*t*g*(bonus||1);
+ const pR=(0.05 +d*0.26 )*t*g*(bonus||1);
+ const pM=(0.24 +d*0.34 )*t*g*(bonus||1);
+ if(chance(pU))return 3;
+ if(chance(pR))return 2;
+ if(chance(pM))return 1;
+ return 0}
+// Bases are gated by depth too: a Plate at 50m makes the first band's loot table meaningless, and
+// a Sword at 3,000m is the reason the deep table felt like the shallow one.
+function baseAllowed(id,ilvl){const b=GEAR[id];return !b||!b.ilvl||ilvl>=b.ilvl}
+function mkItem(baseId,rarity,ilvl){ // 0 normal, 1 magic, 2 rare, 3 unique
+ ilvl=Math.max(1,ilvl===undefined?ilvlAt(P.y||0):ilvl);
  // Threat pays out in rarity, not just shards — otherwise the harder world is a worse deal.
  const rr2=threat().rare||1;
  if(rarity<3&&rr2>1&&chance(Math.min(0.5,(rr2-1)*0.55)))rarity=Math.min(3,rarity+1);
@@ -1563,7 +2024,7 @@ function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
  if(rarity===3&&!UNIQUES[baseId])rarity=2;
  // Two uniques per base, coin-flipped, so a rarity-3 drop isn't a single known outcome.
  const alt=(rarity===3&&UNIQ2[baseId]&&chance(0.5))?1:0;
- const it={uid:itemUid++,base:baseId,rarity:rarity||0,affixes:{},sockets:[],sc:[],chroma:-1,unique:rarity===3?baseId:null,alt};
+ const it={uid:itemUid++,base:baseId,rarity:rarity||0,ilvl,affixes:{},tiers:{},mods:{},sockets:[],sc:[],chroma:-1,unique:rarity===3?baseId:null,alt};
  const UD=rarity===3?uniqueDef(baseId,alt):null;
  const s=b.sockets+(rarity>=2?1:0)+((UD&&UD.sockets)||0);
  // Socket colors: the base's fixed colors first, then extras rolled from its tendency.
@@ -1573,15 +2034,58 @@ function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
   it.sc.push(b.sc&&b.sc[i]?b.sc[i]:tend[ri(0,tend.length-1)])}
  // Chromatic: magic+ gear can roll one socket that accepts any color.
  if(rarity>=1&&s>0&&chance(rarity===3?0.5:rarity===2?0.28:0.15))it.chroma=ri(0,s-1);
- const nAff=rarity===1?1:rarity===2?3:rarity===3?1:0;
+ // Deep rares carry a fourth affix. The count is the cheapest way to make an item level felt
+ // before a single number is read.
+ const nAff=rarity===1?(ilvl>=1200&&chance(0.45)?2:1):rarity===2?(ilvl>=1600&&chance(0.4)?4:3):rarity===3?1:0;
  const pool=AFFIXES.slice();
- for(let i=0;i<nAff&&pool.length;i++){const a=pool.splice(ri(0,pool.length-1),1)[0];it.affixes[a[0]]=ri(a[2],a[3])}
+ for(let i=0;i<nAff&&pool.length;i++){
+  const a=pool.splice(ri(0,pool.length-1),1)[0];
+  const t=affTierFor(ilvl),[lo,hi]=affTierRange(a,t);
+  it.affixes[a[0]]=ri(lo,hi);it.tiers[a[0]]=t}
+ // ONE modifier affix, rare and above, deep only. This is the drop you stop and read.
+ if(rarity>=2){
+  const slot=b.shield?'melee':b.slot;
+  const cand=MODAFF.filter(m=>ilvl>=m.ilvl&&(!m.slot||m.slot===slot||slot==='armor'));
+  // armour links its modifier globally to both weapons, exactly like a support gem in armour
+  if(cand.length&&chance(rarity===3?0.55:Math.min(0.55,0.18+ilvl/6000)))
+   {const m=cand[ri(0,cand.length-1)];it.mods[m.k]=1}}
  return it}
+// The single most useful thing an inventory can tell you is "is this better than the one I have
+// on". Without it every drop is a trip through two screens and a memory test.
+function bagBetter(it){
+ if(!it)return '';
+ const b=GEAR[it.base];if(!b)return '';
+ const sl=b.slot==='any'?(EQ.melee&&GEAR[EQ.melee.base].shield?'melee':'ranged'):b.slot;
+ const cur=EQ[sl];
+ if(!cur)return ' <span class="r2">NEW</span>';
+ const d=itemScore(it)-itemScore(cur);
+ if(d>25)return ' <span class="r3">&#9650;</span>';
+ if(d<-25)return ' <span class="sub">&#9660;</span>';
+ return ''}
 function itemName(it){const b=GEAR[it.base];
  if(it.unique&&uniqueDef(it.unique,it.alt))return uniqueDef(it.unique,it.alt).n;
  return ['','Magic ','Rare ',''][it.rarity]+b.n}
 function itemDesc(it){const u=it.unique&&uniqueDef(it.unique,it.alt);return u?u.d:''}
-function affixStr(it){return Object.entries(it.affixes).map(([k,v])=>{const a=AFF[k];return a?'+'+v+a[1]:''}).filter(Boolean).join(', ')}
+// An affix line has to say how GOOD the roll is, not only what it is. The tier name is the whole
+// reason to compare two rares instead of reading the bigger number and moving on.
+function affixStr(it){
+ const parts=Object.entries(it.affixes).map(([k,v])=>{const a=AFF[k];if(!a)return '';
+  const t=(it.tiers&&it.tiers[k])||1;
+  return (AFF_TIER_NAME[t-1]||'')+'+'+v+(a[4]==='pct'?'':' ')+a[1]}).filter(Boolean);
+ for(const k in (it.mods||{}))if(MODA[k])parts.push('<b class="r3">'+MODA[k].n+'</b>');
+ return parts.join(', ')}
+// Item level is the item's whole story in one number, so it goes next to the name everywhere.
+function ilvlStr(it){return it.ilvl?'<span class="sub">i'+it.ilvl+'</span>':''}
+// A single comparable score, used for "is this worth reading" and for the death summary. It is
+// deliberately crude — its job is ranking, not truth.
+function itemScore(it){
+ if(!it)return 0;
+ let s=(it.rarity||0)*40+(it.ilvl||0)*0.02;
+ for(const k in it.affixes){const a=AFF[k];if(!a)continue;
+  s+=it.affixes[k]*(a[4]==='pct'?1.1:1.6)*(0.7+0.3*((it.tiers&&it.tiers[k])||1))}
+ s+=Object.keys(it.mods||{}).length*55;
+ s+=(it.sockets?it.sockets.length:0)*18;
+ return Math.round(s)}
 function sockColOf(it,i){return it.chroma===i?'*':(it.sc&&it.sc[i])||'r'}
 function gemFits(it,i,gid){const G=GEMS[gid];if(!G)return false;
  const c=sockColOf(it,i);return c==='*'||c===(G.col||'r')}
@@ -1593,7 +2097,12 @@ function sockStr(it){return it.sockets.map((g,i)=>{const c=sockColOf(it,i);
 let EQ={melee:null,ranged:null,armor:null};
 let BAG=[]; // {kind:'gear',item} | {kind:'gem',id}
 let EN=[],PROJ=[],PICK=[],PART=[],DMGN=[],CHESTS=[],SHRINES=[],ANCHOR=null,GRAPPLE=null;
-let SENTRY=[],DECOY=null;
+let SENTRY=[],DECOY=null,VENTS=[];
+// HAZARDS: a volume of space that hurts, for a while. Boss shockwaves, fire trails, spore clouds
+// and biome hazards are all the same object — area denial is a thing the world does TO a position,
+// which is exactly what a projectile cannot express. Capped like every other entity array.
+let HAZ=[];
+const HAZ_MAX=64;
 // Deferred spawn queue. killEnemy runs from inside `for (const e of EN)` loops in doMelee,
 // explode and tickStatus; pushing to EN there means the live iteration walks straight into
 // the newly spawned enemies. Queue them and flush once per frame instead.
@@ -1602,7 +2111,24 @@ function queueEnemy(e){if(EN.length+SPAWNQ.length<120)SPAWNQ.push(e)}
 function flushSpawns(){if(SPAWNQ.length){for(const e of SPAWNQ)EN.push(e);SPAWNQ.length=0}}
 let RUNB={dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0};
 const RUNB0=()=>({dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0});
-let shake=0,hitstop=0,runDepth=0,paused=false;
+// SCREENSHAKE. It was 16px on a 272px-wide view — 5.9% of the screen, where Hades uses 0.4%
+// and shakes the screen for only 3 of its 207 enemy deaths. Three changes: a hard 8px ceiling,
+// a squared response so small events barely register and big ones still land, and distance
+// falloff so something exploding across the cavern does not punch you in the face.
+// Ordinary hits do not shake at all any more; they use hitstop and a local flash instead.
+const SHAKE_MAX=8;
+let shake=0,runDepth=0,paused=false;
+function addShake(n,x,y){
+ if(x!==undefined){const d=Math.hypot(x-P.x,y-P.y);n*=Math.max(0,1-d/420)}
+ if(n>shake)shake=Math.min(SHAKE_MAX,n)}
+// HITSTOP is a time SCALE, not a stop. Two things were wrong with a hard freeze: the impact
+// frame never played at full speed before it (so a hit read as a pause with a hit inside it),
+// and time at exactly 0 reads as a bug rather than as weight. preDelay -> crawl -> ease back.
+let HS={t:0,dur:0,frac:1,pre:0},TSCALE=1;
+function hitStop(dur,frac,pre){
+ const k=(SET.hitstop===undefined?100:SET.hitstop)/100;if(k<=0)return;
+ const d=dur*k;if(d<=HS.t)return;          // never shorten a heavier stop already running
+ HS.t=d;HS.dur=d;HS.frac=frac===undefined?0.12:frac;HS.pre=(pre||0)*k}
 const P={x:0,y:0,vx:0,vy:0,w:12,h:20,hp:100,maxhp:100,face:1,onG:false,coyote:0,jbuf:0,dodgeT:0,dodgeCd:0,inv:0,mcd:0,rcd:0,acd:0,dead:false,block:false,st:null,fuel:60,maxfuel:60,focus:FOCUS_MAX,flying:false,noFall:0,levT:0,burrowT:0,kills:0,bestHit:0,weight:0,weightT:0,band:''};
 
 // ---- ADDITIVE POOL ("increased") -------------------------------------------------------
@@ -1620,12 +2146,12 @@ function gearSum(key){let v=0;
 function inc(key){return treeFx(key)+classFx(key)+gearSum(key)+(RUNB[key]||0)}
 // class HP is the one MULTIPLIER on a defensive stat, so it lives under its own key and is
 // deliberately kept out of inc() — otherwise it would be counted as both a flat and a scalar.
-function maxHP(){return Math.round((100+inc('hp'))*(1+classFx('hpMul')))}
+function maxHP(){return Math.max(20,Math.round((100+inc('hp'))*(1+classFx('hpMul'))*(ECHO.php||1)))}
 function armorVal(){let a=inc('arm');if(auraHas('ironskin'))a+=4;return Math.max(0,a)}
 function sresVal(){let s=inc('sres');if(auraHas('warding'))s+=0.5;return Math.min(0.85,s)}
 function greedVal(){return 1+inc('greed')}
 function critChance(){return Math.max(0,Math.min(0.95,CRIT_BASE+inc('crit')))}
-function critMultVal(){return CRIT_MULT+inc('critMult')}
+function critMultVal(){return CRIT_MULT+inc('critMult')}   // raw; softCrit() caps at the use site
 function ailmentMul(){return 1+inc('ailment')}
 function focusGainMul(){return 1+inc('focus')}
 function auraHas(id){return !!(EQ.armor&&EQ.armor.sockets.some(g=>gemId(g)===id))}
@@ -1652,7 +2178,7 @@ function moveSpd(){let m=MOVE*(1+inc('ms'))*chillMul(P);
 function resolveDmg(a,dkey){
  // `dmg` is the universal increased-damage stat; dkey adds the type-specific one on top.
  // Passing dkey==='dmg' (abilities do) must NOT count the universal pool twice.
- a.inc=(a.inc||0)+inc('dmg')+(dkey&&dkey!=='dmg'?inc(dkey):0);
+ a.inc=softInc((a.inc||0)+inc('dmg')+(dkey&&dkey!=='dmg'?inc(dkey):0));
  a.dmg=a.dmg*(1+a.inc)*a.more;
  // ailment potencies are ratios of FINAL damage, so a support gem's `more` feeds the DoT too.
  // Deep Cut's `ailMore` lands here and nowhere else — that's what lets it trade hit damage
@@ -1675,6 +2201,23 @@ function baseAttack(b,kind){
  return kind==='melee'
   ?{kind:'melee',dmg:b.dmg,range:b.range,arc:b.arc,cd:b.cd,kb:b.kb,dig:b.dig||0,col:'#fff',more:1,inc:0}
   :{kind:'ranged',dmg:b.dmg,speed:b.speed,cd:b.cd,kb:b.kb,pierce:b.pierce||0,count:1,explode:0,col:b.col||'#fff',more:1,inc:0}}
+// A boon or an attunement that is only ever a percentage makes every level-up the same
+// decision wearing a different hat. These write CONTRACT changes into the attack — the same
+// seam supports use — so a shrine can hand you 'your hits burn' instead of '+25% damage'.
+// Folded before resolveDmg so an added ailment derives its potency from the finished number.
+function applyRunMods(a){
+ if(RUNM.hitBurn){a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,RUNM.hitBurn)}
+ if(RUNM.hitBleed){a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,RUNM.hitBleed)}
+ if(RUNM.hitChill){a.st=a.st||{};a.st.chill=Math.min(a.st.chill||9,RUNM.hitChill)}
+ if(RUNM.hitShock){a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,RUNM.hitShock)}
+ if(RUNM.vsBurn)a.vsBurn=(a.vsBurn||0)+RUNM.vsBurn;
+ if(RUNM.vsChill)a.vsChill=(a.vsChill||0)+RUNM.vsChill;
+ if(RUNM.vsSpent)a.vsSpent=(a.vsSpent||0)+RUNM.vsSpent;
+ if(RUNM.vsLow)a.vsLow=(a.vsLow||0)+RUNM.vsLow;
+ if(RUNM.extraProj&&a.kind==='ranged')a.count=(a.count||1)+RUNM.extraProj;
+ if(RUNM.chain)a.chain=(a.chain||0)+RUNM.chain;
+ if(RUNM.sunder)a.sunder=(a.sunder||0)+RUNM.sunder;
+ return a}
 function computeAttack(slot){
  const it=EQ[slot];if(!it)return null;
  const b=GEAR[it.base];
@@ -1685,11 +2228,17 @@ function computeAttack(slot){
  const gems=it.sockets.filter(g=>gemOf(g));
  for(const g of gems){const G=gemOf(g);if(G.t==='skill'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
  for(const g of gems){const G=gemOf(g);if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+ // modifier affixes run in the same seam as uniques — after the gems, before the additive pool.
+ for(const k in it.mods){const M=MODA[k];if(M&&M.mod&&(!M.slot||M.slot===kind))M.mod(a)}
  {const u=it.unique&&uniqueDef(it.unique,it.alt);if(u&&u.mod)u.mod(a)}
  // armor sockets: support gems link GLOBALLY to both weapon skills. This is the one
  // global-vs-local decision in the whole system (HANDOFF §3.3).
- if(slot!=='armor'&&EQ.armor)for(const g of EQ.armor.sockets){const G=gemOf(g);if(!G)continue;
-  if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+ if(slot!=='armor'&&EQ.armor){
+  for(const g of EQ.armor.sockets){const G=gemOf(g);if(!G)continue;
+   if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+  // ...and so does a modifier affix rolled on armour. One rule for both, or players learn two.
+  for(const k in EQ.armor.mods){const M=MODA[k];if(M&&M.mod&&(!M.slot||M.slot===kind))M.mod(a)}}
+ applyRunMods(a);
  resolveDmg(a,kind==='melee'?'meleeDmg':'rangedDmg');
  if(a.dig!==undefined)a.dig+=classFx('digBonus');
  a.cd*=1/(1+inc('cdr'));
@@ -1697,7 +2246,8 @@ function computeAttack(slot){
  if(a.pierce!==undefined)a.pierce+=inc('pierce');
  // cap AFTER critAdd: clamping inside critChance() alone let Precision push past 95%
  a.crit=Math.max(0,Math.min(0.95,critChance()+(a.critAdd||0)));
- a.critMult=critMultVal()+(a.critMultAdd||0);
+ // softCrit AFTER the gem/unique adds, or Deadeye's +0.9 would ride straight past the cap.
+ a.critMult=softCrit(critMultVal()+(a.critMultAdd||0));
  a.leech=(a.leech||0)+inc('leech');
  return a}
 // Cached attack params — recompute only when build changes (equip/socket/tree)
@@ -1712,9 +2262,10 @@ function computeAbility(){
  for(const g2 of it.sockets){if(g2===slot)continue;const S=gemOf(g2);if(!S)continue;
   if(S.t==='sup')applyGem(S,a,gemTier(g2))} // armor supports empower the ability too
  a.inc=(treeFx('meleeDmg')+treeFx('rangedDmg'))*0.5;
+ applyRunMods(a);
  resolveDmg(a,'dmg');
  a.cd*=1/(1+inc('cdr')+classFx('abilCdr'));
- a.crit=critChance();a.critMult=critMultVal();
+ a.crit=critChance();a.critMult=softCrit(critMultVal());
  return a}
 function refreshAttacks(){ATK.melee=computeAttack('melee');ATK.ranged=computeAttack('ranged');ATK.abil=computeAbility();
  P.maxfuel=maxFuel();P.armor=armorVal();P.sres=sresVal();
@@ -1742,7 +2293,7 @@ function useAbility(){
   toast('Blink')}
  else if(a.fx==='warcry'){
   RUNB.dmg+=0.25;BUFFS.push({k:'dmg',v:0.25,until:perf+8});refreshAttacks();
-  shake=Math.max(shake,6);burst(P.x,P.y,'#e6d34a',20);
+  addShake(6);burst(P.x,P.y,'#e6d34a',20);
   for(const e of EN){if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<160){e.vx+=Math.sign(e.x-P.x)*220;applyStatus(e,{shock:1.25})}}
   toast('War Cry — +25% dmg 8s')}
  else if(a.fx==='meteor'){
@@ -1771,7 +2322,7 @@ function useAbility(){
    // potency already carries ailmentMul() from resolveDmg — same double-count as Shatter had
    const d=pot*3.2;total+=d;n++;
    hurtEnemy(e,d,0,'#e05555',null,true,true);burst(e.x,e.y,'#e05555',14)}
-  shake=Math.max(shake,10);flash(0.2);
+  addShake(10);flash(0.2);
   toast(n?'Rupture — '+Math.round(total)+' across '+n:'Rupture — nothing to consume')}
  else if(a.fx==='levitate'){ // free flight burst — refill + no drain for 6s
   P.fuel=P.maxfuel;P.levT=perf+6;P.noFall=Math.max(P.noFall,7);
@@ -1795,10 +2346,25 @@ function useAbility(){
   const md=Math.max(1,digPower());let cut=0;
   for(let d=0;d<26;d++){cut+=carve(P.x,P.y+d*TILE,TILE*1.4,md);
    if(getTile(Math.floor(P.x/TILE),Math.floor((P.y+d*TILE)/TILE))===3)break}
-  shake=Math.max(shake,10);burst(P.x,P.y+30,'#d8a53f',20);
+  addShake(10);burst(P.x,P.y+30,'#d8a53f',20);
   toast('Shaft — '+cut+' tiles');P.noFall=Math.max(P.noFall,3)}
+ else if(a.fx==='crucible'){ // the player's own area denial — the other side of the fungal band
+  addHaz(P.x+P.face*30,P.y+8,64,7,a.dmg*0.30,{burn:a.dmg*0.35},'#ff8a3f',1,'fire');
+  burst(P.x+P.face*30,P.y,'#ff8a3f',18);toast('Crucible — 7s')}
+ else if(a.fx==='wardbreak'){ // the answer to warders, shieldmen and armoured elites
+  let n=0;
+  for(const e of EN){if(e.hp<=0||Math.hypot(e.x-P.x,e.y-P.y)>150)continue;
+   e.arm=0;e.wind=0;e.act=0;e.rec=Math.max(e.rec||0,0.7);
+   applyStatus(e,{shock:1.3},false);burst(e.x,e.y,'#e6d34a',8);n++}
+  addShake(9);flash(0.16);
+  toast(n?'Sunder Ward — '+n+' stripped':'Sunder Ward — nothing near')}
+ else if(a.fx==='tether'){ // damage one, damage all: the crowd answer for single-target builds
+  let n=0;
+  for(const e of EN){if(e.hp<=0||Math.hypot(e.x-P.x,e.y-P.y)>190)continue;e.teth=perf+6;n++}
+  burst(P.x,P.y,'#bfe8ff',20);
+  toast(n>1?'Tether — '+n+' linked':'Tether — nothing to link')}
  else if(a.fx==='quake'){
-  shake=Math.max(shake,14);hitstop=0.08;
+  addShake(14);hitStop(0.09,0.10,0.02);
   explode(P.x,P.y,120,a.dmg*1.4*dm,'#b0a070',{bleed:a.dmg*0.25});
   carve(P.x,P.y+TILE*1.5,TILE*4.5,Math.max(1,digPower()));
   toast('Quake')}}
@@ -1824,7 +2390,16 @@ function scanH(py,cx,w){for(let x=cx-w/2+1;x<=cx+w/2-1;x+=TILE/2){if(solidAt(x,p
 let AC=null,MASTER=null,AUDIO_ON=true;
 function audioInit(){if(AC||!AUDIO_ON)return;
  try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
-  AC=new C();MASTER=AC.createGain();MASTER.gain.value=0.22;MASTER.connect(AC.destination)}catch(e){AC=null}}
+  AC=new C();MASTER=AC.createGain();MASTER.gain.value=0.22;
+  // A compressor on the bus is what stops eight simultaneous hits from clipping into mush.
+  // Without it the voice budget has to stay tiny, and a tiny budget silently eats the sounds
+  // that tell you what just happened.
+  try{const comp=AC.createDynamicsCompressor();
+   comp.threshold.value=-18;comp.knee.value=22;comp.ratio.value=8;
+   comp.attack.value=0.003;comp.release.value=0.16;
+   MASTER.connect(comp);comp.connect(AC.destination)}
+  catch(e){MASTER.connect(AC.destination)}
+ }catch(e){AC=null}}
 const SFX={
  swing:{w:'triangle',f:420,f2:180,d:.08,g:.5},
  nova: {w:'sawtooth',f:220,f2:90, d:.20,g:.6},
@@ -1845,17 +2420,34 @@ const SFX={
  die:  {w:'sawtooth',f:280,f2:40, d:1.1,g:.9},
 };
 let sfxBudget=0; // hard cap on simultaneous voices: a Nova into a crowd must not blow the mix
-function sfx(name){
- if(!AUDIO_ON||!AC||sfxBudget>6)return;const S=SFX[name];if(!S)return;
- try{const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
+// A budget of 6 voices meant a busy fight dropped the sounds that carry information — the crit,
+// the kill, the block. 16 with a per-sound retrigger lockout keeps the mix legible instead:
+// the same sound cannot fire twice inside 35ms, so a multishot volley is one sound, not five.
+let sfxLast={};
+function sfx(name,x){
+ if(!AUDIO_ON||!AC||sfxBudget>16)return;const S=SFX[name];if(!S)return;
+ try{const t=AC.currentTime;
+  if(t-(sfxLast[name]||-9)<0.035)return;
+  sfxLast[name]=t;
+  const o=AC.createOscillator(),g=AC.createGain();
   o.type=S.w;o.frequency.setValueAtTime(S.f,t);o.frequency.exponentialRampToValueAtTime(Math.max(20,S.f2),t+S.d);
   g.gain.setValueAtTime(S.g,t);g.gain.exponentialRampToValueAtTime(0.0008,t+S.d);
-  o.connect(g);g.connect(MASTER);o.start(t);o.stop(t+S.d+0.02);sfxBudget++}catch(e){}}
+  o.connect(g);
+  // Placed in the stereo field by where it happened, so an off-screen shot has a direction.
+  let tail=g;
+  if(x!==undefined&&AC.createStereoPanner){
+   const pan=AC.createStereoPanner();
+   pan.pan.value=Math.max(-1,Math.min(1,(x-cam.x)/Math.max(1,VW/2)))*0.7;
+   g.connect(pan);tail=pan}
+  tail.connect(MASTER);o.start(t);o.stop(t+S.d+0.02);sfxBudget++}catch(e){}}
 // Lightning arcs, screen flashes and floating callouts all render from these.
 let ARCS=[],FLASH=0,CALLOUT=null;
 function arc(x1,y1,x2,y2,col){if(ARCS.length<24)ARCS.push({x1,y1,x2,y2,col,t:0.16})}
 function toastQ(msg){CALLOUT={m:msg,t:0.9};if(msg==='SHATTER')sfx('shatter')}
-function flash(a){FLASH=Math.max(FLASH,a)}
+function flash(a){FLASH=Math.max(FLASH,a*((SET.flashes===undefined?100:SET.flashes)/100))}
+// Damage TAKEN never floats a number. A number tells you how much after the fact; a directional
+// edge flare tells you WHERE it came from, while you can still do something about it.
+let HURT=null,SRCX=null;
 
 // ============ COMBAT ============
 // STATUS. Every entry in o.st is an ARRAY of instances, even the non-stacking ones — one shape
@@ -1919,13 +2511,36 @@ function stSum(o,k){const a=o.st&&o.st[k];if(!a||!a.length)return 0;return a.red
 function hasSt(o,k){return !!(o.st&&o.st[k]&&o.st[k].length)}
 function chillMul(o){const a=o.st&&o.st.chill;return a&&a.length?a[0].p:1}
 function shockMul(o){const a=o.st&&o.st.shock;return a&&a.length?a[0].p:1}
-function dmgNum(x,y,v,col,crit){if(!SET.dmgnum)return;DMGN.push({x,y,vy:crit?-58:-40,t:crit?1.0:0.8,v:Math.round(v),col:col||'#fff',crit:!!crit})}
+// Damage numbers COALESCE. Once auras, hazards, chains and damage-over-time all publish, a
+// literal number per event is an unreadable snowstorm over the thing you are trying to fight.
+// Same place, same colour, inside a quarter second: add to the running total instead.
+const DMGN_MAX=24;
+function dmgNum(x,y,v,col,crit){
+ if(!SET.dmgnum)return;
+ const c=col||'#fff';
+ for(let i=DMGN.length-1;i>=0;i--){const n=DMGN[i];
+  if(n.col!==c||n.crit!==!!crit)continue;
+  if(n.age>0.25)continue;
+  if(Math.abs(n.x-x)>16||Math.abs(n.y-y)>16)continue;
+  n.v+=Math.round(v);n.t=Math.max(n.t,crit?1.0:0.8);n.pop=0.12;return}
+ if(DMGN.length>=DMGN_MAX)DMGN.shift();
+ DMGN.push({x,y,vy:crit?-58:-40,t:crit?1.0:0.8,age:0,pop:0,v:Math.round(v),col:c,crit:!!crit})}
 // ---- the two damage gates. Everything that hurts anything goes through one of these. ----
 function rollCrit(a){return a&&a.crit>0&&chance(a.crit)}
-function applyArmor(raw,armor){return Math.max(ARMOR_FLOOR,raw-(armor||0))}
+// Flat subtraction with a proportional floor: armour is strong against many small hits and weak
+// against one big one (which is what separates Vanguard from Marksman), but can never remove more
+// than 85% of a hit. Applies to the player AND to enemy armour, so an Armoured elite at depth is
+// a wall, never an immunity (PLAN §4.1).
+function applyArmor(raw,armor){return Math.max(ARMOR_FLOOR,raw*ARMOR_MIN_FRAC,raw-(armor||0))}
+// Crit damage is additive and softly capped — past CRIT_SOFT each further point is worth a
+// quarter. Hard caps feel like a wall and make the stat dead; this keeps it always worth a little.
+function softCrit(m){return m<=CRIT_SOFT?m:CRIT_SOFT+(m-CRIT_SOFT)*CRIT_SOFT_RATE}
+function softInc(v){return v<=INC_SOFT?v:INC_SOFT+(v-INC_SOFT)*INC_SOFT_RATE}
 function burst(x,y,col,n){if(PART.length>350)return;for(let i=0;i<(n||6);i++)PART.push({x,y,vx:rr(-90,90),vy:rr(-140,20),t:rr(.2,.5),col})}
 // Undertow makes being nearly dead a build choice rather than only a problem.
-function liveSpeedMul(){return auraHas('undertow')&&P.hp<P.maxhp*0.4?0.8:1}
+function liveSpeedMul(){let m=auraHas('undertow')&&P.hp<P.maxhp*0.4?0.8:1;
+ if(P.tempo)m*=1-0.06*P.tempo;   // Tempo stacks live on P, read here, never cached into ATK
+ return m}
 function doMelee(){
  const a=ATK.melee;if(!a||a.kind!=='melee'||P.mcd>0)return;
  // Riposte only exists inside the counter window, which is what makes Vanguard's shield an
@@ -1936,7 +2551,7 @@ function doMelee(){
  if(a.lunge&&!P.block){P.vx=P.face*a.lunge;P.inv=Math.max(P.inv,0.12);burst(P.x,P.y,'#ffffff40',4)}
  const fang=P.face>0?0:Math.PI, half=a.arc*Math.PI/360;
  let hit=false;
- for(const e of EN){if(e.hp<=0)continue;
+ for(const e of EN){if(e.hp<=0||(e.invT||0)>0)continue;   // an invulnerable target is not a hit
   const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,dy);
   if(d>=a.range+e.w/2)continue;
   const ang=Math.atan2(dy,dx),diff=Math.abs(Math.atan2(Math.sin(ang-fang),Math.cos(ang-fang)));
@@ -1951,7 +2566,9 @@ function doMelee(){
  // dig soft tiles in front
  const cut=carve(P.x+P.face*a.range*0.8,P.y,a.digR||TILE*1.5,a.dig>=0?a.dig:-1);
  if(cut&&CLASSES[META.cls].foc==='dig')gainFocus(cut*1.5);
- if(hit){hitstop=0.05;shake=Math.max(shake,4)}
+ // An ordinary hit no longer shakes the screen. Hitstop, the white flash and the particle
+ // burst carry it — a shake on every swing is a shake you stop being able to read.
+ if(hit)hitStop(0.045,0.30,0.012);
  burst(P.x+P.face*a.range*0.55,P.y,'#ffffff40',3);
  sfx(a.arc>=200?'nova':'swing')}
 // Auto-aim range is tied to what you can actually SEE. It used to be a flat 260px, which on a
@@ -2003,34 +2620,80 @@ function doRanged(){
    // Conditional gems ride along on the projectile — they resolve at impact, not at fire time.
    // Without this, Momentum/Culling/Chain/Reap/Sunder are pure `more` penalties when ranged.
    momentum:a.momentum||0,cull:a.cull||0,chain:a.chain||0,reap:a.reap||0,sunder:a.sunder||0,
+   vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,
+   interrupt:a.interrupt||0,stagger:a.stagger||0,splinter:a.splinter||0,contagion:a.contagion||0,
    ox:P.x,oy:P.y,col:a.col,t:a.life||2,friendly:1})}
- shake=Math.max(shake,2);sfx('shoot')}
+ sfx('shoot')}
 function doMeleeAs(a){if(P.rcd>0)return;P.rcd=a.cd;
- for(const e of EN){if(e.hp<=0)continue;
+ for(const e of EN){if(e.hp<=0||(e.invT||0)>0)continue;
   if(Math.hypot(e.x-P.x,e.y-P.y)<a.range+e.w/2&&Math.sign(e.x-P.x)===P.face)strike(e,a,P.face*a.kb)}
  sfx('swing')}
 // ---- strike(): the single player->enemy damage path. Crit, armor, leech and focus all here.
 // Conditional gem effects (Momentum, Reap, Bloodscent, Culling, Chain, Sunder, Twin Strike)
 // depend on live state, so they resolve HERE rather than in the cached ATK object. ----
+// ---- THE CONDITIONAL LAYER ----
+// Every "more damage IF" and every on-hit rider lives in these two functions, and BOTH damage
+// paths call them. CLAUDE.md rule 2 exists because a conditional gem wired into strike() but not
+// projStrike() is not a weaker gem — it is a pure downside for every ranged build in the game,
+// and that has shipped here before. One implementation, two callers, no way to forget.
+function condMul(a,e){
+ let m=1;
+ // Momentum: damage scales with how fast you're actually moving — makes `ms` an offensive stat
+ if(a.momentum)m*=1+Math.min(1,Math.abs(P.vx)/Math.max(1,MOVE))*a.momentum;
+ // Reap: scales with the target's MISSING health — an execution build
+ if(a.reap&&e.maxhp)m*=1+(1-e.hp/e.maxhp)*a.reap;
+ // ...and the conditions the new roster made possible. Each one rewards a different thing you
+ // can actually DO: set them on fire, freeze them, learn the tell, or finish what you started.
+ if(a.vsBurn&&hasSt(e,'burn'))m*=1+a.vsBurn;
+ if(a.vsChill&&hasSt(e,'chill'))m*=1+a.vsChill;
+ if(a.vsSpent&&(e.rec||0)>0)m*=1+a.vsSpent;
+ if(a.vsLow&&e.maxhp&&e.hp<e.maxhp*0.5)m*=1+a.vsLow;
+ if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))m*=1.3;
+ if(auraHas('vigil')&&perf-(P.lastHurt||-9)>3)m*=1.25;
+ if(auraHas('reaper')&&e.maxhp&&e.hp<e.maxhp*0.5)m*=1.2;
+ return m}
+// Riders that fire on a hit that has already landed. Same contract: both paths call it.
+function onHit(a,e,dmg){
+ // INTERRUPT — the verb the game did not have. Cancelling a windup turns a heavy weapon from
+ // "slower numbers" into a different way to play the fight, and it only means anything because
+ // enemies now have three beats instead of two.
+ // Interrupt needs a per-enemy cooldown or it is not a tool, it is an off switch: a 0.285s
+ // swing against a 0.26s windup floor means the creature never completes an attack in its life.
+ // It also has to reach the RANGED tell, or Bracing Blow silently does nothing to a shooter.
+ if(a.interrupt&&(e.wind>0||(e.swind||0)>0)&&!e.boss&&perf>=(e.intT||0)){
+  e.intT=perf+1.4;
+  e.wind=0;e.swind=0;e.act=0;e.rec=Math.max(e.rec||0,(e.atk&&e.atk.rec)||0.3);
+  burst(e.x,e.y-e.h/2,'#ffe9a0',8);dmgNum(e.x,e.y-e.h-6,0,'#ffe9a0');toastQ('INTERRUPT')}
+ // Stagger lengthens an existing punish window but never creates one, so it cannot chain-lock.
+ if(a.stagger&&(e.rec||0)>0)e.rec=Math.min((e.rec||0)+a.stagger,1.2);
+ if(a.sunder)e.arm=Math.max(0,(e.arm||0)-a.sunder)}
+// Riders that fire when this attack was the killing blow. Kept out of killEnemy so a gem cannot
+// accidentally apply to a death it had nothing to do with (an ailment tick, a hazard, a fall).
+function onKill(a,e){
+ // Splinter: the corpse is a weapon. Turns single-target skills into crowd clear on a delay.
+ if(a.splinter)for(let k=0;k<3&&PROJ.length<200;k++){const ang=k/3*6.283+RNG();
+  PROJ.push({x:e.x,y:e.y,vx:Math.cos(ang)*300,vy:Math.sin(ang)*300-60,dmg:a.dmg*0.35,
+   crit:a.crit,critMult:a.critMult,pierce:1,explode:0,leech:0,st:null,col:'#bfe8ff',t:0.9,friendly:1,ox:e.x,oy:e.y})}
+ // Contagion: ailments jump to a neighbour. The engine of a damage-over-time build.
+ if(a.contagion&&e.st){let best=null,bd=140;
+  for(const o of EN){if(o===e||o.hp<=0)continue;const d=Math.hypot(o.x-e.x,o.y-e.y);if(d<bd){bd=d;best=o}}
+  if(best){const pass={};let any=false;
+   for(const k of ['burn','bleed'])if(stSum(e,k)>0){pass[k]=stSum(e,k)*0.7;any=true}
+   if(any){applyStatus(best,pass,false);arc(e.x,e.y,best.x,best.y,'#8fdc6a')}}}}
 function strike(e,a,kb,isSecond){
  const crit=rollCrit(a);
- let dmg=a.dmg*(crit?a.critMult:1);
- // Momentum: damage scales with how fast you're actually moving — makes `ms` an offensive stat
- if(a.momentum)dmg*=1+Math.min(1,Math.abs(P.vx)/Math.max(1,MOVE))*a.momentum;
- // Reap: scales with the target's MISSING health — an execution build
- if(a.reap&&e.maxhp)dmg*=1+(1-e.hp/e.maxhp)*a.reap;
- // Bloodscent aura: bonus against anything already bleeding or burning
- if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))dmg*=1.3;
+ let dmg=a.dmg*(crit?a.critMult:1)*condMul(a,e);
  if(isSecond)dmg*=0.6;
  let st=a.st;
  if(crit&&st){st={};for(const k in a.st)st[k]=a.st[k]*(k==='chill'?1:CRIT_ST)} // crits deepen ailments
- // Sunder: strip armor before the hit lands, and leave it stripped
- if(a.sunder)e.arm=Math.max(0,(e.arm||0)-a.sunder);
+ onHit(a,e,dmg);                                  // interrupt / stagger / sunder, before it lands
+ const alive=e.hp;
  hurtEnemy(e,dmg,kb,crit?'#d8a53f':a.col,st,false,crit);
  if(a.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*a.leech);
  // Culling: anything left under the threshold dies outright. Feels incredible on trash.
  if(a.cull&&e.hp>0&&e.maxhp&&e.hp<e.maxhp*a.cull){
   dmgNum(e.x,e.y-e.h,e.hp,'#ffe9a0',true);e.hp=0;burst(e.x,e.y,'#ffe9a0',12);killEnemy(e)}
+ if(alive>0&&e.hp<=0)onKill(a,e);
  // Chain: a bolt hops to a neighbour. Gives single-target skills a crowd answer.
  if(a.chain&&!isSecond)chainFrom(e,dmg*0.6,a.col,a.chain);
  gainFocus(FOCUS_HIT);
@@ -2047,7 +2710,20 @@ function chainFrom(from,dmg,col,jumps){
   arc(src.x,src.y,best.x,best.y,col||'#9fd0ff');
   hurtEnemy(best,dmg,0,col,null,true);
   hit.push(best);src=best;dmg*=0.75}}
-function depthMul(y){return 1+Math.max(0,(y/TILE-SURFACE))/900} // enemies scale with depth
+// ---- DEPTH SCALING (PLAN §4.2). Three curves, deliberately different shapes. ----
+// Linear scaling on HP *and* damage means time-to-kill and time-to-die degrade together, which
+// flattens the whole difficulty curve into a wall: at 3140m a 4.5x enemy takes 4.5x longer to
+// kill AND removes 4.5x more of your health bar, so nothing you built matters.
+// Splitting them means deep enemies are TOUGHER rather than DEADLIER — which is what rewards
+// build power instead of punishing every mistake with death.
+function depthOf(y){return Math.max(0,(y/TILE-SURFACE))}
+// The constants are solved against the target table in PLAN §4.2, not copied from its prose —
+// the prose said 1.45 and that overshoots the table it sits under by 15% at the floor.
+function depthHP(y){return 1+Math.pow(depthOf(y)/900,1.15)*1.235}  // 1.00 / 2.24 / 6.20 at 0 / 900 / 3140
+function depthDmg(y){return 1+Math.pow(depthOf(y)/900,0.85)*0.62}  // 1.00 / 1.62 / 2.79
+// The economy keeps the old linear curve on purpose: a deep run should out-earn a surface loop by
+// roughly 4x, and that number was tuned against the unlock costs (DESIGN-PLAN §3.4.1).
+function depthMul(y){return 1+depthOf(y)/900}
 // chained=true suppresses further chaining so a shock loop can't recurse forever.
 function hurtEnemy(e,dmg,kb,col,st,chained,crit){
  if(e.hp<=0||(e.invT||0)>0)return;
@@ -2055,26 +2731,48 @@ function hurtEnemy(e,dmg,kb,col,st,chained,crit){
  // Shieldman blocks hard from the side it's facing — you have to get behind it. That's the
  // whole lesson of the ruins band, and it's one line because `front` is a table field.
  if(e.front&&Math.sign(P.x-e.x)===e.dir&&!e.wind)dmg*=0.25;
+ // A ward makes the thing in front of you harder to kill than the thing behind it. It is the
+ // only mechanic in the roster that asks "what do you shoot FIRST", and it answers itself: the
+ // warder is unwarded, so the encounter has a correct opening move you can discover.
+ let earm=e.arm||0;
+ if(WARDS.length&&!(ENEMIES[e.type]&&ENEMIES[e.type].ward)){
+  for(const w of WARDS){if(w===e||w.hp<=0)continue;const W=ENEMIES[w.type].ward;
+   if(Math.hypot(w.x-e.x,w.y-e.y)<W.range){dmg*=1-W.dr;earm+=W.arm||0;break}}}
  // Mechanical attunements resolve here, on live state, rather than in the cached ATK.
  let mm=1;
  if(RUNM.cornered&&P.hp<P.maxhp*0.5)mm+=RUNM.cornered;
  if(RUNM.moving&&Math.abs(P.vx)>MOVE*0.6)mm+=RUNM.moving;
  if(RUNM.overflow&&P.focus>=FOCUS_MAX-1)mm+=RUNM.overflow;
- dmg=applyArmor(dmg,e.arm)*shockMul(e)*(1-P.weight*0.03)*mm;
+ // The punish window pays out here. Hitting a spent enemy is worth more than hitting a winding
+ // one, which is the entire reason to learn a tell instead of trading blows through it.
+ if((e.rec||0)>0){mm*=RECOVER_DMG;if(!chained)bTick('punish')}
+ dmg=applyArmor(dmg,earm)*shockMul(e)*(1-P.weight*0.03)*mm;
  e.hp-=dmg;e.vx+=kb;e.vy-=60;e.flash=crit?0.20:0.12;
  if(st)applyStatus(e,st,false);
  dmgNum(e.x,e.y-e.h,dmg,col,crit);burst(e.x,e.y,e.c,crit?9:5);
  if(dmg>P.bestHit)P.bestHit=dmg;
  if(shocked&&!chained)shockChain(e,dmg,col);
- if(e.boss)bossPhase(e);
+ // TETHER: the link splashes a share of every hit to everything else on the line. `chained`
+ // suppresses it on the splash itself, so a six-enemy link cannot recurse into a stack overflow.
+ if(!chained&&(e.teth||0)>perf){
+  for(const o of EN){if(o===e||o.hp<=0||(o.teth||0)<=perf)continue;
+   arc(e.x,e.y,o.x,o.y,'#bfe8ff');hurtEnemy(o,dmg*0.35,0,'#bfe8ff',null,true)}}
+ // Only a LIVING boss changes phase. The lethal hit puts hp at or below zero, and every
+ // remaining `at` threshold is trivially true against a corpse — so the killing blow used to
+ // unlock the next phase on a dead boss: roar, invulnerability, and a full pattern burst.
+ if(e.boss&&e.hp>0)bossPhase(e);
  if(e.hp<=0)killEnemy(e);
- else sfx(crit?'crit':'hit')}
+ else sfx(crit?'crit':'hit',e.x)}
 function killEnemy(e){
  if(e.dying)return;e.dying=1;
- burst(e.x,e.y,e.c,e.boss?40:12);shake=Math.max(shake,e.boss?12:3);
- P.kills++;gainFocus(FOCUS_KILL);sfx(e.boss?'bosskill':'kill');
+ burst(e.x,e.y,e.c,e.boss?40:12);addShake(e.boss?12:3);
+ P.kills++;gainFocus(FOCUS_KILL);sfx(e.boss?'bosskill':'kill',e.x);
+ bTick('kill');if(e.elite)bTick('elite');if(e.boss)bTick('boss');
+ if(hasSt(e,'burn'))bTick('burn');
+ if(auraHas('tempo')){P.tempo=Math.min(5,(P.tempo||0)+1);P.tempoT=perf+4}
  discover('en',e.type);
  gainXP(Math.max(1,Math.round((ENEMIES[e.type].shards||2)*(e.boss?6:e.elite?2.5:1))));
+ if(ECHO.wound)addHaz(e.x,e.y,26,4.5,e.dmg*0.22,{bleed:e.dmg*0.3},'#c04a70',0,'gas');
  if(RUNM.feast)P.hp=Math.min(P.maxhp,P.hp+P.maxhp*RUNM.feast);
  if(RUNM.echo)P.acd=Math.max(0,P.acd-RUNM.echo);
  if(e.boss)rumble(0.9,0.7,400);else rumble(0.25,0.15,70);
@@ -2083,17 +2781,17 @@ function killEnemy(e){
  if(D.burstOnDeath){
   explode(e.x,e.y,D.burstOnDeath,e.dmg*0.7,D.burnDeath?'#ff8a3f':'#9f7ac0',
    D.burnDeath?{burn:e.dmg*0.5}:{chill:0.7});
-  if(Math.hypot(P.x-e.x,P.y-e.y)<D.burstOnDeath){hurtPlayer(e.dmg*0.7);
+  if(Math.hypot(P.x-e.x,P.y-e.y)<D.burstOnDeath){hurtPlayer(e.dmg*0.7,false,e.x);
    applyStatus(P,D.burnDeath?{burn:e.dmg*0.4}:{chill:0.7},true)}}
  // Void spawn: splits into halves, so killing it fast in a corner is a mistake.
- if(D.split&&!e.isSplit){const H=ENEMIES.voidling,m=depthMul(e.y);
-  for(let i=0;i<D.split;i++){
-   queueEnemy({x:e.x+rr(-14,14),y:e.y-6,vx:rr(-90,90),vy:-140,w:H.w,h:H.h,type:'voidling',ai:H.ai,c:H.c,
-    hp:H.hp*m,maxhp:H.hp*m,dmg:H.dmg*m,arm:0,spd:H.spd,onG:false,flash:0,dir:i?1:-1,
-    boss:false,elite:null,shoot:null,scd:0,atk:H.atk,acd:rr(.2,.6),wind:0,act:0,invT:0,phase:0,ph:null,isSplit:1})}}
- if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitstop=0.18;
+ if(D.split&&!e.isSplit){
+  for(let i=0;i<D.split;i++)
+   queueEnemy(Object.assign(mkEnemy('voidling',e.x+rr(-14,14),e.y-6,null,threat(),null),
+    {vx:rr(-90,90),vy:-140,dir:i?1:-1,isSplit:1}))}
+ if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitStop(0.22,0.05,0.03);
   const gp=gemPool();for(let i=0;i<2;i++)PICK.push({x:e.x+rr(-10,10),y:e.y,vy:-170,kind:'gem',id:gp[ri(0,gp.length-1)],t:60});
-  const gr=gearPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gear',item:mkItem(gr[ri(0,gr.length-1)],chance(.22)?3:chance(.5)?2:1),t:60});
+  {const il=ilvlAt(e.y),gr=gearPool(il);
+   PICK.push({x:e.x,y:e.y,vy:-150,kind:'gear',item:mkItem(gr[ri(0,gr.length-1)],Math.max(2,rollRarity(il,3.2)),il),t:60})}
   // Every warden carries one. Killing them is how the mechanic opens up.
   {const pool=Object.keys(SIGILS_DEF);
    PICK.push({x:e.x+10,y:e.y,vy:-190,kind:'sigil',id:pool[ri(0,pool.length-1)],t:90})}
@@ -2105,22 +2803,22 @@ function killEnemy(e){
    if(n>(META.maxThreat||0)&&n<THREATS.length){META.maxThreat=n;
     UNLOCK_MSG.push('THREAT '+THREATS[n].n);toastQ('THREAT UNLOCKED')}
    saveMeta()}}
- dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?3:1)*rr(0.7,1.3)));
+ dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?(e.elite.loot||3):1)*rr(0.7,1.3)));
  if(e.elite){
   toast(e.elite.n+' '+e.type+' slain');
   if(e.elite.boom){ // Volatile: corpse detonates — hurts the player too
    const bx=e.x,by=e.y,br=e.elite.boom,bd=e.dmg*1.2;
-   burst(bx,by,'#e07a3f',20);shake=Math.max(shake,8);
+   burst(bx,by,'#e07a3f',20);addShake(8);
    explode(bx,by,br,bd,'#e07a3f');
-   if(Math.hypot(P.x-bx,P.y-by)<br)hurtPlayer(bd)}
-  if(chance(0.35)){const gp=gemPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gem',id:gp[ri(0,gp.length-1)],t:40})}}
+   if(Math.hypot(P.x-bx,P.y-by)<br)hurtPlayer(bd,false,bx)}
+  if(chance(e.elite.loot?0.8:0.35)){const gp=gemPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gem',id:gp[ri(0,gp.length-1)],t:40})}}
  if(chance(0.06)){const pool=gemPool();PICK.push({x:e.x,y:e.y,vy:-120,kind:'gem',id:pool[ri(0,pool.length-1)],t:30})}
- else if(chance(0.05)){const pool=gearPool();const r=chance(0.15)?2:chance(0.45)?1:0;
-  PICK.push({x:e.x,y:e.y,vy:-120,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],r),t:30})}}
+ else if(chance(e.elite?0.10:0.035)){const il=ilvlAt(e.y),pool=gearPool(il);
+  PICK.push({x:e.x,y:e.y,vy:-120,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],rollRarity(il,e.elite?2:1),il),t:30})}}
 // SHARD VALUE SCALES WITH DEPTH (DESIGN-PLAN §3.4.1). This one multiplier is what stops the
 // shallow-farm strategy from being optimal — a deep run should out-earn a surface loop ~4x.
 function dropShards(x,y,n){
- const total=Math.max(1,Math.round(n*greedVal()*depthMul(y)*threat().shard*(RUNM.scav?1.3:1)));
+ const total=Math.max(1,Math.round(n*greedVal()*depthMul(y)*threat().shard*(ECHO.shard||1)*(RUNM.scav?1.3:1)));
  for(let i=0;i<total;i++)PICK.push({x:x+rr(-6,6),y,vy:rr(-160,-80),vx:rr(-50,50),kind:'shard',t:20})}
 // The next undiscovered fragment at or above your depth. Reading them in order matters more
 // than reading them all, so a chest hands you the shallowest one you haven't seen.
@@ -2128,7 +2826,7 @@ function nextFrag(depth){
  // depth < 0 marks a fragment that is not buried anywhere — it is written by doing something.
  for(const f of LORE.frag)if(f.depth>=0&&f.depth<=depth&&!META.seen.frag[f.id])return f;
  return null}
-function openChest(ch){ch.opened=true;burst(ch.x,ch.y,'#d8a53f',12);shake=Math.max(shake,3);
+function openChest(ch){ch.opened=true;bTick('chest');burst(ch.x,ch.y,'#d8a53f',12);addShake(3);
  const f=nextFrag(Math.max(0,Math.floor(ch.y/TILE)-SURFACE));
  if(f&&chance(0.55)){discover('frag',f.id,true);CODEX_NEW++;
   toastQ('FRAGMENT FOUND');toast('Fragment: '+f.n);sfx('level');openFrag(f.id)}
@@ -2141,24 +2839,28 @@ function openChest(ch){ch.opened=true;burst(ch.x,ch.y,'#d8a53f',12);shake=Math.m
    const pool=Object.keys(SIGILS_DEF);
    const id=d>1600?pool[ri(0,pool.length-1)]:(chance(.6)?'reroll':'lock');
    PICK.push({x:ch.x-6,y:ch.y-8,vy:-150,kind:'sigil',id,t:60})}}
- if(chance(0.6)){const pool=gearPool();const r=chance(0.07)?3:chance(0.35)?2:1;
-  PICK.push({x:ch.x+6,y:ch.y-8,vy:-140,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],r),t:30})}}
+ if(chance(0.72)){const il=ilvlAt(ch.y),pool=gearPool(il);
+  PICK.push({x:ch.x+6,y:ch.y-8,vy:-140,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],Math.max(1,rollRarity(il,2.4)),il),t:30})}}
 // damageTaken = max(1, incoming - armor) x (1-blockDR) x (1-ironskin)   [DESIGN-PLAN §1.4]
 // Flat subtraction is deliberate: armor is strong against many small hits and weak against one
 // big one, which is what actually separates Vanguard from Marksman.
-function hurtPlayer(dmg,noArmor){if(P.inv>0||P.dead)return;
+function hurtPlayer(dmg,noArmor,srcX){if(P.inv>0||P.dead)return;
+ SRCX=(srcX===undefined?null:srcX);
  if(P.shield>0){const absorbed=Math.min(P.shield,dmg);P.shield-=absorbed;dmg-=absorbed;
   burst(P.x,P.y,'#9fd0ff',6);if(dmg<=0){P.inv=0.35;return}}
  if(!noArmor)dmg=applyArmor(dmg,P.armor||0);
  if(auraHas('ironskin'))dmg*=0.8;
- if(P.block){dmg*=0.3*(1-classFx('blockDR'));burst(P.x+P.face*8,P.y,'#9fd0ff',6);shake=Math.max(shake,2);
+ if(RUNM.lastLight&&P.hp<P.maxhp*0.34)dmg*=1-RUNM.lastLight;
+ if(P.block){dmg*=0.3*(1-classFx('blockDR'));burst(P.x+P.face*8,P.y,'#9fd0ff',6);addShake(2);
   P.blockedT=perf;P.riposteWarned=0;      // opens the Riposte counter window
   if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2);sfx('block')}
- else{shake=Math.max(shake,6);hitstop=0.06;burst(P.x,P.y,'#e05555',8);sfx('hurt');rumble(0.6,0.3,140)}
- P.hp-=dmg;P.inv=0.7;
- dmgNum(P.x,P.y-P.h,dmg,'#e05555');
+ // TAKING damage is the one moment that earns real time distortion. Hades spends ~140ms at
+ // 1% speed here and it is what makes a hit feel like it cost you something. We had none.
+ else{addShake(5);hitStop(0.15,0.02,0.022);burst(P.x,P.y,'#e05555',10);sfx('hurt');rumble(0.6,0.3,140);
+  HURT={x:(SRCX===null?0:Math.sign(SRCX-P.x)),t:0.55}}
+ P.hp-=dmg;P.inv=0.7;P.lastHurt=perf;BSTATE.hurt=1;
  if(RUNM.thorn)for(const e of EN){if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<44)
-  hurtEnemy(e,14*depthMul(P.y),Math.sign(e.x-P.x)*120,'#8fdc6a',null,true)}
+  hurtEnemy(e,14*depthDmg(P.y),Math.sign(e.x-P.x)*120,'#8fdc6a',null,true)}
  if(P.hp<=0&&!secondWind())die()}
 // Both fatal paths go through here — a direct hit and an ailment tick. It used to live inside
 // hurtPlayer only, so a burn or a Shatter killed straight through the save. Clearing status
@@ -2166,7 +2868,7 @@ function hurtPlayer(dmg,noArmor){if(P.inv>0||P.dead)return;
 function secondWind(){
  if(!RUNM.secondWind||P.secondWind)return false;
  P.secondWind=1;P.hp=Math.round(P.maxhp*0.35);P.inv=2.0;P.st=null;P.hpDrain=0;
- flash(0.5);shake=Math.max(shake,16);burst(P.x,P.y,'#ffe9a0',36);
+ flash(0.5);addShake(16);burst(P.x,P.y,'#ffe9a0',36);
  sfx('level');toastQ('SECOND WIND');rumble(1,1,600);
  return true}
 // ---- FOCUS: the ability resource (DESIGN-PLAN §3.2) ----
@@ -2176,6 +2878,14 @@ function gainFocus(n){if(P.dead)return;P.focus=Math.min(FOCUS_MAX,P.focus+n*focu
 function spendFocus(n,quiet){if(P.focus<n){if(!quiet)toast('Not enough focus');return false}
  P.focus-=n;return true}
 // ============ ENEMIES / PROJECTILES / PICKUPS ============
+// Entity budget is a gameplay resource, not just a perf guard: a hundred sleeping enemies two
+// screens away are a hundred fights you will never have, holding the slots for the fight you
+// are actually in. Reclaim from the furthest sleeper instead of refusing the nearest spawn.
+function evictFar(){
+ let wi=-1,wd=1400*1400;
+ for(let i=0;i<EN.length;i++){const e=EN[i];if(e.boss)continue;
+  const dx=e.x-P.x,dy=e.y-P.y,d2=dx*dx+dy*dy;if(d2>wd){wd=d2;wi=i}}
+ if(wi<0)return false;EN.splice(wi,1);return true}
 function spawnFromChunks(){
  const pcx=Math.floor(P.x/TILE/CHUNK),pcy=Math.floor(P.y/TILE/CHUNK);
  for(let cy=pcy-1;cy<=pcy+1;cy++)for(let cx=pcx-1;cx<=pcx+1;cx++){
@@ -2184,9 +2894,12 @@ function spawnFromChunks(){
    for(const s of c.spawns){
     if(s.type==='chest'){CHESTS.push({x:s.x,y:s.y,opened:false});continue}
     if(s.type==='shrine'){SHRINES.push({x:s.x,y:s.y,used:false});continue}
+    if(s.type==='vent'){if(VENTS.length<40)VENTS.push({x:s.x,y:s.y,kind:s.vent,t:rr(0,3)});continue}
     const boss=!!(ENEMIES[s.type]&&ENEMIES[s.type].boss);
-    if(EN.length>120&&!boss)continue;
-    const m=depthMul(s.y);
+    // At the cap, reclaim a slot from something a thousand pixels away that you could not
+    // possibly be fighting, rather than refusing to spawn the thing in front of you. Bosses
+    // never yield a slot and never take one from another boss.
+    if(EN.length>=(boss?124:120)&&!evictFar())if(!boss)continue;
     // elite chance ramps with depth: ~2% shallow -> 22% deep. Bosses never roll elite.
     const T=threat();
     const eliteP=Math.min(0.55,(0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55)*(T.elite||1));
@@ -2197,48 +2910,136 @@ function spawnFromChunks(){
      const all=BIOMES[ri(0,BIOMES.length-1)][4];const pick=all[ri(0,all.length-1)];
      if(ENEMIES[pick]&&!ENEMIES[pick].boss)stype=pick}
     const E=ENEMIES[stype]||ENEMIES[s.type];
-    const el=(!boss&&chance(eliteP))?ELITES[ri(0,ELITES.length-1)]:null;
-    EN.push({x:s.x,y:s.y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type:stype,ai:E.ai,
-     c:el?el.c:E.c,
-     hp:E.hp*m*(el?el.hp:1),maxhp:E.hp*m*(el?el.hp:1),dmg:E.dmg*m*(el?el.dmg:1),
-     arm:(E.arm||0)+(el&&el.arm||0)+(T.arm||0),front:E.front||0,
-     spd:E.spd*(el?el.spd:1)*(T.spd||1),onG:false,flash:0,dir:chance(.5)?1:-1,
-     boss:boss,elite:el,shoot:E.shoot||null,scd:E.shoot?rr(.5,1.5):0,
-     // Threat III shortens every windup. The tell is still there — you just have less of it.
-     atk:E.atk?(T.wind?Object.assign({},E.atk,{wind:E.atk.wind*T.wind}):E.atk):null,
-     acd:E.atk?rr(.3,1.0):0,wind:0,act:0,invT:0,phase:0,ph:E.ph||null,
-     spawnedBy:s.by||null})}}}}
+    const el=(!boss&&chance(eliteP))?eliteFor(E):null;
+    EN.push(mkEnemy(stype,s.x,s.y,el,T,s.by||null))}}}}
+// One place where a table row becomes a live enemy. Splits, summons, packs and world spawns all
+// come through here, so a new field can never be live in one spawn path and undefined in another.
+function mkEnemy(type,x,y,el,T,by){
+ const E=ENEMIES[type];T=T||threat();
+ const mh=depthHP(y),md=depthDmg(y),boss=!!E.boss;
+ return {x,y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type,ai:E.ai,
+  c:el?el.c:E.c,
+  hp:E.hp*mh*(el?el.hp:1)*(ECHO.hp||1),maxhp:E.hp*mh*(el?el.hp:1)*(ECHO.hp||1),
+  dmg:E.dmg*md*(el?el.dmg:1)*(ECHO.dmg||1),
+  arm:(E.arm||0)+(el&&el.arm||0)+(T.arm||0)+(ECHO.arm||0),front:E.front||0,
+  spd:E.spd*(el?el.spd:1)*(T.spd||1)*(ECHO.spd||1),onG:false,flash:0,dir:chance(.5)?1:-1,
+  boss,elite:el,shoot:E.shoot?Object.assign({},E.shoot):null,scd:E.shoot?rr(.5,1.5):0,
+  atk:mkAtk(E.atk,T),
+  acd:E.atk?rr(.3,1.0):0,wind:0,act:0,rec:0,invT:0,phase:0,ph:E.ph||null,pats:null,
+  spawnedBy:by||null}}
+// One place where a table's attack row becomes a live attack, so the windup floor and the Threat
+// recovery multiplier can never be forgotten by a caller. Every hand-built enemy (splits, summons,
+// tests) goes through it too.
+function mkAtk(atk,T){
+ if(!atk)return null;
+ T=T||threat();
+ const wind=Math.max(WINDUP_FLOOR,atk.wind*(T.wind||1));
+ const rec=Math.max(0.10,(atk.rec!==undefined?atk.rec:Math.max(0.22,atk.wind*0.75))*(T.rec||1));
+ return Object.assign({},atk,{wind,rec})}
+// Real reach of a telegraphed melee: the enemy lunges for the whole active window, so the ground
+// marker has to show range + lunge*act or it is teaching the player a lie (PLAN §2.3).
+function atkReach(atk){if(!atk)return 0;return (atk.range||0)+(atk.lunge||0)*(atk.act||0)}
 // BOSS PHASES (DESIGN-PLAN §4.3). At 66% and 33% HP: brief invuln + roar, shoot cooldown drops
 // 25%, and one new pattern unlocks. Turns HP sponges into fights with a shape.
 function bossPhase(e){
  if(!e.ph||e.phase>=e.ph.length)return;
  const next=e.ph[e.phase];
  if(e.hp/e.maxhp>next.at)return;
- e.phase++;e.invT=0.9;e.pat=next.pat;
+ e.phase++;e.invT=0.9;
+ // ACCUMULATE. Phase 2 is the base fight plus one rule; phase 3 is the base fight plus both.
+ // The old code assigned `e.pat` and nothing ever read it, so every phase was the same fight
+ // with a different colour (PLAN §2.2).
+ (e.pats||(e.pats=[])).push(next.pat);
+ e.patT=e.patT||{};e.patT[next.pat]=0.8;   // first tick comes quickly so the change is legible
  if(e.shoot)e.shoot=Object.assign({},e.shoot,{cd:e.shoot.cd*0.75});
  e.scd=Math.min(e.scd,0.5);
- shake=Math.max(shake,14);flash(0.35);hitstop=0.10;
+ addShake(14);flash(0.35);hitStop(0.12,0.08,0.02);
  burst(e.x,e.y,'#fff',34);sfx('bosskill');
- toast(e.type.toUpperCase()+' — PHASE '+(e.phase+1));
+ toast(e.type.toUpperCase()+' — '+PAT_NAME[next.pat]);
  bossPattern(e,next.pat)}
-// Each unlocked pattern is a one-shot burst on transition; `e.pat` then colors ongoing behaviour.
+const PAT_NAME={slam:'IT BRINGS THE ROOF DOWN',volley:'IT OPENS UP',spores:'THE AIR TURNS',
+ firewall:'IT LEAVES A TRAIL',summon:'IT CALLS',beam:'IT TAKES AIM',devour:'IT BREATHES IN'};
+function bossPat(e,pat){return !!(e.pats&&e.pats.indexOf(pat)>=0)}
+// The transition burst. Still fires — it is the punctuation on the phase change — but it is no
+// longer the entire content of the phase.
 function bossPattern(e,pat){
- const dm=depthMul(e.y);
- if(pat==='volley'){for(let k=0;k<14&&PROJ.length<220;k++){const a=k/14*Math.PI*2;
-  PROJ.push({x:e.x,y:e.y,vx:Math.cos(a)*220,vy:Math.sin(a)*220,dmg:e.dmg*0.5,pierce:0,explode:0,st:null,col:'#ffe9a0',t:3,friendly:0})}}
- else if(pat==='slam'){shake=Math.max(shake,16);explode(e.x,e.y,150,e.dmg*0.8,'#b0a070');carve(e.x,e.y+TILE,TILE*4,1)}
+  if(pat==='volley')bossRing(e,14,220,0.5);
+ else if(pat==='slam')bossSlam(e);
  else if(pat==='spores'){for(let k=0;k<10&&PROJ.length<220;k++)
   PROJ.push({x:e.x+rr(-20,20),y:e.y,vx:rr(-60,60),vy:rr(-180,-60),grav:1,dmg:e.dmg*0.4,pierce:0,explode:26,st:null,col:'#c98fe0',t:4,friendly:0})}
  else if(pat==='firewall'){for(let k=-3;k<=3;k++)if(PROJ.length<220)
-  PROJ.push({x:e.x+k*26,y:e.y-10,vx:0,vy:-40,dmg:e.dmg*0.45,pierce:0,explode:34,stR:null,st:{burn:e.dmg*0.3},col:'#ff8a3f',t:2.4,friendly:0})}
- else if(pat==='summon'){const t=BIOMES.find(b=>b[1]===biomeName(Math.floor(e.y/TILE)));
-  const types=(t&&t[4])||['crawler'];
-  for(let k=0;k<3;k++){const ty=types[ri(0,types.length-1)],E2=ENEMIES[ty];
-   queueEnemy({x:e.x+rr(-60,60),y:e.y-20,vx:0,vy:0,w:E2.w,h:E2.h,type:ty,ai:E2.ai,c:E2.c,
-    hp:E2.hp*dm,maxhp:E2.hp*dm,dmg:E2.dmg*dm,arm:E2.arm||0,spd:E2.spd,onG:false,flash:0,dir:1,
-    boss:false,elite:null,shoot:E2.shoot||null,scd:rr(.5,1.5),atk:E2.atk||null,acd:rr(.3,1),
-    wind:0,act:0,invT:0,phase:0,ph:null})}}}
+  PROJ.push({x:e.x+k*26,y:e.y-10,vx:0,vy:-40,dmg:e.dmg*0.45,pierce:0,explode:34,st:{burn:e.dmg*0.3},col:'#ff8a3f',t:2.4,friendly:0})}
+ else if(pat==='summon')bossSummon(e,3);
+ else if(pat==='beam'){addShake(10);burst(e.x,e.y,'#ffe9a0',22)}
+ else if(pat==='devour'){addShake(12);burst(e.x,e.y,'#a08fff',26)}}
+function bossRing(e,n,speed,mul){
+ for(let k=0;k<n&&PROJ.length<220;k++){const a=k/n*Math.PI*2;
+  PROJ.push({x:e.x,y:e.y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,dmg:e.dmg*mul,pierce:0,explode:0,st:null,
+   col:e.shoot?e.shoot.col:'#ffe9a0',t:3,friendly:0})}
+ sfx('shoot')}
+function bossSlam(e){
+ addShake(16);hitStop(0.06,0.2,0.015);burst(e.x,e.y+e.h/2,'#b0a070',22);
+ // the shockwave is a hazard on the floor, so it can be jumped rather than being an unavoidable tax
+ addHaz(e.x,e.y+e.h/2,110,0.55,e.dmg*0.8,null,'#b0a070',0,'shock');
+ carve(e.x,e.y+TILE,TILE*4,1);sfx('kill')}
+function bossSummon(e,n){
+ const t=BIOMES.find(b=>b[1]===biomeName(Math.floor(e.y/TILE)));
+ const types=(t&&t[4])||['crawler'];
+ const mh=depthHP(e.y),md=depthDmg(e.y);
+ for(let k=0;k<n;k++){const ty=types[ri(0,types.length-1)],E2=ENEMIES[ty];
+  // Through mkEnemy, or the boss's own reinforcements are the weakest things in the room at
+  // Threat V and Echo 20 — the exact inverse of what those ladders are for.
+  queueEnemy(mkEnemy(ty,e.x+rr(-60,60),e.y-20,null,threat(),e.type))}
+ burst(e.x,e.y,'#fff',18);sfx('gem')}
+// ONGOING patterns. This is what makes a phase a different fight instead of a different colour:
+// every unlocked pattern runs on its own timer for the rest of the encounter.
+function bossOngoing(e,dt,dx,dy,d){
+ const T=e.patT||(e.patT={});
+ const tick=(k,period)=>{T[k]=(T[k]||0)-dt;if(T[k]<=0){T[k]=period;return true}return false};
+ for(const pat of e.pats){
+  // Patterns that touch the PLAYER must measure the player. dx/dy/d here describe the aggro
+  // target, which is the Decoy when one is out — devour then dragged you along the boss-to-decoy
+  // line from anywhere on screen, and spores dropped on a dummy.
+  const pdx=P.x-e.x,pdy=P.y-e.y,pd=Math.hypot(pdx,pdy)||1;
+  if(pat==='volley'){if(tick('volley',4.6)&&d<620)bossRing(e,e.phase>=2?18:12,240,0.42)}
+  else if(pat==='spores'){if(tick('spores',3.2)&&pd<520){
+   // dropped ON the player, so standing still is the mistake — this is area denial, not damage
+   addHaz(P.x,P.y+8,42,5.0,e.dmg*0.22,{chill:0.7},'#c98fe0',0,'cloud');
+   burst(P.x,P.y,'#c98fe0',10)}}
+  else if(pat==='firewall'){if(tick('firewall',0.34)&&(Math.abs(e.vx)>12||chance(0.3)))
+   addHaz(e.x,e.y+e.h/2-2,26,3.4,e.dmg*0.30,{burn:e.dmg*0.35},'#ff8a3f',0,'fire')}
+  else if(pat==='summon'){if(tick('summon',5.5)){
+   let mine=0;for(const o of EN)if(o.spawnedBy===e.type&&o.hp>0)mine++;
+   if(mine<4)bossSummon(e,1)}}
+  else if(pat==='beam'){
+   if((e.beamT||0)>0){e.beamT-=dt;e.vx*=0.7;
+    if(e.beamT<=0){ // fires along the locked line — you had 0.9s to leave it
+     const a=e.beamA,sp=760;
+     for(let k=0;k<3&&PROJ.length<220;k++)PROJ.push({x:e.x+Math.cos(a)*(10+k*6),y:e.y+Math.sin(a)*(10+k*6),
+      vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,dmg:e.dmg*1.15,pierce:9,explode:0,st:{shock:1.3},col:'#ffe9a0',t:1.4,friendly:0});
+     addShake(9);sfx('shoot')}}
+   else if(tick('beam',5.2)&&d<620){e.beamT=0.9;e.beamA=Math.atan2(dy,dx);
+    burst(e.x,e.y,'#ffe9a0',14);sfx('deny')}}
+  else if(pat==='devour'){
+   if((e.devT||0)>0){e.devT-=dt;
+    // inhale: drag the player in for 1.1s, then bite. Flight is the counterplay, not distance.
+    if(pd>1&&pd<300){const pull=520*dt;P.vx+=pdx/pd*-pull;P.vy+=pdy/pd*-pull}
+    if(chance(dt*30))PART.push({x:P.x+rr(-20,20),y:P.y+rr(-20,20),vx:(e.x-P.x)*1.4,vy:(e.y-P.y)*1.4,t:.25,col:'#a08fff'});
+    if(e.devT<=0){burst(e.x,e.y,'#a08fff',26);
+     addHaz(e.x,e.y,120,0.4,e.dmg*1.4,{chill:0.55},'#a08fff',0,'shock');
+     addShake(14);sfx('kill')}}
+   else if(tick('devour',6.4)&&pd<340){e.devT=1.1;burst(e.x,e.y,'#a08fff',16);sfx('deny')}}
+ }}
+// A ward is a damage reduction projected onto everything NEAR a warder, so the warder itself is
+// the answer to the fight. Collected once per frame: hurtEnemy runs dozens of times a frame and
+// EN can hold 120, so searching per hit would be a 14,000-comparison inner loop.
+let WARDS=[];
+// A trail/aura status potency is written as a RATIO of the creature's damage, so it scales with
+// depth through e.dmg and never needs a second table.
+function stFrom(spec,dmg){const o={};for(const k in spec)o[k]=spec[k]*dmg;return o}
 function upEnemies(dt){
+ WARDS.length=0;
+ for(const e of EN)if(e.hp>0&&ENEMIES[e.type]&&ENEMIES[e.type].ward)WARDS.push(e);
  for(let i=EN.length-1;i>=0;i--){const e=EN[i];
   if(e.hp<=0){EN.splice(i,1);continue}
   // Decoy steals aggro from anything close enough to notice it.
@@ -2250,65 +3051,124 @@ function upEnemies(dt){
   e.swind=Math.max(0,e.swind||0);
   if(e.st){tickStatus(e,dt,false);if(e.hp<=0){EN.splice(i,1);continue}}
   // The Weight speeds enemies up; Dissonance does too, because the world is looking for you.
-  const cm=chillMul(e)*(1+P.weight*0.03)*dissSpeed();
-  if(d>1400){continue} // sleep far enemies
+  // FRENZIED: the fight gets harder as you win it. Committing to the kill becomes a decision.
+  const frenzy=(e.elite&&e.elite.frenzy)?1+(1-Math.max(0,e.hp/e.maxhp))*0.9:1;
+  const cm=chillMul(e)*(1+P.weight*0.03)*dissSpeed()*frenzy;
+  // Sleeping five screens away is fine; sleeping mid-swing is not. A frozen `act` is a live
+  // damage window with no windup and no marker, waiting for you to walk back into it.
+  if(d>1400){if(e.act>0){e.act=0;e.rec=(e.atk&&e.atk.rec)||0.24}e.wind=0;e.swind=0;continue}
+  const ED=ENEMIES[e.type]||{};
+  // ---- TRAIL: the creature makes the floor its weapon. Area denial that follows you around,
+  // which is the one thing a projectile cannot do. Species or elite modifier, same field.
+  const TR=ED.trail||(e.elite&&e.elite.trail);
+  if(TR&&(e.rec||0)<=0){e.trT=(e.trT||0)-dt;
+   if(e.trT<=0){e.trT=TR.every;
+    addHaz(e.x,e.y+e.h/2-2,TR.r,TR.t,e.dmg*TR.dmg,
+     TR.st?stFrom(TR.st,e.dmg):null,TR.col,0,TR.kind)}}
+  // ---- HEAL: makes another enemy the priority target. The first unit in the game that asks
+  // "what do you shoot first", which is the question that turns a crowd into an encounter.
+  if(ED.heal&&(e.rec||0)<=0){e.hcd=(e.hcd===undefined?rr(0,ED.heal.cd):e.hcd)-dt;
+   if(e.hcd<=0){e.hcd=ED.heal.cd;
+    let t=null,worst=0.999;
+    for(const o of EN){if(o===e||o.hp<=0||!o.maxhp)continue;
+     const f=o.hp/o.maxhp;
+     if(f<worst&&Math.hypot(o.x-e.x,o.y-e.y)<ED.heal.range){worst=f;t=o}}
+    if(t){t.hp=Math.min(t.maxhp,t.hp+t.maxhp*ED.heal.amt);
+     arc(e.x,e.y,t.x,t.y,'#8fdc6a');burst(t.x,t.y,'#8fdc6a',6)}}}
   // ---- TELEGRAPHED RANGED: wind up visibly, THEN fire (DESIGN-PLAN §4.1) ----
   if(e.shoot){e.scd-=dt;
    const S=e.shoot,wind=S.wind||0;
+   // Spent cancels a shot in flight, not just the decision to take one — otherwise melee is
+   // safe during the punish window and the same creature snipes you through it.
+   if((e.rec||0)>0&&e.swind>0)e.swind=0;
    if(e.swind>0){e.swind-=dt;
     if(e.swind<=0){const ux=dx/(d||1),uy=dy/(d||1),n=S.count||1;
+     // LOB: an arcing shell aimed at the GROUND YOU ARE ON, not at you. Solved ballistically so
+     // it actually lands there — artillery that misses by design is just a slow bullet.
+     let bx=ux*S.speed,by=uy*S.speed;
+     if(S.lob){const lx=(e.lockX===undefined?tgt.x:e.lockX)-e.x,ly=(e.lockY===undefined?tgt.y:e.lockY)-e.y;
+      const g=GRAV*0.55,ft=e.lockFt||Math.max(0.35,Math.min(0.9,Math.abs(lx)/Math.max(150,S.speed)));
+      bx=lx/ft;by=(ly-0.5*g*ft*ft)/ft}
      for(let k=0;k<n&&PROJ.length<220;k++){const off=(k-(n-1)/2)*(S.spread||0);
       const c=Math.cos(off),si=Math.sin(off);
-      const pst=S.st?Object.assign({},S.st):(S.stR?{burn:S.dmg*depthMul(e.y)*S.stR.burn}:null);
-      PROJ.push({x:e.x,y:e.y,vx:(ux*c-uy*si)*S.speed,vy:(ux*si+uy*c)*S.speed,
-       dmg:S.dmg*depthMul(e.y),pierce:0,explode:S.explode||0,st:pst,col:S.col,t:3,friendly:0})}
+      const pst=S.st?Object.assign({},S.st):(S.stR?{burn:S.dmg*depthDmg(e.y)*S.stR.burn}:null);
+      PROJ.push({x:e.x,y:e.y,vx:bx*c-by*si,vy:bx*si+by*c,grav:S.grav||0,
+       dmg:S.dmg*depthDmg(e.y),pierce:0,explode:S.explode||0,st:pst,col:S.col,t:3,friendly:0})}
      burst(e.x,e.y,S.col,3)}}
-   else if(e.scd<=0&&d<S.range&&e.invT<=0){e.scd=S.cd;e.swind=wind;
-    if(wind>0)burst(e.x,e.y-e.h/2,S.col,2)}}
+   // A spent enemy cannot shoot either — the punish window has to be a real window, not "melee
+   // is safe but it still snipes you".
+   else if(e.scd<=0&&d<S.range&&e.invT<=0&&(e.rec||0)<=0&&e.wind<=0&&e.act<=0){e.scd=S.cd;e.swind=wind;
+    if(wind>0)burst(e.x,e.y-e.h/2,S.col,2);
+    // Artillery LOCKS the ground you were standing on and paints it. The shell lands there
+    // whatever you do next — so the unit's whole content is "you have `wind` seconds to leave".
+    // Solve the flight time AT LOCK so the marker's countdown and the shell agree. Hard-coding
+    // 0.9s meant a close shell landed while the circle still read as three-quarters full.
+    if(S.lob){e.lockX=tgt.x;e.lockY=tgt.y;
+     e.lockFt=Math.max(0.35,Math.min(0.9,Math.abs(tgt.x-e.x)/Math.max(150,S.speed)));
+     addHaz(tgt.x,tgt.y,(S.explode||30)*0.9,wind+e.lockFt,0,null,S.col,0,'mark')}}}
   // ---- TELEGRAPHED MELEE: stop, swell, then a live damage window ----
   // e.wind > 0 => winding up (no damage). e.act > 0 => strike is live.
   let lunging=false;
-  if(e.atk){e.acd=Math.max(0,e.acd-dt);
+  // THE THREE BEATS. wind (tell, no damage) -> act (live, lunging) -> rec (spent, punishable).
+  // `endAct` is the one place act ends, so recovery can never be skipped by a code path.
+  const endAct=()=>{e.act=0;e.rec=(e.atk&&e.atk.rec)||0.24;e.vx*=0.35};
+  if(e.atk){e.acd=Math.max(0,e.acd-dt*frenzy);
    if(e.act>0){e.act-=dt;lunging=true;
     const tw=onDecoy?12:P.w, th=onDecoy?20:P.h;
     if(Math.abs(dx)<(e.w+tw)/2+6&&Math.abs(dy)<(e.h+th)/2+6){
-     if(onDecoy){DECOY.hp-=e.dmg;burst(DECOY.x,DECOY.y,'#e8e2d0',5);e.act=0}
+     if(onDecoy){DECOY.hp-=e.dmg;burst(DECOY.x,DECOY.y,'#e8e2d0',5);endAct()}
      else{
-      const before=P.inv;hurtPlayer(e.dmg);
+      const before=P.inv;hurtPlayer(e.dmg,false,e.x);
       if(P.inv>before){
        P.vx+=Math.sign(-dx||1)*-(e.atk.kb||150);
        if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
-       if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a');
-       e.act=0}}}}
+       if(e.elite&&e.elite.hex)applyStatus(P,e.elite.hex,true);
+       if(auraHas('thorns'))hurtEnemy(e,12*depthDmg(P.y),Math.sign(-dx||1)*160,'#8fdc6a');
+       endAct()}}}
+    if(e.act<=0&&(e.rec||0)<=0)endAct();          // window closed without connecting: still spent
+    if(bossPat(e,'slam')&&!e.slammed&&e.act<=0){e.slammed=1;bossSlam(e)}}
    else if(e.wind>0){e.wind-=dt;
     e.vx*=0.82;                                  // brace: the enemy visibly commits
-    if(e.wind<=0){e.act=e.atk.act;e.vx=Math.sign(dx||e.dir)*(e.atk.lunge||160)}}
-   else if(e.acd<=0&&d<e.atk.range+e.w/2&&e.invT<=0){e.wind=e.atk.wind;e.acd=e.atk.cd;
+    // The lunge commits to the direction the TELL pointed. Re-reading dx here let the creature
+    // turn on the last frame of its windup, so crossing behind it during the tell — the core
+    // defensive move — was punished by an attack the marker never showed.
+    if(e.wind<=0){e.act=e.atk.act;e.slammed=0;e.vx=e.dir*(e.atk.lunge||160)}}
+   else if((e.rec||0)>0){e.rec-=dt;e.vx*=0.86}   // spent: cannot act, cannot turn, takes more
+   else if(e.acd<=0&&d<atkReach(e.atk)*0.85+e.w/2&&e.invT<=0){e.wind=e.atk.wind;e.acd=e.atk.cd;
     e.dir=Math.sign(dx)||e.dir}}
-  const winding=e.wind>0;
+  const winding=e.wind>0, recovering=(e.rec||0)>0;
+  // Rule 15 applies hardest to the units with the most going on: a spent boss must not open a
+  // bolt ring or lock a beam into the window you just earned. Continuing states still tick.
+  if(e.boss&&e.pats&&e.invT<=0&&(e.rec||0)<=0&&e.wind<=0)bossOngoing(e,dt,dx,dy,d);
   if(e.ai==='walk'){
-   if(d<320&&Math.abs(dy)<80&&!winding)e.dir=Math.sign(dx)||e.dir;
-   if(!winding&&!lunging)e.vx+=(e.dir*e.spd*cm-e.vx)*Math.min(1,dt*6);
+   if(d<320&&Math.abs(dy)<80&&!winding&&!recovering)e.dir=Math.sign(dx)||e.dir;
+   if(!winding&&!lunging&&!recovering)e.vx+=(e.dir*e.spd*cm-e.vx)*Math.min(1,dt*6);
    e.vy+=GRAV*dt;
    // hop small ledges / turn at walls
    const ahead=solidAt(e.x+e.dir*(e.w/2+3),e.y);
-   if(ahead&&e.onG&&!winding){if(!solidAt(e.x+e.dir*(e.w/2+3),e.y-TILE))e.vy=-260;else e.dir*=-1}
+   if(ahead&&e.onG&&!winding&&!recovering){if(!solidAt(e.x+e.dir*(e.w/2+3),e.y-TILE))e.vy=-260;else e.dir*=-1}
    if(e.onG&&!solidAt(e.x+e.dir*(e.w/2+3),e.y+e.h/2+4)&&d>340)e.dir*=-1; // don't walk off cliffs when idle
    collideMove(e,e.vx*dt,Math.min(e.vy*dt,14));
   }else{ // fly
-   if(winding){e.vx*=0.8;e.vy*=0.8}
+   if(winding||recovering){e.vx*=0.8;e.vy*=0.8}
    else if(d<380&&d>0.001){e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}
    else{e.vx+=Math.sin(perf*2+e.x)*10*dt;e.vy+=Math.cos(perf*1.7+e.y)*10*dt}
    // Wraiths ignore terrain entirely — there is no wall to put between you and the abyss.
-   if(ENEMIES[e.type]&&ENEMIES[e.type].phase){e.x+=e.vx*dt;e.y+=e.vy*dt;e.onG=false;
+   if(ED.phase){e.x+=e.vx*dt;e.y+=e.vy*dt;e.onG=false;
     if(chance(dt*12))burst(e.x,e.y,e.c,1)}
+   // Burrowers do not ignore the rock, they EAT it — and the tunnel stays. A wall buys you time
+   // and then becomes a corridor you can use, which is the destructible world paying you back.
+   else if(ED.burrows){e.x+=e.vx*dt;e.y+=e.vy*dt;e.onG=false;
+    carve(e.x,e.y,e.w*0.62,1);
+    if(chance(dt*22))burst(e.x,e.y,'#8a6743',1)}
    else collideMove(e,e.vx*dt,e.vy*dt);
    e.vy*=0.98;e.vx*=0.98}
   // Enemies with no attack block at all still body-check, so nothing is harmless by omission.
-  if(!e.atk&&!onDecoy&&Math.abs(dx)<(e.w+P.w)/2&&Math.abs(dy)<(e.h+P.h)/2){const before=P.inv;hurtPlayer(e.dmg);
+  if(!e.atk&&!onDecoy&&Math.abs(dx)<(e.w+P.w)/2&&Math.abs(dy)<(e.h+P.h)/2){const before=P.inv;hurtPlayer(e.dmg,false,e.x);
    if(P.inv>before){
     if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
-    if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a')}}}}
+    if(e.elite&&e.elite.hex)applyStatus(P,e.elite.hex,true);
+    if(auraHas('thorns'))hurtEnemy(e,12*depthDmg(P.y),Math.sign(-dx||1)*160,'#8fdc6a')}}}}
 function upProj(dt){
  for(let i=PROJ.length-1;i>=0;i--){const p=PROJ[i];p.t-=dt;
   if(p.grav)p.vy+=GRAV*0.55*dt;               // Grenade-class skills are the only ones that arc
@@ -2343,8 +3203,8 @@ function upProj(dt){
     // explode() only damages ENEMIES, so an enemy shell bursting on rock would friendly-fire
     // its own side. A hostile blast checks the player instead.
     if(p.explode&&p.friendly)explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p);
-    else if(p.explode){burst(p.x,p.y,p.col,14);shake=Math.max(shake,5);carve(p.x,p.y,p.explode*0.55,0);
-     if(Math.hypot(P.x-p.x,P.y-p.y)<p.explode){hurtPlayer(p.dmg);if(p.st)applyStatus(P,p.st,true)}}
+    else if(p.explode){burst(p.x,p.y,p.col,14);addShake(5);carve(p.x,p.y,p.explode*0.55,0);
+     if(Math.hypot(P.x-p.x,P.y-p.y)<p.explode){hurtPlayer(p.dmg,false,p.x);if(p.st)applyStatus(P,p.st,true)}}
     else burst(p.x,p.y,p.col,3)}}
   else if(!p.friendly){
    if(Math.abs(p.x-P.x)<P.w/2+3&&Math.abs(p.y-P.y)<P.h/2+3&&!P.dead){
@@ -2352,14 +3212,17 @@ function upProj(dt){
     const facing=Math.sign(p.x-P.x)===P.face;
     if(P.block&&facing){burst(p.x,p.y,'#9fd0ff',5);dead=true;sfx('block');
      if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2)}
-    else{hurtPlayer(p.dmg);if(p.st)applyStatus(P,p.st,true);
-     if(p.explode){burst(p.x,p.y,p.col,14);shake=Math.max(shake,5);carve(p.x,p.y,p.explode*0.55,0)}
+    else{hurtPlayer(p.dmg,false,p.x);if(p.st)applyStatus(P,p.st,true);
+     if(p.explode){burst(p.x,p.y,p.col,14);addShake(5);carve(p.x,p.y,p.explode*0.55,0)}
      dead=true}}}
   else{for(const e of EN){if(e.hp<=0||e.invT>0)continue;
    if(p.hitList&&p.hitList.indexOf(e)>=0)continue;   // pierced targets are never hit twice
    if(Math.abs(e.x-p.x)<e.w/2+3&&Math.abs(e.y-p.y)<e.h/2+3){
-    if(p.explode){explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p);dead=true;break}
+    // The hit resolves FIRST, then the blast. Checking p.explode before projStrike meant an
+    // exploding shot never paid leech, Focus, Momentum, Punish, Culling, Splinter or any other
+    // rider — the blast called hurtEnemy directly and skipped the whole contract.
     projStrike(e,p);
+    if(p.explode){explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p,e);dead=true;break}
     if(p.fork>0){ // Fork: split into two on first hit. Pairs badly with Multishot on purpose.
      const sp=Math.hypot(p.vx,p.vy)||280,base=Math.atan2(p.vy,p.vx);
      for(const s of [-0.5,0.5])if(PROJ.length<200)
@@ -2372,22 +3235,21 @@ function upProj(dt){
 // Culling, Chain, Reap and Sunder are strictly negative for every ranged skill in the game.
 function projStrike(e,p){
  const crit=p.crit>0&&chance(p.crit);
- let dmg=p.dmg*(crit?(p.critMult||CRIT_MULT):1);
- if(p.momentum)dmg*=1+Math.min(1,Math.abs(P.vx)/Math.max(1,MOVE))*p.momentum;
- if(p.reap&&e.maxhp)dmg*=1+(1-e.hp/e.maxhp)*p.reap;
- if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))dmg*=1.3;
+ let dmg=p.dmg*(crit?(p.critMult||CRIT_MULT):1)*condMul(p,e);
  let st=p.st;
  if(crit&&st){st={};for(const k in p.st)st[k]=p.st[k]*(k==='chill'?1:CRIT_ST)}
- if(p.sunder)e.arm=Math.max(0,(e.arm||0)-p.sunder);
+ onHit(p,e,dmg);
+ const alive=e.hp;
  hurtEnemy(e,dmg,Math.sign(p.vx)*60,crit?'#d8a53f':p.col,st,false,crit);
  if(p.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*p.leech);
  if(p.cull&&e.hp>0&&e.maxhp&&e.hp<e.maxhp*p.cull){
   dmgNum(e.x,e.y-e.h,e.hp,'#ffe9a0',true);e.hp=0;burst(e.x,e.y,'#ffe9a0',12);killEnemy(e)}
+ if(alive>0&&e.hp<=0)onKill(p,e);
  if(p.chain)chainFrom(e,dmg*0.6,p.col,p.chain);
  gainFocus(FOCUS_HIT*0.6);
  if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT)}
 function explode(x,y,r,dmg,col,st,src,skip){
- burst(x,y,col,14);shake=Math.max(shake,5);
+ burst(x,y,col,14);addShake(5);
  if(dmg>0)for(const e of EN){if(e.hp<=0||e.invT>0||e===skip)continue;
   if(Math.hypot(e.x-x,e.y-y)<r+e.w/2){
    const crit=src?(src.crit>0&&chance(src.crit)):false;
@@ -2408,6 +3270,8 @@ function upSentry(dt){
     const d=Math.max(1,bd),vx=(best.x-s.x)/d,vy=(best.y-s.y)/d;
     if(PROJ.length<200)PROJ.push({x:s.x,y:s.y,vx:vx*a.speed,vy:vy*a.speed,dmg:a.dmg*0.6,
      crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:0,st:a.st||null,
+     vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,
+     chain:a.chain||0,cull:a.cull||0,
      col:a.col,t:2,friendly:1,ox:s.x,oy:s.y})}}}}
 function upDecoy(dt){
  if(!DECOY)return;
@@ -2415,6 +3279,36 @@ function upDecoy(dt){
  DECOY.y+=0;
  for(const e of EN){if(e.hp<=0)continue;
   if(Math.abs(e.x-DECOY.x)<(e.w+12)/2&&Math.abs(e.y-DECOY.y)<(e.h+20)/2){DECOY.hp-=e.dmg*dt*2;burst(DECOY.x,DECOY.y,'#e8e2d0',1)}}}
+// kind: 'cloud' (soft, drifts) | 'fire' (bright, burns) | 'shock' (hard edge, brief) | 'gas'
+function addHaz(x,y,r,t,dmg,st,col,friendly,kind){
+ if(HAZ.length>=HAZ_MAX)HAZ.shift();
+ HAZ.push({x,y,r,t,life:t,dmg:dmg||0,st:st||null,col:col||'#c98fe0',friendly:friendly?1:0,
+  tickT:0,kind:kind||'cloud'})}
+function upHaz(dt){
+ for(let i=HAZ.length-1;i>=0;i--){const h=HAZ[i];h.t-=dt;
+  if(h.t<=0){HAZ.splice(i,1);continue}
+  h.tickT-=dt;
+  if(h.dmg<=0)continue;                        // a pure marker ('mark') paints, it does not touch
+  if(h.tickT<=0){h.tickT=0.35;
+   if(h.friendly){for(const e of EN){if(e.hp<=0)continue;
+    if(Math.hypot(e.x-h.x,e.y-h.y)<h.r+e.w/2)hurtEnemy(e,h.dmg,0,h.col,h.st,true)}}
+   // hurtPlayer's own i-frames rate-limit this, so standing in fire costs ~one hit per 0.7s
+   // rather than one per tick — chip damage that says "move", not a death sentence.
+   else if(!P.dead&&Math.hypot(P.x-h.x,P.y-h.y)<h.r){hurtPlayer(h.dmg,false,h.x);if(h.st)applyStatus(P,h.st,true)}}
+  if(PART.length<300&&chance(dt*(h.kind==='fire'?26:14)))
+   PART.push({x:h.x+rr(-h.r*.7,h.r*.7),y:h.y+rr(-h.r*.5,h.r*.4),vx:rr(-14,14),
+    vy:h.kind==='fire'?rr(-60,-20):rr(-18,6),t:rr(.3,.7),col:h.col})}}
+// VENTS are the band's own hazard, fixed to a place rather than carried by a creature. They are
+// what makes the Bloom feel like the Bloom with the HUD off: the room itself is doing something.
+function upVents(dt){
+ for(let i=VENTS.length-1;i>=0;i--){const v=VENTS[i];
+  if(Math.abs(v.x-P.x)>900||Math.abs(v.y-P.y)>700)continue;   // asleep off screen
+  v.t-=dt;
+  if(v.t<=0){v.t=v.kind==='flame'?2.6:3.4;
+   const dm=depthDmg(v.y);
+   if(v.kind==='flame')addHaz(v.x,v.y-10,34,1.9,7*dm,{burn:6*dm},'#ff8a3f',0,'fire');
+   else addHaz(v.x,v.y-6,46,4.5,4*dm,{chill:0.7},'#c98fe0',0,'cloud');
+   burst(v.x,v.y,v.kind==='flame'?'#ff8a3f':'#c98fe0',6)}}}
 function upPickups(dt){
  for(let i=PICK.length-1;i>=0;i--){const k=PICK[i];k.t-=dt;
   k.vy=(k.vy||0)+GRAV*0.6*dt;k.x+=(k.vx||0)*dt;
@@ -2430,6 +3324,10 @@ function upPickups(dt){
    else if(k.kind==='gem'){BAG.push({kind:'gem',id:k.id,tier:k.tier||1});toast('Gem: '+GEMS[k.id].n);sfx('gem');
     hint('socket',`Open the bag (${pr('bag')}) and socket that gem — colors must match`)}
    else{BAG.push({kind:'gear',item:k.item});toast(itemName(k.item));sfx('gem');
+    // the run remembers its best find, because "what did I get" is half of why you went down
+    if(!BESTITEM||itemScore(k.item)>itemScore(BESTITEM))BESTITEM=k.item;
+    RUNITEMS++;
+    if(k.item.rarity>=2){toastQ(k.item.rarity>=3?'UNIQUE':'RARE');flash(0.14);sfx('level');bTick('rare')}
     discover('item',k.item.unique?k.item.base+(k.item.alt?'#2':''):k.item.base,true)}
    PICK.splice(i,1);continue}
   if(k.t<=0)PICK.splice(i,1)}}
@@ -2483,14 +3381,20 @@ function applyWeight(dt){
  if(nearCamp())  {P.weightT=0;P.weight=0;return}  // camp and anchors are safe by design
  P.weightT+=dt;
  const T=threat(),wm=T.weight||1;
- const target=Math.max(0,Math.min(WEIGHT_MAX,Math.floor((P.weightT*wm-WEIGHT_GRACE)/WEIGHT_EVERY)+1));
+ const target=Math.max(0,Math.min(WEIGHT_MAX,Math.floor((P.weightT*wm*(ECHO.weight||1)-WEIGHT_GRACE)/WEIGHT_EVERY)+1));
  if(target>P.weight){P.weight=target;
   toast('THE WEIGHT ×'+P.weight+' — descend');flash(0.12);sfx('deny')}}
 function upPlayer(dt){
  if(P.dead)return;
  P.mcd=Math.max(0,P.mcd-dt);P.rcd=Math.max(0,P.rcd-dt);
- P.inv=Math.max(0,P.inv-dt);P.coyote=Math.max(0,P.coyote-dt);P.jbuf=Math.max(0,P.jbuf-dt);
+ P.inv=Math.max(0,P.inv-dt);
+ // Coyote time and the jump buffer are INPUT FORGIVENESS, not game time: they exist to cover
+ // a human being slightly early or slightly late. Decaying them on scaled time means a
+ // 140ms hitstop silently trebles them, which turns a forgiving window into a floaty one.
+ {const rdt=dt/Math.max(0.05,TSCALE);
+  P.coyote=Math.max(0,P.coyote-rdt);P.jbuf=Math.max(0,P.jbuf-rdt);}
  P.acd=Math.max(0,(P.acd||0)-dt);P.dodgeCd=Math.max(0,P.dodgeCd-dt);
+ if(P.tempo&&perf>P.tempoT)P.tempo=0;
  if(P.shield>0&&perf>P.shieldT)P.shield=0;
  gainFocus(FOCUS_REGEN*dt);                            // slow trickle out of combat
  applyWeight(dt);
@@ -2521,6 +3425,11 @@ function upPlayer(dt){
   if(P.vy<FLY_VMAX)P.vy=FLY_VMAX;
   if(chance(dt*30))PART.push({x:P.x+rr(-4,4),y:P.y+P.h/2,vx:rr(-30,30),vy:rr(40,120),t:rr(.15,.3),col:'#9fd0ff'})}
  P.fuel=Math.min(P.maxfuel,P.fuel+(P.onG?FLY_REGEN:FLY_REGEN_AIR)*dt);
+ // BIOME IDENTITY: the forge cooks off your fuel wherever you stand. A band you have to
+ // manage a resource through reads differently from a band with a different palette.
+ {const bs=BSHAPE[biomeName(Math.floor(P.y/TILE))];
+  if(bs&&bs.heat&&!nearCamp()){P.fuel=Math.max(0,P.fuel-bs.heat*dt);
+   if(P.fuel<=0&&chance(dt*1.5))hint('heat','The forge burns your fuel. Updraft and the harness carry more.')}}
  // --- FALL DAMAGE: the price of a 3200-tile vertical world ---
  const vyPrev=P.vy,wasAir=!P.onG;
  // BURROW: ignore collision, move freely through rock, leave a tunnel
@@ -2533,7 +3442,7 @@ function upPlayer(dt){
  if(wasAir&&P.onG&&vyPrev>FALL_SAFE&&P.noFall<=0&&!P.fallImmune&&!P.dead){
   let dmg=(vyPrev-FALL_SAFE)*FALL_DMG*(auraHas('featherfall')?0:1);
   dmg=Math.min(dmg,P.maxhp*0.55); // never a one-shot from full HP
-  if(dmg>=1){hurtPlayer(dmg);shake=Math.max(shake,6);burst(P.x,P.y+P.h/2,'#8a8578',10)}}
+  if(dmg>=1){hurtPlayer(dmg);addShake(6);burst(P.x,P.y+P.h/2,'#8a8578',10)}}
  P.noFall=Math.max(0,P.noFall-dt);
  runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
  const bn=biomeName(Math.floor(P.y/TILE));
@@ -2550,13 +3459,15 @@ function upPlayer(dt){
 function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
  P.dodgeT=0.22;P.dodgeCd=0.55;P.inv=Math.max(P.inv,0.30*(1+inc('iframes')));
  burst(P.x,P.y,'#ffffff50',5);sfx('swing');
- if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthMul(P.y),'#ffcf8a',{burn:8*depthMul(P.y)})}}
+ if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthDmg(P.y),'#ffcf8a',{burn:8*depthDmg(P.y)})}}
 let DYING=false;
 function die(){if(P.dead)return;
  // A queued fragment or level-up must not resurface over — or after — the death screen.
  P.dead=true;DYING=true;PANEL_Q.length=0;paused=true;P.hp=0;sfx('die');flash(0.5);
  META.bestDepth=Math.max(META.bestDepth||0,runDepth);
- META.runs=(META.runs||0)+1;saveMeta();
+ META.runs=(META.runs||0)+1;
+ {const bp=bountyPayout();if(bp>0){META.shards+=bp;RUNSHARDS+=bp}}
+ saveMeta();
  const newly=UNLOCK_MSG.length?`<div class="sub" style="color:var(--acc)">Unlocked this run: ${UNLOCK_MSG.join(', ')}</div>`:'';
  openPanel(`<h2>YOU DIED</h2>
  <table class="sum">
@@ -2565,14 +3476,19 @@ function die(){if(P.dead)return;
   <tr><td>Threat</td><td>${threat().n}</td></tr>
   <tr><td>Kills</td><td>${P.kills}</td></tr>
   <tr><td>Best hit</td><td>${Math.round(P.bestHit)}</td></tr>
+  <tr><td>Best find</td><td>${BESTITEM?`<span class="r${BESTITEM.rarity}">${itemName(BESTITEM)}</span> <span class="sub">i${BESTITEM.ilvl||1}</span>`:'<span class="sub">nothing worth naming</span>'}</td></tr>
+  <tr><td>Items found</td><td>${RUNITEMS}</td></tr>
   <tr><td>Shards earned</td><td class="r3">${RUNSHARDS}◆</td></tr>
   <tr><td>Banked total</td><td>${META.shards}◆</td></tr>
   <tr><td>Run</td><td>#${META.runs}</td></tr>
- </table>${newly}
+ </table>
+ <div class="sub">BOUNTIES</div>
+ <table class="sum">${BOUNTY.map(b=>`<tr><td>${bDone(b)?'<span class="r3">&#10003;</span> ':'<span class="sub">&#183;</span> '}${b.n}</td><td>${bDone(b)?'<span class="r3">+'+b.pay+'&#9670;</span>':'<span class="sub">'+(b.test?'':Math.min(b.goal,BSTATE[b.id]||0)+'/'+b.goal)+'</span>'}</td></tr>`).join('')}</table>${newly}
  <p class="sub">Run gear is lost. Shards, unlocks and the Vault are forever.</p>
  <button onclick="newRun()">RISE AGAIN</button>`,true,null);
  DYING=false}
 let RUNBANDS={},UNLOCK_MSG=[];
+let BESTITEM=null,RUNITEMS=0;
 // Mechanical attunements. Kept separate from RUNB so the additive pool stays purely numeric
 // and every mechanic has one obvious hook site.
 let RUNM={};
@@ -2581,18 +3497,19 @@ const RUNM0=()=>({});
 // corrupted blob or a future migration — returned undefined and every threat lookup threw.
 function threat(){return THREATS[Math.max(0,Math.min(META.threat|0,THREATS.length-1))]||THREATS[0]}
 function newRun(){
- SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);deriveWeave(SEED);
+ SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);deriveWeave(SEED);calibrateAir();
  DISSONANCE=0;SIGILS=[];WOVEN=0;
  CHUNKS.clear();EN.length=0;PROJ.length=0;PICK.length=0;PART.length=0;DMGN.length=0;
- BAG.length=0;CHESTS.length=0;SHRINES.length=0;SENTRY.length=0;ARCS.length=0;
+ BAG.length=0;CHESTS.length=0;SHRINES.length=0;SENTRY.length=0;ARCS.length=0;HAZ.length=0;VENTS.length=0;
  ANCHOR=null;DECOY=null;SPAWNQ.length=0;runDepth=0;RUNSHARDS=0;RUNBANDS={};UNLOCK_MSG=[];
+ BESTITEM=null;RUNITEMS=0;refreshEcho();rollBounties();
  RUNB=RUNB0();RUNM=RUNM0();BUFFS.length=0;
  P.level=1;P.xp=0;P.xpNeed=xpNeed(1);P.picks=0;P.secondWind=0;
  const C=CLASSES[META.cls]||CLASSES.vanguard;
  const kit=META.useClassKit!==false?C.kit:META.loadout;
  for(const sl of ['melee','ranged','armor']){const id=kit[sl];
-  EQ[sl]=(id&&GEAR[id])?mkItem(id,0):null}
- if(!EQ.melee&&!EQ.ranged)EQ.melee=mkItem('sword',0);
+  EQ[sl]=(id&&GEAR[id])?mkItem(id,0,1):null}
+ if(!EQ.melee&&!EQ.ranged)EQ.melee=mkItem('sword',0,1);
  // signature gem: free, pre-socketed. Force the socket's color to match so the class kit
  // is never dead on arrival because of a colour roll.
  if(C.gem&&EQ[C.gem.slot]&&EQ[C.gem.slot].sockets.length){
@@ -2615,10 +3532,10 @@ function newRun(){
   ANCHOR={x:tx*TILE,y:ty*TILE};P.x=tx*TILE;P.y=(ty-1)*TILE}
  P.vx=0;P.vy=0;P.dead=false;P.dodgeT=0;P.dodgeCd=0;P.block=false;
  P.maxhp=maxHP();P.hp=P.maxhp;P.inv=1;P.st=null;P.acd=0;P.mcd=0;P.rcd=0;
- P.focus=FOCUS_MAX;P.shield=0;P.shieldT=0;P.kills=0;P.bestHit=0;
+ P.focus=FOCUS_MAX;P.shield=0;P.shieldT=0;P.kills=0;P.bestHit=0;P.tempo=0;P.tempoT=0;P.lastHurt=-9;
  P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
- shake=0;hitstop=0;FLASH=0;CALLOUT=null;
+ shake=0;HS={t:0,dur:0,frac:1,pre:0};TSCALE=1;FLASH=0;CALLOUT=null;HURT=null;
  UIROOT=null;MODAL=false;PANEL_FN=null;PANEL_Q.length=0;
  closePanel(true);
 }
@@ -2708,13 +3625,13 @@ function openBag(){
  let h='<h2>BAG</h2>'+dpsLine();
  for(const s of ['melee','ranged','armor']){const it=EQ[s];
   if(!it){h+=`<button class="slotb" disabled>${s.toUpperCase()}: —</button>`;continue}
-  h+=`<button class="slotb" onclick="itemMenu('${s}')">${s.toUpperCase()}: <span class="r${it.rarity}">${itemName(it)}</span>
+  h+=`<button class="slotb" onclick="itemMenu('${s}')">${s.toUpperCase()}: <span class="r${it.rarity}">${itemName(it)}</span> ${ilvlStr(it)}
    <span class="sub">${affixStr(it)}${itemDesc(it)?' — '+itemDesc(it):''}</span>${sockDots(it,s,false)}</button>`}
  if(ATK.abil)h+=`<div class="sub">ABIL: ${ATK.abil.n} — ${ATK.abil.cd.toFixed(1)}s cd, ${ATK.abil.fc} focus</div>`;
  h+='<div class="sub" style="margin-top:8px">Carried:</div>';
  if(!BAG.length)h+='<div class="sub">empty</div>';
  BAG.forEach((b,i)=>{
-  if(b.kind==='gear')h+=`<button onclick="equipFromBag(${i})"><span class="r${b.item.rarity}">${itemName(b.item)}</span>
+  if(b.kind==='gear')h+=`<button onclick="equipFromBag(${i})"><span class="r${b.item.rarity}">${itemName(b.item)}</span> ${ilvlStr(b.item)}${bagBetter(b.item)}
     <span class="sub">${itemDesc(b.item)||affixStr(b.item)||'no affixes'}</span>
     <span class="cmp">${compareTo(b.item)}</span></button>`;
   else{const G=GEMS[b.id],col=SOCK[G.col||'r'].c;
@@ -2723,7 +3640,7 @@ function openBag(){
  h+='<button onclick="closePanel()" style="text-align:center">CLOSE</button>';
  openPanel(h)}
 function itemMenu(slot){const it=EQ[slot];if(!it)return openBag();
- let h=`<h2 class="r${it.rarity}">${itemName(it)}</h2>${dpsLine()}
+ let h=`<h2 class="r${it.rarity}">${itemName(it)} ${ilvlStr(it)}</h2>${dpsLine()}
   <div class="sub">${affixStr(it)||'no affixes'}${itemDesc(it)?'<br>'+itemDesc(it):''}</div>
   <div class="sub" style="margin-top:6px">Sockets — tap to remove:</div>${sockDots(it,slot,true)}`;
  h+='<button onclick="openBag()">BACK</button>';openPanel(h)}
@@ -2881,11 +3798,14 @@ everything you carried down. That is not escape. That is the only kind of escape
   <button onclick="openLattice()">NOT YET <span class="sub">${pr('cancel')}</span></button>`,true,null)}
 function doEscape(){
  META.escapes=(META.escapes||0)+1;
+ // Every escape opens one more rung of the ladder. This is the only thing past Threat V, and
+ // it is unbounded on purpose: the answer to "what is hour 40" has to not have a ceiling.
+ META.maxEcho=Math.max(META.maxEcho||0,META.escapes||0);
  META.shards+=Math.round(400+DISSONANCE*6);
  META.maxThreat=Math.min(THREATS.length-1,(META.maxThreat||0)+1);
  discover('frag','escape',true);
  saveMeta();
- flash(0.9);shake=Math.max(shake,20);sfx('level');rumble(1,1,900);
+ flash(0.9);addShake(20);sfx('level');rumble(1,1,900);
  openPanel(`<h2>THE WORLD RE-FORMS</h2>
   <div class="lore">${loreHTML(`You wrote a glyph and the rock agreed to it.
 
@@ -3039,28 +3959,63 @@ let SHRINE_PICK=[],SHRINE_SRC=null;
 function openShrine(sh){
  // Marked used in takeBoon, not here. Consuming it up front meant any dismissal — a stray
  // tap on the backdrop — destroyed the boon and left a dead shrine behind.
- SHRINE_SRC=sh;const pool=BOONS.slice(),pick=[];
+ SHRINE_SRC=sh;
+ // Taken boons leave the pool. Being offered Wrath for the third time is not a decision, and
+ // a thinning pool is what makes the last shrine of a run sharper than the first.
+ const taken=RUNM.__boons||(RUNM.__boons={});
+ let pool=BOONS.filter(b=>!taken[b.id]);if(pool.length<3)pool=BOONS.slice();
+ pool=pool.slice();const pick=[];
  for(let i=0;i<3&&pool.length;i++)pick.push(pool.splice(ri(0,pool.length-1),1)[0]);
  SHRINE_PICK=pick;
  let h='<h2>SHRINE</h2><div class="sub">Choose a boon. Lasts this run only.</div>';
  pick.forEach((b,i)=>{h+=`<button onclick="takeBoon(${i})">${b.n} <span class="sub">— ${b.d}</span></button>`});
  openPanel(h,true)}
 function takeBoon(i){const b=SHRINE_PICK[i];if(!b)return;
- if(SHRINE_SRC)SHRINE_SRC.used=true;SHRINE_SRC=null;
- for(const k in b.fx)RUNB[k]=(RUNB[k]||0)+b.fx[k];
- P.maxhp=maxHP();P.hp=Math.min(Math.max(1,P.hp+(b.fx.hp>0?b.fx.hp:0)),P.maxhp);
+ if(SHRINE_SRC)SHRINE_SRC.used=true;SHRINE_SRC=null;BSTATE.shrine=1;
+ (RUNM.__boons||(RUNM.__boons={}))[b.id]=1;
+ for(const k in (b.fx||{}))RUNB[k]=(RUNB[k]||0)+b.fx[k];
+ for(const k in (b.m||{}))RUNM[k]=(RUNM[k]||0)+b.m[k];
+ P.maxhp=maxHP();P.hp=Math.min(Math.max(1,P.hp+((b.fx&&b.fx.hp>0)?b.fx.hp:0)),P.maxhp);
  refreshAttacks();sfx('level');toast('Boon: '+b.n);closePanel(true)}
 
 // -------- camp --------
 function nearCamp(){
  if(Math.abs(P.x/TILE-CAMP_X)<7&&P.y/TILE<SURFACE+4)return true;
  return !!(ANCHOR&&Math.hypot(P.x-ANCHOR.x,P.y-ANCHOR.y)<90)}
+// The ladder, and the objectives, as screens. Both are stacks of buttons like everything else,
+// so a dpad reaches them without a single extra line of navigation code.
+function openEcho(){
+ const max=META.maxEcho|0;
+ let h=`<h2>ECHO</h2><div class="sub">Each escape opens another. An Echo stacks a named rule on
+  the world and pays for it. There is no top.</div>`;
+ for(let i=0;i<=max;i++){
+  const cur=(META.echoLv|0)===i;
+  const rules=i===0?'the world as it stands':ECHOES.filter((E,k)=>k<Math.min(i,ECHOES.length)).map(E=>E.n).join(', ')+(i>ECHOES.length?' (+'+(i-ECHOES.length)+' again)':'');
+  h+=`<button onclick="setEcho(${i})">${i?'ECHO &#215;'+i:'NO ECHO'} ${cur?'<span class="r3">— current</span>':''}
+   <span class="sub">${rules}</span></button>`}
+ h+=`<div class="sub" style="margin-top:6px">${(META.echoLv|0)?echoList().join(' &#183; '):'&nbsp;'}</div>`;
+ h+=`<button onclick="backPanel()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,openEcho)}
+function setEcho(n){
+ META.echoLv=Math.max(0,Math.min(META.maxEcho|0,n|0));saveMeta();refreshEcho();
+ sfx('level');toast((META.echoLv?'Echo x'+META.echoLv:'Echo cleared')+' — takes effect next descent');
+ openEcho()}
+function openBounties(){
+ let h=`<h2>BOUNTIES</h2><div class="sub">Three a run, drawn fresh. Paid whether you meant to do
+  them or not — they are here to give a descent a shape other than "further".</div><table class="sum">`;
+ for(const b of BOUNTY){const done=bDone(b);
+  h+=`<tr><td>${done?'<span class="r3">&#10003;</span> ':''}${b.n}</td>
+   <td>${done?'<span class="r3">+'+b.pay+'&#9670;</span>':'<span class="sub">'+(b.test?'&#183;':Math.min(b.goal,BSTATE[b.id]||0)+'/'+b.goal)+'</span>'}</td></tr>`}
+ h+=`</table><button onclick="backPanel()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,openBounties)}
 function openCamp(){
  let h=`<h2>CAMP</h2><div class="sub">Shards: ${META.shards}</div>
  <button onclick="openClasses()">CLASS — ${(CLASSES[META.cls]||CLASSES.vanguard).n}</button>
  <button onclick="openAnchors()">DESCEND FROM — ${(META.startBiome||'surface').toUpperCase()}</button>
  <button onclick="openLoadout()">STARTING LOADOUT — ${['melee','ranged','armor'].map(s=>META.loadout[s]?GEAR[META.loadout[s]].n:'—').join(' / ')}</button>
  <button onclick="openThreat()">THREAT — ${threat().n}</button>
+ ${(META.maxEcho|0)>0?`<button onclick="openEcho()">ECHO — ${(META.echoLv|0)?('&#215;'+(META.echoLv|0)):'none'}</button>`:''}
+ <button onclick="openBounties()">BOUNTIES — ${BOUNTY.filter(bDone).length}/${BOUNTY.length} this run</button>
  <button onclick="openVault()">THE VAULT — ${META.vault.length}/3 stored</button>
  <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
  <button onclick="toggleAudio()">SOUND — ${AUDIO_ON?'on':'off'}</button>
@@ -3184,9 +4139,15 @@ function fire(a){EDGE[a]=1}
 function consumed(a){const v=EDGE[a];EDGE[a]=0;return v}
 
 // ---- settings, persisted in META.set ----
-const SET_DEF={vol:22,shake:100,dmgnum:1,aimassist:55,autoaim:1,deadzone:22,rumble:1,hints:1};
+const SET_DEF={vol:22,shake:100,hitstop:100,flashes:100,dmgnum:1,aimassist:55,autoaim:1,deadzone:22,rumble:1,hints:1};
 let SET=Object.assign({},SET_DEF);
-function loadSet(){SET=Object.assign({},SET_DEF,META.set||{});applyVol()}
+function loadSet(){SET=Object.assign({},SET_DEF,META.set||{});
+ // prefers-reduced-motion is free in one HTML file and it is the difference between playable
+ // and unplayable for some people. Honoured ONCE, on a save that has never set these, so it
+ // is a default rather than an override the player cannot escape.
+ try{if(!META.set&&matchMedia('(prefers-reduced-motion: reduce)').matches){
+  SET.shake=0;SET.flashes=25;SET.hitstop=40}}catch(e){}
+ applyVol()}
 function saveSet(){META.set=SET;saveMeta()}
 function applyVol(){if(MASTER)MASTER.gain.value=(SET.vol/100)*0.9}
 
@@ -3464,6 +4425,8 @@ function confirmAbandon(){
 const SETTINGS=[
  {k:'vol',      n:'Volume',        min:0,max:100,step:10,fmt:v=>v+'%'},
  {k:'shake',    n:'Screen shake',  min:0,max:150,step:25,fmt:v=>v+'%'},
+ {k:'hitstop',  n:'Impact freeze', min:0,max:150,step:25,fmt:v=>v===0?'off':v+'%'},
+ {k:'flashes',  n:'Flashes & glare',min:0,max:100,step:25,fmt:v=>v===0?'off':v+'%'},
  {k:'aimassist',n:'Aim assist',    min:0,max:100,step:15,fmt:v=>v===0?'off':v+'%'},
  {k:'deadzone', n:'Stick deadzone',min:5,max:40, step:5, fmt:v=>v+'%'},
  {k:'dmgnum',   n:'Damage numbers',min:0,max:1,  step:1, fmt:v=>v?'on':'off'},
@@ -3500,10 +4463,16 @@ let VW=0,VH=0,SCALE=2;
 // incoming enemy, and auto-aim reached further than the screen did. Fewer world px per screen
 // px = more visible world, so the clamp floor is what widens the view, not the ceiling.
 // 17 tiles across is the compromise: enough warning to react, still chunky enough to read.
+let CAMTILES=17;
 function resize(){
- const target=17*TILE;
+ const target=CAMTILES*TILE;
  SCALE=Math.max(1.1,Math.min(3,innerWidth/target));
- VW=Math.ceil(innerWidth/SCALE);VH=Math.ceil(innerHeight/SCALE);
+ const w=Math.ceil(innerWidth/SCALE),h=Math.ceil(innerHeight/SCALE);
+ // The camera width lerps every frame while you move, and assigning cv.width reallocates the
+ // whole backing store and resets the 2D context state. Bail out when the pixel size has not
+ // actually changed, or a dynamic camera costs a canvas allocation per frame.
+ if(w===VW&&h===VH)return;
+ VW=w;VH=h;
  cv.width=VW;cv.height=VH;ctx.imageSmoothingEnabled=false}
 addEventListener('resize',resize);resize();
 const cam={x:0,y:0};
@@ -3624,7 +4593,8 @@ function drawLight(){
  const ty=P.y/TILE;
  // Ramps in over the first cave band and tops out well short of unplayable. The player's
  // light is always the brightest thing on screen, which is what pulls the eye down.
- const dark=Math.min(0.78,Math.max(0,(ty-SURFACE-40)/900)*0.62*(threat().dark||1));
+ const bs=BSHAPE[biomeName(ty)]||{};
+ const dark=Math.min(0.86,Math.max(0,(ty-SURFACE-40)/900)*0.62*(threat().dark||1)*(bs.dark||1));
  if(dark<=0.01)return;
  const px=P.x-camOX,py=P.y-camOY;
  // Radius scales with the viewport. A fixed radius looked fine on the old square-ish canvas
@@ -3638,7 +4608,7 @@ function drawLight(){
  ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH)}
 let camOX=0,camOY=0;
 function render(){
- const sk=shake*(SET.shake/100);
+ const sk=Math.pow(shake/SHAKE_MAX,2)*SHAKE_MAX*(SET.shake/100);
  const sx=(RRNG()-0.5)*sk,sy=(RRNG()-0.5)*sk;
  const ox=Math.round(cam.x-VW/2+sx),oy=Math.round(cam.y-VH/2+sy);
  camOX=ox;camOY=oy;
@@ -3687,21 +4657,56 @@ function render(){
   ctx.fillStyle='#ffe9a0';ctx.fillRect(x-2,y-7,4,5)}
  if(DECOY){const x=DECOY.x-ox,y=DECOY.y-oy;
   ctx.globalAlpha=.55;ctx.fillStyle='#e8e2d0';ctx.fillRect(x-6,y-10,12,20);ctx.globalAlpha=1}
+ // ---- hazards: drawn under the actors, so nothing you need to react to is ever hidden by fog.
+ for(const h of HAZ){const x=h.x-ox,y=h.y-oy;
+  if(x<-h.r-20||x>VW+h.r+20||y<-h.r-20||y>VH+h.r+20)continue;
+  const k=h.t/h.life;                                    // fade out, so "about to expire" reads
+  if(h.kind==='mark'){
+   // An incoming-fire marker fills as the shell closes. It is a countdown drawn on the floor.
+   ctx.globalAlpha=0.85;ctx.strokeStyle=h.col;ctx.lineWidth=1;
+   ctx.beginPath();ctx.arc(x,y,h.r,0,6.283);ctx.stroke();
+   ctx.globalAlpha=0.30;ctx.fillStyle=h.col;
+   ctx.beginPath();ctx.arc(x,y,h.r*(1-k),0,6.283);ctx.fill();
+   ctx.globalAlpha=1;continue}
+  ctx.globalAlpha=(h.kind==='shock'?0.42:0.26)*Math.min(1,k*2.2);
+  ctx.fillStyle=h.col;
+  if(h.kind==='shock'){ctx.fillRect(x-h.r*(1-k*0.5),y-3,h.r*2*(1-k*0.5),6)}
+  else{ctx.beginPath();ctx.arc(x,y,h.r*(0.82+0.18*Math.sin(perf*3+h.x)),0,6.283);ctx.fill()}
+  ctx.globalAlpha=1}
+ // ---- a locked beam is an attack, so it has to be a tell. The sentinel spent 0.9s aiming a
+ // screen-crossing lance with nothing on screen but a one-frame spark; the line now draws and
+ // brightens as the lock closes, in the same countdown language the ground markers use.
+ for(const e of EN){
+  if(!((e.beamT||0)>0))continue;
+  const x=e.x-ox,y=e.y-oy,k=1-Math.min(1,e.beamT/0.9);
+  ctx.globalAlpha=0.25+0.55*k;ctx.strokeStyle='#ffe9a0';ctx.lineWidth=1+2*k;
+  ctx.beginPath();ctx.moveTo(x,y);
+  ctx.lineTo(x+Math.cos(e.beamA)*700,y+Math.sin(e.beamA)*700);ctx.stroke();
+  ctx.globalAlpha=1;ctx.lineWidth=1}
  // ---- enemies. The windup tell is the single most important thing on screen. ----
  for(const e of EN){const x=e.x-ox,y=e.y-oy;
   if(x<-40||x>VW+40||y<-40||y>VH+40)continue;
-  const winding=e.wind>0,acting=e.act>0,charging=(e.swind||0)>0;
+  const winding=e.wind>0,acting=e.act>0,charging=(e.swind||0)>0,spent=(e.rec||0)>0;
   // swell + strobe during windup, white during the live frames
   let w=e.w,h=e.h,col=e.c;
   if(winding){const t=1-e.wind/((e.atk&&e.atk.wind)||0.35);
    const s=1+t*0.28;w=e.w*s;h=e.h*s;
    col=(Math.floor(perf*22)&1)?'#ffffff':'#ffd0a0';
-   // a ground marker showing where the lunge lands, so it can be dodged on sight
-   ctx.fillStyle='#e0555540';
-   ctx.fillRect(x+(e.dir>0?0:-(e.atk.range||30)),y+e.h/2-2,(e.atk.range||30),3)}
+   // The ground marker shows the REAL reach — range plus the whole lunge — and fills left to
+   // right as the windup runs out, so it reads as a countdown as well as a distance.
+   const reach=ECHO.nomark?0:atkReach(e.atk);
+   ctx.fillStyle='#e0555530';
+   ctx.fillRect(x+(e.dir>0?0:-reach),y+e.h/2-2,reach,3);
+   ctx.fillStyle='#e05555c0';
+   ctx.fillRect(x+(e.dir>0?0:-reach*t),y+e.h/2-2,reach*t,3)}
   else if(acting)col='#fff';
   else if(e.flash>0)col='#fff';
+  // SPENT: the punish window has to be visible or it is not a window. Sag, desaturate, and
+  // put a small pale tick over the head for the whole of it.
+  else if(spent)col='#5a5550';
   else if(charging)col=(Math.floor(perf*18)&1)?'#ffffff':e.c;
+  if(spent){h=e.h*0.9;
+   ctx.fillStyle='#ffe9a0d0';ctx.fillRect(x-3,y-e.h/2-6,6,2)}
   // Windup swells the sprite; the flash and status tint are masked copies so the silhouette
   // survives instead of being replaced by a coloured rectangle.
   const anim=(e.act>0)?2:(winding?1:((perf*4+e.x)|0));
@@ -3810,9 +4815,23 @@ function render(){
  // damage numbers last so darkness never eats them. Crits are bigger and gold.
  ctx.textAlign='center';
  for(const n of DMGN){
-  ctx.font=(n.crit?'bold 11px ':'8px ')+'monospace';
+  // a coalescing number pops when it absorbs a hit, and older ones shrink so the newest read first
+  const fade=Math.min(1,n.t*2.5), big=n.crit?11:8, sz=Math.round(big*(0.78+0.22*fade)+(n.pop>0?2:0));
+  ctx.globalAlpha=Math.min(1,0.35+fade*0.65);
+  ctx.font=(n.crit?'bold ':'')+sz+'px monospace';
   ctx.fillStyle='#00000090';ctx.fillText(n.v,n.x-ox+1,n.y-oy+1);
   ctx.fillStyle=n.col;ctx.fillText(n.v,n.x-ox,n.y-oy)}
+ ctx.globalAlpha=1;
+ // DIRECTIONAL HURT FLARE — where it came from, drawn on the edge you were hit from, while
+ // you can still act on it. This replaces floating a number for damage taken entirely.
+ if(HURT&&SET.flashes>0){
+  const a=Math.min(0.5,HURT.t*0.9)*(SET.flashes/100);
+  const w=Math.round(VW*0.28);
+  const g=ctx.createLinearGradient(HURT.x<0?0:VW,0,HURT.x<0?w:VW-w,0);
+  g.addColorStop(0,`rgba(224,85,85,${a.toFixed(3)})`);g.addColorStop(1,'rgba(224,85,85,0)');
+  ctx.fillStyle=g;ctx.fillRect(HURT.x<0?0:VW-w,0,w,VH);
+  if(HURT.x===0){ctx.globalAlpha=a*0.8;ctx.fillStyle='#e05555';
+   ctx.fillRect(0,0,VW,3);ctx.fillRect(0,VH-3,VW,3);ctx.globalAlpha=1}}
  if(CALLOUT){ctx.font='bold 13px monospace';
   ctx.globalAlpha=Math.min(1,CALLOUT.t*2);
   ctx.fillStyle='#00000090';ctx.fillText(CALLOUT.m,VW/2+1,VH*0.34+1);
@@ -3836,7 +4855,7 @@ function sim(dt){
  else{if(PREVr&&isShield('ranged')&&HOLDr<=0.18)doRanged();HOLDr=0}
  P.block=(HELD.mel&&isShield('melee')&&HOLDm>0.18)||(HELD.rng&&isShield('ranged')&&HOLDr>0.18);
  PREVm=HELD.mel;PREVr=HELD.rng;
- upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);
+ upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upHaz(dt);upVents(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);
  if(!P.dead){if(auraHas('regrowth'))P.hp=Math.min(P.maxhp,P.hp+2*dt);
   if(auraHas('staticfield')&&(staticT-=dt)<=0){staticT=1.6;   // Static Field: periodic shock pulse
    burst(P.x,P.y,'#e6d34a',8);
@@ -3856,15 +4875,25 @@ function sim(dt){
     if(Math.abs(cx-pcx)<=2&&Math.abs(cy-pcy)<=2)continue;
     CHUNKS.delete(k);break}}}
  for(let i=PART.length-1;i>=0;i--){const p=PART[i];p.t-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=600*dt;if(p.t<=0)PART.splice(i,1)}
- for(let i=DMGN.length-1;i>=0;i--){const n=DMGN[i];n.t-=dt;n.y+=n.vy*dt;if(n.t<=0)DMGN.splice(i,1)}
+ for(let i=DMGN.length-1;i>=0;i--){const n=DMGN[i];n.t-=dt;n.age+=dt;
+  if(n.pop>0)n.pop-=dt;
+  n.y+=n.vy*dt;n.vy*=0.94;                 // older numbers slow and settle rather than fly off
+  if(n.t<=0)DMGN.splice(i,1)}
  for(let i=ARCS.length-1;i>=0;i--){if((ARCS[i].t-=dt)<=0)ARCS.splice(i,1)}
  if(CALLOUT&&(CALLOUT.t-=dt)<=0)CALLOUT=null;
+ if(HURT&&(HURT.t-=dt)<=0)HURT=null;
  FLASH=Math.max(0,FLASH-dt*2.2);
- sfxBudget=Math.max(0,sfxBudget-dt*45);
- shake=Math.max(0,shake-dt*30);
+ sfxBudget=Math.max(0,sfxBudget-dt*55);
+ shake=Math.max(0,shake-dt*26);
  cam.x+=(P.x+P.face*24-cam.x)*Math.min(1,dt*5);
  // lead the camera downward when falling fast — you need to see what you're landing on
  cam.y+=((P.y-10+Math.max(0,Math.min(70,P.vy*0.16)))-cam.y)*Math.min(1,dt*5);
+ // Speed widens the view. 17 tiles makes the player 13% of screen height — about twice
+ // Celeste's ratio, in a game with flight AND ranged enemies. 21 while moving fast gives back
+ // the reaction time that costs you, and returns to intimate when you stop.
+ {const sp=Math.min(1,(Math.abs(P.vx)/MOVE)*0.6+Math.max(0,Math.abs(P.vy)-120)/700);
+  const want=17+4*sp;
+  if(Math.abs(want-CAMTILES)>0.03){CAMTILES+=(want-CAMTILES)*Math.min(1,dt*1.6);resize()}}
  cam.x=Math.max(VW/2,Math.min(WORLD_W*TILE-VW/2,cam.x));
  cam.y=Math.max(VH/2,Math.min(WORLD_H*TILE-VH/2,cam.y))}
 let staticT=1.6;
@@ -3900,7 +4929,14 @@ function frame(t){
  requestAnimationFrame(frame);
  const now=t/1000;let ft=Math.min(0.1,now-last);last=now;
  readInput();                       // devices -> intent -> actions, before anything simulates
- if(hitstop>0){hitstop-=ft;ft=0}
+ TSCALE=1;
+ if(HS.t>0){
+  HS.t-=ft;
+  if(HS.pre>0){HS.pre-=ft}            // the impact frame plays at full speed FIRST
+  else{const k=Math.max(0,Math.min(1,HS.t/Math.max(1e-4,HS.dur)));
+   TSCALE=HS.frac+(1-HS.frac)*Math.pow(1-k,2)}   // crawl, then ease back to real time
+  if(HS.t<=0){HS.t=0;TSCALE=1}}
+ ft*=TSCALE;
  // Re-check `paused` INSIDE the loop: sim() is where modals open, and the remaining steps
  // used to run behind the panel. `acc=0` matters too — otherwise the leftover fires as a
  // burst of gameplay the moment the panel closes.
