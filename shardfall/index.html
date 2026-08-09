@@ -117,7 +117,11 @@ sim/render separated, fixed 60Hz timestep, no per-frame allocation in hot loops 
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <title>SHARDFALL</title>
 <meta name="theme-color" content="#0a0a0f">
-<link rel="manifest" href='data:application/manifest+json,{"name":"SHARDFALL","short_name":"SHARDFALL","display":"fullscreen","background_color":"%230a0a0f","theme_color":"%230a0a0f","start_url":"."}'>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{--ui:#e8e2d0;--dim:#8a8578;--acc:#3fc9c1;--bad:#e05555;--gold:#d8a53f;--rare:#e6d34a;--magic:#6f8fe0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -229,11 +233,11 @@ const TILES={
 // biome by tile depth: [maxY, name, groundTile, caveScale, enemyTypes]
 const BIOMES=[
  [SURFACE+10,'surface',1,0.00,['crawler']],
- [400,'caves',2,0.055,['crawler','bat']],
- [900,'fungal',4,0.06,['crawler','bat','spitter']],
- [1600,'ruins',5,0.05,['brute','bat','spitter']],
- [2400,'forge',6,0.055,['brute','bat','spitter']],
- [WORLD_H,'abyss',7,0.045,['brute','bat','spitter']],
+ [400,'caves',2,0.055,['crawler','bat','rockling']],
+ [900,'fungal',4,0.06,['spitter','sporeling','stalker','bat']],
+ [1600,'ruins',5,0.05,['brute','archer','shieldman']],
+ [2400,'forge',6,0.055,['ember','smith','spitter']],
+ [WORLD_H,'abyss',7,0.045,['wraith','voidspawn','stalker']],
 ];
 // ===== GEMS =====
 // THE ONE RULE (DESIGN-PLAN §1.1): support gems and uniques write to `a.more` (multiplicative,
@@ -300,6 +304,65 @@ const GEMS={
  grapple:  {t:'abil',for:'armor',n:'Grapple',  col:'g', cd:5,  fc:20, fx:'grapple',  d:'yank yourself, or an enemy'},
  burrow:   {t:'abil',for:'armor',n:'Burrow',   col:'r', cd:10, fc:35, fx:'burrow',   d:'phase through solid rock'},
  shaft:    {t:'abil',for:'armor',n:'Shaft',    col:'r', cd:8,  fc:30, fx:'shaft',    d:'drill 26 tiles straight down'},
+
+ // ================= CONTENT WAVE (DESIGN-PLAN §2) =================
+ // Every gem below had to answer "what build does this create that didn't exist before?"
+ // If the answer was "the same build but stronger", it became an affix instead.
+
+ // ---- SKILL: melee ----
+ whirlwind:{t:'skill',for:'melee',n:'Whirlwind', col:'r', d:'channel while held, drains focus',
+   mod:a=>{a.arc=360;a.dmg*=0.42;a.cd*=0.22;a.range*=1.05;a.chan=26}},
+ lunge:    {t:'skill',for:'melee',n:'Lunge', col:'g', d:'dash forward on every swing',
+   mod:a=>{a.dmg*=1.15;a.cd*=1.1;a.lunge=340;a.range*=1.1}},
+ riposte:  {t:'skill',for:'melee',n:'Riposte', col:'r', d:'huge, but only just after a block',
+   mod:a=>{a.dmg*=3.4;a.cd*=1.2;a.riposte=1;a.kb*=1.5}},
+ sunder:   {t:'skill',for:'melee',n:'Sunder', col:'r', d:'low damage, shreds armor',
+   mod:a=>{a.dmg*=0.7;a.cd*=1.05;a.sunder=6;a.arc=Math.max(a.arc,110)}},
+ reap:     {t:'skill',for:'melee',n:'Reap', col:'g', d:'scales with missing enemy health',
+   mod:a=>{a.dmg*=0.75;a.reap=2.2;a.arc=Math.max(a.arc,130);a.cd*=1.15}},
+ // ---- SKILL: ranged ----
+ grenade:  {t:'skill',for:'ranged',n:'Grenade', col:'r', d:'lobbed, bounces, explodes',
+   mod:a=>{a.dmg*=1.7;a.speed*=0.62;a.grav=1;a.bounce=2;a.explode=58;a.cd*=1.25;a.life=1.6;a.col='#e0a03f'}},
+ wisp:     {t:'skill',for:'ranged',n:'Homing Wisp', col:'b', d:'slow seeker, fire and forget',
+   mod:a=>{a.dmg*=0.8;a.speed*=0.5;a.homing=3.2;a.life=4;a.cd*=0.8;a.col='#c98fe0'}},
+ frostlance:{t:'skill',for:'ranged',n:'Frost Lance', col:'b', d:'pierces, chills, ramps per hit',
+   mod:a=>{a.dmg*=0.9;a.speed*=1.4;a.pierce+=4;a.st=a.st||{};a.st.chill=0.6;a.col='#9fd0ff'}},
+ sporeburst:{t:'skill',for:'ranged',n:'Spore Burst', col:'g', d:'short cone, brutal up close',
+   mod:a=>{a.dmg*=1.5;a.count=5;a.speed*=0.55;a.life=0.34;a.cd*=0.85;a.col='#8fdc6a'}},
+ siphon:   {t:'skill',for:'ranged',n:'Siphon Beam', col:'b', d:'continuous beam, leeches, drains focus',
+   mod:a=>{a.dmg*=0.30;a.cd*=0.16;a.speed*=2.2;a.life=0.22;a.pierce+=2;a.leech=(a.leech||0)+0.10;a.chan=22;a.col='#bfe8ff'}},
+ // ---- SUPPORT ----
+ chain:    {t:'sup',for:'any', n:'Chain', col:'b', d:'hits jump to 2 more enemies',
+   mod:a=>{a.chain=(a.chain||0)+2;a.more*=0.9}},
+ fork:     {t:'sup',for:'ranged',n:'Fork', col:'g', d:'projectiles split on first hit',
+   mod:a=>{a.fork=1;a.more*=0.85}},
+ ret:      {t:'sup',for:'ranged',n:'Return', col:'g', d:'projectiles boomerang back',
+   mod:a=>{a.ret=150;a.pierce+=1;a.more*=0.9}},
+ conc:     {t:'sup',for:'any', n:'Concentrated', col:'r', d:'+55% more damage, −40% area',
+   mod:a=>{a.more*=1.55;if(a.arc)a.arc*=0.6;if(a.explode)a.explode*=0.6;if(a.range)a.range*=0.85}},
+ culling:  {t:'sup',for:'any', n:'Culling', col:'r', d:'executes enemies under 12% HP',
+   mod:a=>{a.cull=Math.max(a.cull||0,0.12);a.more*=0.92}},
+ momentum: {t:'sup',for:'any', n:'Momentum', col:'g', d:'damage scales with move speed',
+   mod:a=>{a.momentum=(a.momentum||0)+0.75;a.more*=0.85}},
+ overload: {t:'sup',for:'any', n:'Overload', col:'r', d:'+80% more damage, +60% cooldown',
+   mod:a=>{a.more*=1.8;a.cd*=1.6}},
+ precision:{t:'sup',for:'any', n:'Precision', col:'g', d:'+18% crit chance, −15% damage',
+   mod:a=>{a.critAdd=(a.critAdd||0)+0.18;a.critMultAdd=(a.critMultAdd||0)+0.15;a.more*=0.85}},
+ twin:     {t:'sup',for:'melee',n:'Twin Strike', col:'g', d:'strike twice at 60% each',
+   mod:a=>{a.twin=1;a.more*=0.95}},
+ deepcut:  {t:'sup',for:'any', n:'Deep Cut', col:'b', d:'+60% ailment damage, −25% hit damage',
+   mod:a=>{a.more*=0.75;a.ailMore=(a.ailMore||1)*1.6}},
+ // ---- AURA ----
+ bloodscent:{t:'aura',for:'armor',n:'Bloodscent', col:'r', d:'+30% vs bleeding or burning'},
+ staticfield:{t:'aura',for:'armor',n:'Static Field', col:'b', d:'pulses shock around you'},
+ warding:  {t:'aura',for:'armor',n:'Warding', col:'b', d:'+50% status resist, −10% damage'},
+ prospector:{t:'aura',for:'armor',n:'Prospector', col:'g', d:'reveals ore and secrets on the map'},
+ undertow: {t:'aura',for:'armor',n:'Undertow', col:'g', d:'below 40% HP: +25% move and attack speed'},
+ // ---- ABILITY ----
+ bulwark:  {t:'abil',for:'armor',n:'Bulwark', col:'r', cd:14, fc:45, fx:'bulwark', d:'overshield, scales with armor'},
+ sentry:   {t:'abil',for:'armor',n:'Shard Sentry', col:'g', cd:16, fc:60, fx:'sentry', d:'turret fires your ranged attack'},
+ decoy:    {t:'abil',for:'armor',n:'Decoy', col:'g', cd:12, fc:35, fx:'decoy', d:'taunt dummy pulls aggro'},
+ rupture:  {t:'abil',for:'armor',n:'Rupture', col:'b', cd:10, fc:50, fx:'rupture', d:'detonate all nearby ailments'},
 };
 const SOCK={r:{n:'Might',c:'#e05555'},g:{n:'Finesse',c:'#6ad07a'},b:{n:'Focus',c:'#6f8fe0'}};
 const SOCKC=['r','g','b'];
@@ -337,6 +400,23 @@ const UNIQUES={
  plate:   {n:'Anchor',         d:'+90 HP, +15 armor, heavy', hp:90, arm:15, ms:-0.12},
  harness: {n:'Skyrigger',      d:'huge fuel, immune to fall damage', fuel:160, noFall:1},
 };
+// A second unique per base, so finding "the" unique for your weapon isn't a single lottery
+// ticket. UNIQ2 rolls half the time when a rarity-3 item drops.
+const UNIQ2={
+ sword:   {n:'Splitfang',      d:'every hit chains to a second enemy', mod:a=>{a.chain=(a.chain||0)+1;a.more*=0.9;a.cd*=0.9}},
+ axe:     {n:'Rimebite',       d:'chills, and shatters what it chills', mod:a=>{a.st=a.st||{};a.st.chill=0.5;a.stR=a.stR||{};a.stR.burn=0.35;a.col='#9fd0ff'}},
+ greataxe:{n:'The Long Hunger',d:'executes the wounded, heals you',    mod:a=>{a.cull=0.18;a.leech=(a.leech||0)+0.14;a.more*=0.9}},
+ bow:     {n:'Windwake',       d:'arrows return, damage scales with speed', mod:a=>{a.ret=170;a.momentum=(a.momentum||0)+0.9;a.more*=0.9}},
+ crossbow:{n:'Deadeye',        d:'huge crit, single bolt',            mod:a=>{a.critAdd=(a.critAdd||0)+0.30;a.critMultAdd=(a.critMultAdd||0)+0.9;a.count=1;a.more*=1.1}},
+ wand:    {n:'Hollow Star',    d:'bolts fork and pierce',             mod:a=>{a.fork=1;a.pierce+=2;a.speed*=1.3;a.more*=0.95}},
+ shield:  {n:'Last Word',      d:'bash executes, blocks harder',      mod:a=>{a.cull=0.15;a.kb*=1.5;a.more*=1.3;a.blockBonus=0.15}},
+ vest:    {n:'Ghostweave',     d:'+3 sockets, no armor',  sockets:3, arm:-4},
+ robe:    {n:'Emberweave',     d:'+45 fuel, burns brighter', fuel:45, hp:-4},
+ chain:   {n:'Ironbound',      d:'+16 armor, slower',     arm:16, ms:-.08},
+ plate:   {n:'The Mountain',   d:'+140 HP, +22 armor, very heavy', hp:140, arm:22, ms:-.22},
+ harness: {n:'Stormrigger',    d:'+110 fuel, +15% move',  fuel:110, ms:.15},
+};
+function uniqueDef(id,alt){return (alt&&UNIQ2[id])?UNIQ2[id]:UNIQUES[id]}
 // AFFIXES rolled on magic/rare gear: [key,label,min,max,scale]
 // scale 'pct' => stored as a percent that folds into the ADDITIVE pool; 'flat' => added raw.
 const AFFIXES=[
@@ -364,6 +444,34 @@ const ENEMIES={
  spitter:{hp:30,dmg:6, spd:30, w:14,h:14,ai:'walk',c:'#5f8f5a',shards:4,
    atk:{cd:2.0,range:22,wind:.34,act:.14,kb:110,lunge:120},
    shoot:{cd:1.9,dmg:7,speed:210,count:1,spread:0,col:'#8fdc6a',range:300,wind:.40}},
+ // ---- CONTENT WAVE: three grunts per biome, each teaching one thing (DESIGN-PLAN §4.2) ----
+ // CAVES — teaches dodge
+ rockling:{hp:40,dmg:11,spd:52,w:14,h:14,ai:'walk',c:'#7a7f86',shards:3,arm:4,
+   atk:{cd:1.6,range:26,wind:.30,act:.16,kb:200,lunge:420}},          // ambusher: long lunge
+ // FUNGAL — teaches area denial
+ sporeling:{hp:22,dmg:7, spd:44,w:13,h:13,ai:'walk',c:'#9f7ac0',shards:3,burstOnDeath:34,
+   atk:{cd:1.6,range:22,wind:.30,act:.14,kb:120,lunge:170}},          // dies into a cloud
+ stalker: {hp:18,dmg:13,spd:118,w:11,h:15,ai:'walk',c:'#c05a8f',shards:4,
+   atk:{cd:1.2,range:24,wind:.22,act:.12,kb:120,lunge:460}},          // fast, fragile, punishing
+ // RUINS — teaches flanking
+ archer:  {hp:34,dmg:8, spd:28,w:13,h:16,ai:'walk',c:'#b0a070',shards:5,
+   atk:{cd:2.2,range:22,wind:.36,act:.14,kb:100,lunge:100},
+   shoot:{cd:2.3,dmg:17,speed:390,count:1,spread:0,col:'#ffe9a0',range:520,wind:.55}},
+ shieldman:{hp:70,dmg:14,spd:26,w:18,h:20,ai:'walk',c:'#8a8f9a',shards:6,arm:12,front:1,
+   atk:{cd:2.3,range:30,wind:.44,act:.20,kb:260,lunge:150}},          // blocks from the front
+ // FORGE — teaches burn management
+ ember:   {hp:26,dmg:10,spd:66,w:13,h:13,ai:'walk',c:'#e0703a',shards:4,burstOnDeath:52,burnDeath:1,
+   atk:{cd:1.5,range:22,wind:.26,act:.14,kb:150,lunge:300}},          // detonates on death
+ smith:   {hp:150,dmg:24,spd:22,w:24,h:26,ai:'walk',c:'#a05a30',shards:9,arm:16,
+   atk:{cd:2.6,range:38,wind:.58,act:.24,kb:340,lunge:130},
+   shoot:{cd:3.0,dmg:14,speed:200,count:2,spread:.3,col:'#ff8a3f',range:280,wind:.5,stR:{burn:.5}}},
+ // ABYSS — teaches everything at once
+ wraith:  {hp:48,dmg:18,spd:70,w:14,h:18,ai:'fly',c:'#8f7ad0',shards:8,phase:1,
+   atk:{cd:1.7,range:28,wind:.30,act:.16,kb:180,lunge:340}},          // phases through terrain
+ voidspawn:{hp:60,dmg:15,spd:54,w:16,h:16,ai:'walk',c:'#6a4fd0',shards:7,split:2,
+   atk:{cd:1.8,range:26,wind:.32,act:.16,kb:170,lunge:220}},          // splits on death
+ voidling:{hp:20,dmg:9, spd:82,w:10,h:10,ai:'walk',c:'#8a6ff0',shards:2,
+   atk:{cd:1.4,range:20,wind:.24,act:.12,kb:100,lunge:240}},          // the halves
  // MINIBOSSES (boss:1 => healthbar, guaranteed loot, no cap eviction)
  // ph:[{at,...}] = phase transitions (DESIGN-PLAN §4.3). Crossing an `at` HP fraction triggers
  // a roar + brief invuln, drops shoot cooldown, and unlocks the named extra pattern.
@@ -499,6 +607,37 @@ const UNLOCKS=[
  {id:'robe',   n:'Runed Robe (gear)', cost:65},
  {id:'plate',  n:'Plate (gear)',      cost:80},
  {id:'harness',n:'Delver Harness (gear)',cost:75},
+ // ---- content wave. Priced above the first tier: these are the build-defining picks, and
+ // depth-scaled shards mean a deep run can afford them (DESIGN-PLAN §5). ----
+ {id:'whirlwind', n:'Whirlwind gem (channel)', cost:110},
+ {id:'lunge',     n:'Lunge gem',               cost:85},
+ {id:'riposte',   n:'Riposte gem (counter)',   cost:105},
+ {id:'sunder',    n:'Sunder gem (armor break)',cost:90},
+ {id:'reap',      n:'Reap gem (execute)',      cost:100},
+ {id:'grenade',   n:'Grenade gem',             cost:95},
+ {id:'wisp',      n:'Homing Wisp gem',         cost:90},
+ {id:'frostlance',n:'Frost Lance gem',         cost:95},
+ {id:'sporeburst',n:'Spore Burst gem',         cost:90},
+ {id:'siphon',    n:'Siphon Beam gem (channel)',cost:115},
+ {id:'chain',     n:'Chain support',           cost:100},
+ {id:'fork',      n:'Fork support',            cost:85},
+ {id:'ret',       n:'Return support',          cost:85},
+ {id:'conc',      n:'Concentrated support',    cost:105},
+ {id:'culling',   n:'Culling support',         cost:120},
+ {id:'momentum',  n:'Momentum support',        cost:110},
+ {id:'overload',  n:'Overload support',        cost:100},
+ {id:'precision', n:'Precision support',       cost:110},
+ {id:'twin',      n:'Twin Strike support',     cost:125},
+ {id:'deepcut',   n:'Deep Cut support',        cost:115},
+ {id:'bloodscent',n:'Bloodscent aura',         cost:80},
+ {id:'staticfield',n:'Static Field aura',      cost:85},
+ {id:'warding',   n:'Warding aura',            cost:75},
+ {id:'prospector',n:'Prospector aura',         cost:90},
+ {id:'undertow',  n:'Undertow aura',           cost:95},
+ {id:'bulwark',   n:'Bulwark gem (ability)',   cost:100},
+ {id:'sentry',    n:'Shard Sentry (ability)',  cost:130},
+ {id:'decoy',     n:'Decoy gem (ability)',     cost:85},
+ {id:'rupture',   n:'Rupture gem (ability)',   cost:120},
 ];
 // ============ RNG + NOISE ============
 let SEED=Date.now()>>>0;
@@ -676,8 +815,11 @@ let itemUid=1;
 function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
  const b=GEAR[baseId];
  if(rarity===3&&!UNIQUES[baseId])rarity=2;
- const it={uid:itemUid++,base:baseId,rarity:rarity||0,affixes:{},sockets:[],sc:[],chroma:-1,unique:rarity===3?baseId:null};
- const s=b.sockets+(rarity>=2?1:0)+(rarity===3&&UNIQUES[baseId].sockets?UNIQUES[baseId].sockets:0);
+ // Two uniques per base, coin-flipped, so a rarity-3 drop isn't a single known outcome.
+ const alt=(rarity===3&&UNIQ2[baseId]&&chance(0.5))?1:0;
+ const it={uid:itemUid++,base:baseId,rarity:rarity||0,affixes:{},sockets:[],sc:[],chroma:-1,unique:rarity===3?baseId:null,alt};
+ const UD=rarity===3?uniqueDef(baseId,alt):null;
+ const s=b.sockets+(rarity>=2?1:0)+((UD&&UD.sockets)||0);
  // Socket colors: the base's fixed colors first, then extras rolled from its tendency.
  // "The perfect gem with nowhere to put it" is the whole point (DESIGN-PLAN §3.1).
  const tend=b.tend||'rgb';
@@ -690,9 +832,9 @@ function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
  for(let i=0;i<nAff&&pool.length;i++){const a=pool.splice(ri(0,pool.length-1),1)[0];it.affixes[a[0]]=ri(a[2],a[3])}
  return it}
 function itemName(it){const b=GEAR[it.base];
- if(it.unique&&UNIQUES[it.unique])return UNIQUES[it.unique].n;
+ if(it.unique&&uniqueDef(it.unique,it.alt))return uniqueDef(it.unique,it.alt).n;
  return ['','Magic ','Rare ',''][it.rarity]+b.n}
-function itemDesc(it){return it.unique&&UNIQUES[it.unique]?UNIQUES[it.unique].d:''}
+function itemDesc(it){const u=it.unique&&uniqueDef(it.unique,it.alt);return u?u.d:''}
 function affixStr(it){return Object.entries(it.affixes).map(([k,v])=>{const a=AFF[k];return a?'+'+v+a[1]:''}).filter(Boolean).join(', ')}
 function sockColOf(it,i){return it.chroma===i?'*':(it.sc&&it.sc[i])||'r'}
 function gemFits(it,i,gid){const G=GEMS[gid];if(!G)return false;
@@ -720,7 +862,7 @@ function gearSum(key){let v=0;
  for(const s of ['melee','ranged','armor']){const it=EQ[s];if(!it)continue;
   v+=statPct(it,key);
   const b=GEAR[it.base];if(b[key]!==undefined&&(key==='arm'||key==='fuel'||key==='hp'))v+=b[key];
-  const u=it.unique&&UNIQUES[it.unique];if(u&&u[key]!==undefined)v+=u[key]}
+  const u=it.unique&&uniqueDef(it.unique,it.alt);if(u&&u[key]!==undefined)v+=u[key]}
  return v}
 // inc(key) is THE additive pool. Never let a support gem reach it.
 function inc(key){return treeFx(key)+classFx(key)+gearSum(key)+(RUNB[key]||0)}
@@ -756,8 +898,11 @@ function moveSpd(){let m=MOVE*(1+inc('ms'))*chillMul(P);
 function resolveDmg(a,dkey){
  a.inc=(a.inc||0)+inc(dkey)+inc('dmg');
  a.dmg=a.dmg*(1+a.inc)*a.more;
- // ailment potencies are ratios of FINAL damage, so a support gem's `more` feeds the DoT too
- if(a.stR){a.st=a.st||{};for(const k in a.stR)a.st[k]=Math.max(a.st[k]||0,a.dmg*a.stR[k]*ailmentMul())}
+ // ailment potencies are ratios of FINAL damage, so a support gem's `more` feeds the DoT too.
+ // Deep Cut's `ailMore` lands here and nowhere else — that's what lets it trade hit damage
+ // for DoT damage instead of just being a worse Added Fire.
+ if(a.stR){a.st=a.st||{};for(const k in a.stR)a.st[k]=Math.max(a.st[k]||0,a.dmg*a.stR[k]*ailmentMul()*(a.ailMore||1))}
+ else if(a.ailMore&&a.st){for(const k in a.st)if(k!=='chill'&&k!=='shock')a.st[k]*=a.ailMore}
  if(a.st&&a.st.burn)a.st.burn*=1+classFx('burnBonus');
  return a}
 // GEM TIERS (DESIGN-PLAN §3.3). One uniform rule instead of per-gem tier tables: a tier lifts
@@ -782,7 +927,7 @@ function computeAttack(slot){
  const gems=it.sockets.filter(g=>gemOf(g));
  for(const g of gems){const G=gemOf(g);if(G.t==='skill'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
  for(const g of gems){const G=gemOf(g);if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
- if(it.unique&&UNIQUES[it.unique].mod)UNIQUES[it.unique].mod(a);
+ {const u=it.unique&&uniqueDef(it.unique,it.alt);if(u&&u.mod)u.mod(a)}
  // armor sockets: support gems link GLOBALLY to both weapon skills. This is the one
  // global-vs-local decision in the whole system (HANDOFF §3.3).
  if(slot!=='armor'&&EQ.armor)for(const g of EQ.armor.sockets){const G=gemOf(g);if(!G)continue;
@@ -794,6 +939,7 @@ function computeAttack(slot){
  if(a.pierce!==undefined)a.pierce+=inc('pierce');
  a.crit=critChance()+(a.critAdd||0);a.critMult=critMultVal()+(a.critMultAdd||0);
  a.leech=(a.leech||0)+inc('leech');
+ if(auraHas('warding'))a.dmg*=0.9;   // Warding buys status resist with raw damage
  return a}
 // Cached attack params — recompute only when build changes (equip/socket/tree)
 let ATK={melee:null,ranged:null,abil:null};
@@ -813,7 +959,8 @@ function computeAbility(){
  return a}
 function refreshAttacks(){ATK.melee=computeAttack('melee');ATK.ranged=computeAttack('ranged');ATK.abil=computeAbility();
  P.maxfuel=maxFuel();P.armor=armorVal();P.sres=sresVal();
- P.fallImmune=!!(EQ.armor&&EQ.armor.unique&&UNIQUES[EQ.armor.unique].noFall)}
+ const au=EQ.armor&&EQ.armor.unique&&uniqueDef(EQ.armor.unique,EQ.armor.alt);
+ P.fallImmune=!!(au&&au.noFall)}
 // DPS estimate for the socket screen. Players cannot evaluate `more` multipliers in their
 // head; without this line the whole gem system is guesswork (DESIGN-PLAN §7).
 function dpsOf(a){if(!a||!a.cd)return 0;
@@ -1016,10 +1163,16 @@ function dmgNum(x,y,v,col,crit){DMGN.push({x,y,vy:crit?-58:-40,t:crit?1.0:0.8,v:
 function rollCrit(a){return a&&a.crit>0&&chance(a.crit)}
 function applyArmor(raw,armor){return Math.max(ARMOR_FLOOR,raw-(armor||0))}
 function burst(x,y,col,n){if(PART.length>350)return;for(let i=0;i<(n||6);i++)PART.push({x,y,vx:rr(-90,90),vy:rr(-140,20),t:rr(.2,.5),col})}
+// Undertow makes being nearly dead a build choice rather than only a problem.
+function liveSpeedMul(){return auraHas('undertow')&&P.hp<P.maxhp*0.4?0.8:1}
 function doMelee(){
  const a=ATK.melee;if(!a||a.kind!=='melee'||P.mcd>0)return;
+ // Riposte only exists inside the counter window, which is what makes Vanguard's shield an
+ // active button instead of a passive damage reduction stat.
+ if(a.riposte&&perf>(P.blockedT||-9)+1.2){if(!P.riposteWarned){P.riposteWarned=perf;toast('Riposte — block first')}return}
  if(a.chan&&!spendFocus(a.chan*DT,true))return;   // channelled skills pay per tick
- P.mcd=a.cd;
+ P.mcd=a.cd*liveSpeedMul();
+ if(a.lunge&&!P.block){P.vx=P.face*a.lunge;P.inv=Math.max(P.inv,0.12);burst(P.x,P.y,'#ffffff40',4)}
  const fang=P.face>0?0:Math.PI, half=a.arc*Math.PI/360;
  let hit=false;
  for(const e of EN){if(e.hp<=0)continue;
@@ -1049,7 +1202,7 @@ function doRanged(){
  const a=ATK.ranged;if(!a||P.rcd>0)return;
  if(a.kind==='melee'){doMeleeAs(a);return} // shield in ranged slot => bash
  if(a.chan&&!spendFocus(a.chan*DT,true))return;
- P.rcd=a.cd;const v=aimVec();
+ P.rcd=a.cd*liveSpeedMul();const v=aimVec();
  const n=a.count||1,spread=0.18;
  for(let i=0;i<n;i++){if(PROJ.length>200)break;const off=(i-(n-1)/2)*spread;
   const c=Math.cos(off),s=Math.sin(off);
@@ -1062,21 +1215,52 @@ function doMeleeAs(a){if(P.rcd>0)return;P.rcd=a.cd;
  for(const e of EN){if(e.hp<=0)continue;
   if(Math.hypot(e.x-P.x,e.y-P.y)<a.range+e.w/2&&Math.sign(e.x-P.x)===P.face)strike(e,a,P.face*a.kb)}
  sfx('swing')}
-// ---- strike(): the single player->enemy damage path. Crit, armor, leech and focus all here. ----
-function strike(e,a,kb){
+// ---- strike(): the single player->enemy damage path. Crit, armor, leech and focus all here.
+// Conditional gem effects (Momentum, Reap, Bloodscent, Culling, Chain, Sunder, Twin Strike)
+// depend on live state, so they resolve HERE rather than in the cached ATK object. ----
+function strike(e,a,kb,isSecond){
  const crit=rollCrit(a);
  let dmg=a.dmg*(crit?a.critMult:1);
+ // Momentum: damage scales with how fast you're actually moving — makes `ms` an offensive stat
+ if(a.momentum)dmg*=1+Math.min(1,Math.abs(P.vx)/Math.max(1,MOVE))*a.momentum;
+ // Reap: scales with the target's MISSING health — an execution build
+ if(a.reap&&e.maxhp)dmg*=1+(1-e.hp/e.maxhp)*a.reap;
+ // Bloodscent aura: bonus against anything already bleeding or burning
+ if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))dmg*=1.3;
+ if(isSecond)dmg*=0.6;
  let st=a.st;
  if(crit&&st){st={};for(const k in a.st)st[k]=a.st[k]*(k==='chill'?1:CRIT_ST)} // crits deepen ailments
+ // Sunder: strip armor before the hit lands, and leave it stripped
+ if(a.sunder)e.arm=Math.max(0,(e.arm||0)-a.sunder);
  hurtEnemy(e,dmg,kb,crit?'#d8a53f':a.col,st,false,crit);
  if(a.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*a.leech);
+ // Culling: anything left under the threshold dies outright. Feels incredible on trash.
+ if(a.cull&&e.hp>0&&e.maxhp&&e.hp<e.maxhp*a.cull){
+  dmgNum(e.x,e.y-e.h,e.hp,'#ffe9a0',true);e.hp=0;burst(e.x,e.y,'#ffe9a0',12);killEnemy(e)}
+ // Chain: a bolt hops to a neighbour. Gives single-target skills a crowd answer.
+ if(a.chain&&!isSecond)chainFrom(e,dmg*0.6,a.col,a.chain);
  gainFocus(FOCUS_HIT);
- if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT)}
+ if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT);
+ // Twin Strike: a second, weaker hit. Doubles every on-hit effect, so it's the ailment engine.
+ if(a.twin&&!isSecond)strike(e,a,kb*0.4,true)}
+function chainFrom(from,dmg,col,jumps){
+ let src=from;const hit=[from];
+ for(let j=0;j<jumps;j++){
+  let best=null,bd=120;
+  for(const e of EN){if(e.hp<=0||hit.indexOf(e)>=0)continue;
+   const d=Math.hypot(e.x-src.x,e.y-src.y);if(d<bd){bd=d;best=e}}
+  if(!best)return;
+  arc(src.x,src.y,best.x,best.y,col||'#9fd0ff');
+  hurtEnemy(best,dmg,0,col,null,true);
+  hit.push(best);src=best;dmg*=0.75}}
 function depthMul(y){return 1+Math.max(0,(y/TILE-SURFACE))/900} // enemies scale with depth
 // chained=true suppresses further chaining so a shock loop can't recurse forever.
 function hurtEnemy(e,dmg,kb,col,st,chained,crit){
  if(e.hp<=0||(e.invT||0)>0)return;
  const shocked=hasSt(e,'shock');
+ // Shieldman blocks hard from the side it's facing — you have to get behind it. That's the
+ // whole lesson of the ruins band, and it's one line because `front` is a table field.
+ if(e.front&&Math.sign(P.x-e.x)===e.dir&&!e.wind)dmg*=0.25;
  dmg=applyArmor(dmg,e.arm)*shockMul(e)*(1-P.weight*0.03);
  e.hp-=dmg;e.vx+=kb;e.vy-=60;e.flash=crit?0.20:0.12;
  if(st)applyStatus(e,st,false);
@@ -1090,10 +1274,23 @@ function killEnemy(e){
  if(e.dying)return;e.dying=1;
  burst(e.x,e.y,e.c,e.boss?40:12);shake=Math.max(shake,e.boss?12:3);
  P.kills++;gainFocus(FOCUS_KILL);sfx(e.boss?'bosskill':'kill');
+ const D=ENEMIES[e.type]||{};
+ // Sporeling / Ember: the corpse is the attack. Area denial you have to walk around.
+ if(D.burstOnDeath){
+  explode(e.x,e.y,D.burstOnDeath,e.dmg*0.7,D.burnDeath?'#ff8a3f':'#9f7ac0',
+   D.burnDeath?{burn:e.dmg*0.5}:{chill:0.7});
+  if(Math.hypot(P.x-e.x,P.y-e.y)<D.burstOnDeath){hurtPlayer(e.dmg*0.7);
+   applyStatus(P,D.burnDeath?{burn:e.dmg*0.4}:{chill:0.7},true)}}
+ // Void spawn: splits into halves, so killing it fast in a corner is a mistake.
+ if(D.split&&!e.isSplit){const H=ENEMIES.voidling,m=depthMul(e.y);
+  for(let i=0;i<D.split;i++){if(EN.length>=120)break;
+   EN.push({x:e.x+rr(-14,14),y:e.y-6,vx:rr(-90,90),vy:-140,w:H.w,h:H.h,type:'voidling',ai:H.ai,c:H.c,
+    hp:H.hp*m,maxhp:H.hp*m,dmg:H.dmg*m,arm:0,spd:H.spd,onG:false,flash:0,dir:i?1:-1,
+    boss:false,elite:null,shoot:null,scd:0,atk:H.atk,acd:rr(.2,.6),wind:0,act:0,invT:0,phase:0,ph:null,isSplit:1})}}
  if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitstop=0.18;
   const gp=gemPool();for(let i=0;i<2;i++)PICK.push({x:e.x+rr(-10,10),y:e.y,vy:-170,kind:'gem',id:gp[ri(0,gp.length-1)],t:60});
   const gr=gearPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gear',item:mkItem(gr[ri(0,gr.length-1)],chance(.22)?3:chance(.5)?2:1),t:60});
-  META.bosses=META.bosses||{};if(!META.bosses[e.type]){META.bosses[e.type]=1;saveMeta()}}
+  META.bosses=META.bosses||{};if(!META.bosses[e.type]){META.bosses[e.type]=1;UNLOCK_MSG.push('first '+e.type);saveMeta()}}
  dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?3:1)*rr(0.7,1.3)));
  if(e.elite){
   toast(e.elite.n+' '+e.type+' slain');
@@ -1125,6 +1322,7 @@ function hurtPlayer(dmg,noArmor){if(P.inv>0||P.dead)return;
  if(!noArmor)dmg=applyArmor(dmg,P.armor||0);
  if(auraHas('ironskin'))dmg*=0.8;
  if(P.block){dmg*=0.3*(1-classFx('blockDR'));burst(P.x+P.face*8,P.y,'#9fd0ff',6);shake=Math.max(shake,2);
+  P.blockedT=perf;P.riposteWarned=0;      // opens the Riposte counter window
   if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2);sfx('block')}
  else{shake=Math.max(shake,6);hitstop=0.06;burst(P.x,P.y,'#e05555',8);sfx('hurt')}
  P.hp-=dmg;P.inv=0.7;
@@ -1154,7 +1352,7 @@ function spawnFromChunks(){
     EN.push({x:s.x,y:s.y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type:s.type,ai:E.ai,
      c:el?el.c:E.c,
      hp:E.hp*m*(el?el.hp:1),maxhp:E.hp*m*(el?el.hp:1),dmg:E.dmg*m*(el?el.dmg:1),
-     arm:(E.arm||0)+(el&&el.arm||0),
+     arm:(E.arm||0)+(el&&el.arm||0),front:E.front||0,
      spd:E.spd*(el?el.spd:1),onG:false,flash:0,dir:chance(.5)?1:-1,
      boss:boss,elite:el,shoot:E.shoot||null,scd:E.shoot?rr(.5,1.5):0,
      atk:E.atk||null,acd:E.atk?rr(.3,1.0):0,wind:0,act:0,invT:0,phase:0,ph:E.ph||null,
@@ -1245,7 +1443,11 @@ function upEnemies(dt){
    if(winding){e.vx*=0.8;e.vy*=0.8}
    else if(d<380){e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}
    else{e.vx+=Math.sin(perf*2+e.x)*10*dt;e.vy+=Math.cos(perf*1.7+e.y)*10*dt}
-   collideMove(e,e.vx*dt,e.vy*dt);e.vy*=0.98;e.vx*=0.98}
+   // Wraiths ignore terrain entirely — there is no wall to put between you and the abyss.
+   if(ENEMIES[e.type]&&ENEMIES[e.type].phase){e.x+=e.vx*dt;e.y+=e.vy*dt;e.onG=false;
+    if(chance(dt*12))burst(e.x,e.y,e.c,1)}
+   else collideMove(e,e.vx*dt,e.vy*dt);
+   e.vy*=0.98;e.vx*=0.98}
   // Enemies with no attack block at all still body-check, so nothing is harmless by omission.
   if(!e.atk&&Math.abs(dx)<(e.w+P.w)/2&&Math.abs(dy)<(e.h+P.h)/2){const before=P.inv;hurtPlayer(e.dmg);
    if(P.inv>before){
@@ -1414,7 +1616,8 @@ function upPlayer(dt){
  P.noFall=Math.max(0,P.noFall-dt);
  runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
  const bn=biomeName(Math.floor(P.y/TILE));
- if(!META.anchors[bn]){META.anchors[bn]=1;saveMeta();toast('ANCHOR SET: '+bn.toUpperCase()+' — descend from here next run')}
+ if(!META.anchors[bn]){META.anchors[bn]=1;saveMeta();UNLOCK_MSG.push(bn+' anchor');
+  toast('ANCHOR SET: '+bn.toUpperCase()+' — descend from here next run');sfx('level')}
  // DESCENT BONUS (§3.4.3): reaching a new band this run is a free shrine roll. Pull, not push.
  if(!RUNBANDS[bn]){RUNBANDS[bn]=1;
   if(bn!=='surface'){openShrine({x:P.x,y:P.y,used:false,free:1});toast('DESCENT — a boon for going deeper')}}
@@ -1594,6 +1797,8 @@ function openCamp(){
  <button onclick="openClasses()">CLASS — ${(CLASSES[META.cls]||CLASSES.vanguard).n}</button>
  <button onclick="openAnchors()">DESCEND FROM — ${(META.startBiome||'surface').toUpperCase()}</button>
  <button onclick="openLoadout()">STARTING LOADOUT — ${['melee','ranged','armor'].map(s=>META.loadout[s]?GEAR[META.loadout[s]].n:'—').join(' / ')}</button>
+ <button onclick="openVault()">THE VAULT — ${META.vault.length}/3 stored</button>
+ <button onclick="toggleAudio()">SOUND — ${AUDIO_ON?'on':'off'}</button>
  <div class="sub" style="margin-top:6px">UNLOCK INTO DROP POOL</div>`;
  for(const u of UNLOCKS){const owned=META.unlocks[u.id];
   h+=`<button ${owned||META.shards<u.cost?'disabled':''} onclick="buyUnlock('${u.id}')">${u.n} — ${owned?'OWNED':u.cost+'◆'}</button>`}
@@ -1611,9 +1816,13 @@ function openClasses(){
    <span class="sub"><br>${C.d}<br>${fxs}</span></button>`}
  h+=`<button onclick="toggleKit()">STARTING GEAR: ${META.useClassKit!==false?'class kit':'custom loadout'}</button>`;
  h+='<button onclick="openCamp()">BACK</button>';openPanel(h)}
-function pickClass(id){if(META.classes[id]){META.cls=id;saveMeta();toast(CLASSES[id].n)}openClasses()}
+// classFx() is read live by inc(), so switching class changes every stat immediately — not
+// just on the next run. Without this the cached ATK, maxHP and armor all go stale the moment
+// you pick a class and walk away from camp without descending.
+function applyClass(){refreshAttacks();P.maxhp=maxHP();P.hp=Math.min(P.hp,P.maxhp);P.fuel=Math.min(P.fuel,P.maxfuel)}
+function pickClass(id){if(META.classes[id]){META.cls=id;saveMeta();applyClass();toast(CLASSES[id].n)}openClasses()}
 function buyClass(id){const C=CLASSES[id];
- if(!META.classes[id]&&META.shards>=C.cost){META.shards-=C.cost;META.classes[id]=1;META.cls=id;saveMeta();toast('Unlocked '+C.n)}
+ if(!META.classes[id]&&META.shards>=C.cost){META.shards-=C.cost;META.classes[id]=1;META.cls=id;saveMeta();applyClass();sfx('level');toast('Unlocked '+C.n)}
  openClasses()}
 function toggleKit(){META.useClassKit=(META.useClassKit===false);saveMeta();openClasses()}
 function openAnchors(){
@@ -1635,9 +1844,46 @@ function openLoadout(){
    h+=`<button onclick="setLoad('${sl}','${id}')">${META.loadout[sl]===id?'▸ ':''}${b.n} <span class="sub">${b.sockets} socket(s)</span></button>`}}
  h+='<button onclick="openCamp()">BACK</button>';openPanel(h)}
 function setLoad(slot,id){META.loadout[slot]=id;saveMeta();openLoadout()}
+function toggleAudio(){AUDIO_ON=!AUDIO_ON;META.audio=AUDIO_ON?1:0;saveMeta();if(AUDIO_ON){audioInit();sfx('pick')}openCamp()}
+// THE VAULT (DESIGN-PLAN §3.5). Dead Cells' real hook is that death is a scene change, not a
+// reset. Three slots; deposit costs shards scaled by rarity so a great early unique becomes an
+// event you can bank rather than a thing you lose in four minutes.
+const VAULT_COST=[60,140,300,650];
+function openVault(){
+ let h=`<h2>THE VAULT</h2><div class="sub">Stored items come back on every future run. Shards: ${META.shards}◆</div>`;
+ if(!META.vault.length)h+='<div class="sub">empty</div>';
+ META.vault.forEach((v,i)=>{h+=`<button onclick="vaultTake(${i})"><span class="r${v.rarity}">${itemName(v)}</span>
+   <span class="sub">${itemDesc(v)||affixStr(v)} — tap to remove</span></button>`});
+ const carried=[];
+ for(const sl of ['melee','ranged','armor'])if(EQ[sl])carried.push({from:sl,item:EQ[sl]});
+ BAG.forEach((b,i)=>{if(b.kind==='gear')carried.push({bag:i,item:b.item})});
+ h+='<div class="sub" style="margin-top:8px">Deposit from this run:</div>';
+ if(META.vault.length>=3)h+='<div class="sub">Vault full — remove something first.</div>';
+ else if(!carried.length)h+='<div class="sub">nothing carried</div>';
+ else carried.forEach((c,i)=>{const cost=VAULT_COST[c.item.rarity]||100;
+  h+=`<button ${META.shards<cost?'disabled':''} onclick="vaultPut(${i})">
+   <span class="r${c.item.rarity}">${itemName(c.item)}</span>
+   <span class="sub">${c.from?'equipped '+c.from:'in bag'} — ${cost}◆</span></button>`});
+ h+='<button onclick="openCamp()">BACK</button>';
+ VAULT_SRC=carried;openPanel(h)}
+let VAULT_SRC=[];
+function vaultPut(i){const c=VAULT_SRC[i];if(!c||META.vault.length>=3)return;
+ const cost=VAULT_COST[c.item.rarity]||100;
+ if(META.shards<cost)return;
+ META.shards-=cost;META.vault.push(c.item);
+ if(c.from){EQ[c.from]=null;refreshAttacks();P.maxhp=maxHP();P.hp=Math.min(P.hp,P.maxhp)}
+ else BAG.splice(c.bag,1);
+ saveMeta();sfx('level');toast('Vaulted: '+itemName(c.item));openVault()}
+function vaultTake(i){const v=META.vault[i];if(!v)return;
+ META.vault.splice(i,1);saveMeta();BAG.push({kind:'gear',item:v});toast('Withdrawn to bag');openVault()}
 function buyUnlock(id){const u=UNLOCKS.find(x=>x.id===id);if(META.shards>=u.cost&&!META.unlocks[id]){META.shards-=u.cost;META.unlocks[id]=1;saveMeta();toast('Unlocked: '+u.n)}openCamp()}
 function buyNode(id){const n=TREE.find(x=>x.id===id);if(META.shards>=n.cost&&!META.tree[id]){META.shards-=n.cost;META.tree[id]=1;saveMeta();P.maxhp=maxHP();refreshAttacks();toast(n.n)}openCamp()}
 // ============ INPUT ============
+// Browsers refuse to start an AudioContext before a real gesture, so the first touch or
+// keypress is what actually turns sound on. Registered once and then removed.
+function armAudio(){if(AUDIO_ON)audioInit();
+ removeEventListener('pointerdown',armAudio);removeEventListener('keydown',armAudio)}
+addEventListener('pointerdown',armAudio);addEventListener('keydown',armAudio);
 const IN={x:0};const HELD={mel:false,rng:false,jmp:false};const KEYS={};
 addEventListener('keydown',e=>{if(e.repeat)return;KEYS[e.code]=true;
  if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp'){P.jbuf=0.12;HELD.jmp=true}
@@ -1974,5 +2220,9 @@ loadMeta();newRun();
 cam.x=P.x;cam.y=P.y;
 toast('Descend. Die. Bank shards. (E=bag, C=camp)');
 requestAnimationFrame(frame);
+// Offline install. Wrapped because file:// and the test harness have no SW support, and a
+// throw here would take the whole game down after it had already started fine.
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
+ addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 </script>
 </body></html>

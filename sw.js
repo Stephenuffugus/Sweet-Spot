@@ -35,6 +35,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // Shardfall lives at /shardfall/ and ships its own service worker. This one's scope is the
+  // whole repo path, so without this guard it would answer Shardfall's requests — and its
+  // offline navigation fallback would serve Sweet Spot's HTML for a Shardfall URL.
+  if (new URL(req.url).pathname.includes('/shardfall/')) return;
   e.respondWith(
     caches.match(req).then(hit => {
       if (hit) return hit;

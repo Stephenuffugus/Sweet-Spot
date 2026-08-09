@@ -1,6 +1,8 @@
 # SHARDFALL — Design Plan v2
-**Companion to `shardfall.html` (1152 lines, sessions 1–5 shipped). This is the forward plan.**
-Owner: Stephen / Lucid Winds. Read `roguelite-handoff.md` for the original concept.
+**Companion to `index.html`. Written after session 5; §1-§8 are now built (session 7).**
+Owner: Stephen / Lucid Winds. `HANDOFF.md` is the current system map — read that for what
+exists. This file is kept as the *reasoning* behind the design, and §10-§11 record what was
+decided and what is genuinely still open.
 
 ---
 
@@ -390,17 +392,43 @@ Strict dependency order — do not skip ahead:
 
 ---
 
-## 10. OPEN DECISIONS FOR STEPHEN
+## 10. DECISIONS — RESOLVED
 
-1. **Focus resource: yes or no?** It's the biggest gameplay change proposed here. It makes
-   abilities a decision instead of a reflex, but it's a new bar on a small screen and a new
-   thing to learn. I lean yes.
-2. **Vault (carry one item through death) — does it undercut the roguelite?** Dead Cells says
-   no, purists say yes. I lean yes-with-cost.
-3. **Socket colors — confirm** we're doing this instead of link groups. Strongly recommend yes.
-4. **Run length:** is 8–12 minutes right for a phone game, or should it be 4–6? This changes
-   every number in §5.
-5. **Do bosses gate progression?** Right now anchors unlock by depth alone. Alternative: an
-   anchor only sets after you kill that biome's miniboss. More structure, more frustration.
-6. **Title:** still SHARDFALL as working title. Locking it or not affects nothing technical,
-   but the shard currency name is now load-bearing across the whole economy.
+These were open at the end of session 5. All are now settled and built; recorded here so the
+reasoning survives.
+
+1. **Focus resource — YES, built.** Abilities cost 30-60 Focus *and* have a cooldown. Focus
+   comes from being in the fight: ~8 per hit, 25 per kill, 2/s idle. Each class earns it a
+   different way (`CLASSES[x].foc`) — Vanguard from blocking, Marksman from crits, Pyromancer
+   from ailment ticks, Delver from carving. That last part is where class identity actually
+   lives now. The new bar is a thin strip under the fuel bar, and the ABIL button itself
+   reports the state, so the extra HUD cost is close to zero.
+2. **Vault — YES, built, with cost.** Three slots at camp, deposit price scales with rarity
+   (60 / 140 / 300 / 650). It does not undercut the roguelite because the shard price is real
+   and the slots are few; what it fixes is a great unique found four minutes before dying.
+3. **Socket colors — YES, locked.** Red (might) / green (finesse) / blue (focus), gem colors
+   fixed per gem, bases have tendencies, magic+ gear can roll one Chromatic socket. Link-group
+   UI stays permanently off the table for a phone screen.
+4. **Run length — 8-12 minutes**, confirmed by the owner. Everything in §5 is calibrated to it.
+   **Caveat: §5 has not been re-derived since depth-scaled shards landed**, and that change
+   multiplies deep-run income by `depthMul` (~2.8x at 1600m, ~4.5x at the floor). The unlock
+   pool grew from 39 to 68 entries partly to absorb it, and gem fusion is the infinite sink,
+   but the table needs redoing against real runs.
+5. **Do bosses gate progression? — NO.** Anchors still unlock by depth alone. First kills are
+   recorded in `META.bosses` and surface in the death summary, so the hook exists if it's ever
+   wanted, but gating was judged more frustrating than structuring.
+6. **Title — SHARDFALL**, kept. `shards` is load-bearing across the economy, the save key, the
+   currency glyph and the icon.
+
+---
+
+## 11. WHAT'S ACTUALLY LEFT
+
+Sessions 6-9 of §9 are shipped. The honest remaining list:
+
+1. **A phone playtest.** Not a browser one — a phone one. Every difficulty number, the windup
+   durations, the Weight timings and the thumb layout are educated guesses until then.
+2. **Re-derive §5** against real runs now that shards scale with depth.
+3. **Art** behind `drawEntity()`.
+4. **Music**, if it can be done without an asset file.
+5. **Liquids**, and turning boss patterns into ongoing states rather than one-shot bursts.

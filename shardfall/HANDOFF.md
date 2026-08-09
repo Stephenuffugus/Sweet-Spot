@@ -1,8 +1,10 @@
 # SHARDFALL — Engineering Handoff
 
-**State:** playable vertical slice, 1290 lines, 141 passing assertions, never opened in a browser.
+**State:** playable, ~2100 lines, sessions 1-7 shipped. Renders in a real browser, installs
+offline, 249 assertions across 6 node suites plus 15 browser and 22 PWA checks, all passing.
 **Stack:** single-file vanilla HTML/CSS/JS PWA, canvas 2D, no build step, mobile-first.
-**Owner:** Stephen / Lucid Winds. Target: lucidwinds.com.
+**Owner:** Stephen / Lucid Winds. Target: lucidwinds.com. Lives in `shardfall/` in the
+Sweet-Spot repo, so the live Sweet Spot page at the repo root is untouched.
 
 Read `CLAUDE.md` first (rules + testing). This file is the map. `DESIGN-PLAN.md` is the roadmap.
 
@@ -10,19 +12,27 @@ Read `CLAUDE.md` first (rules + testing). This file is the map. `DESIGN-PLAN.md`
 
 ## 0. The one thing to do first
 
-**Open `index.html` in a browser and play it.** Every line was written and tested headlessly.
-The logic is verified; the *feel* is completely unvalidated. Nobody has ever seen it render.
-
-Expect to fix render bugs and tune numbers. Start there before building anything new.
+**Play it on an actual phone.** It has now been rendered and driven in headless Chromium, and
+`test/shots.js` writes screenshots of staged moments — but nobody has yet held it in one hand
+with a thumb on the buttons. Everything about pacing, button reach and difficulty is judged
+there, not here.
 
 Controls — keyboard: `A/D` move, `Space/W` jump (**hold to hover**), `J` melee, `K` ranged,
 `Shift` dodge, `F/Q` ability, `E` bag, `C` camp (when at camp/anchor). Touch: left half of the
-screen is a virtual stick, buttons bottom-right, `MAP`/`BAG` top-right.
+screen is a virtual stick; the thumb cluster is bottom-right with MEL nearest the corner and
+ABIL furthest; `MAP`/`BAG`/`CAMP` top-right; minimap below them.
 
 The first numbers to reach for, in likely order of need:
 `FLY_THRUST` 2100, `FLY_DRAIN` 42, `JUMPV` 430, `GRAV` 1500, `MOVE` 170, `FALL_SAFE` 520,
+the `17*TILE` camera target in `resize()`, `WEIGHT_GRACE`/`WEIGHT_EVERY`, `FOCUS_*`,
 and the POI density gates in `genChunk` (hash thresholds: chests .12, shrines .16, vaults .10,
 secrets .14, boss arenas .045).
+
+**The browser-only findings from the first render, all now fixed**, as a warning about what a
+headless harness cannot tell you: the camera showed 12 tiles while auto-aim reached 16, so you
+auto-targeted enemies off-screen; the minimap drew on top of the HUD buttons; ABIL was a
+full-width bar across the play area; and every depth looked identical because there was no
+lighting.
 
 ---
 
@@ -33,22 +43,23 @@ are the navigation.
 
 | Section | What lives there |
 |---|---|
-| CONSTANTS | tile size, world dims, gravity/movement, flight + fall tuning |
+| CONSTANTS | tile size, world dims, gravity/movement, flight + fall tuning, crit/armor/focus/weight |
 | **DATA TABLES** | tiles, status types, elites, biomes, enemies, gems, gear, uniques, affixes, classes, boons, tree, unlocks. **All content goes here.** |
 | RNG + NOISE | seeded mulberry32, value noise, `hash2` for deterministic per-chunk decisions |
+| AUDIO + FX | synthesized WebAudio SFX (no asset files), arcs, screen flash, callouts |
 | WORLD / CHUNKS | chunk generation, POI stamping, chunk canvas rendering, canvas eviction |
 | CARVE | `carve()` — the only terrain-removal function |
 | META / SAVE | localStorage, `treeFx`/`classFx`, unlock pools, biome anchors |
 | ITEMS | `mkItem`, affix rolling, unique assignment, naming |
 | RUN STATE | `EQ`, `BAG`, entity arrays, `RUNB` boons, the `P` player object |
-| GEM RESOLUTION | `computeAttack`, `computeAbility`, `refreshAttacks`, `useAbility` |
+| GEM RESOLUTION | `inc`/`resolveDmg`/`applyGem`, `computeAttack`, `computeAbility`, `refreshAttacks`, `useAbility`, `dpsOf` |
 | PHYSICS | `collideMove` + tile scans |
-| COMBAT | melee, ranged, explosions, status application, damage, drops |
+| COMBAT | status engine + interactions, `strike`, crit, flat armor, melee/ranged, explosions, drops |
 | ENEMIES / PROJECTILES / PICKUPS | spawning, AI, enemy shooting, projectile stepping |
 | PLAYER UPDATE | movement, hover/fuel, fall damage, burrow phasing, death, `newRun` |
 | UI | panels, bag/socket screens, shrine, camp, class/anchor/loadout pickers |
 | INPUT | keyboard, virtual stick, touch buttons |
-| RENDER | camera, chunk blitting, entities, minimap |
+| RENDER | adaptive camera, sky + parallax, chunk blitting, `drawEntity` (art fallback), depth lighting, minimap |
 | MAIN LOOP | fixed-timestep `sim()`, `hud()`, `frame()` |
 
 ---
@@ -177,68 +188,66 @@ three branches.
 
 | Table | Count | Notes |
 |---|---|---|
-| `GEMS` | 33 | 6 skill, 12 support, 6 aura, 9 ability |
-| `GEAR` | 12 bases | melee / ranged / armor / `any` (shields) |
-| `UNIQUES` | 12 | rarity 3; `mod()` runs after gems so they break rules |
-| `ENEMIES` | 9 | 4 grunts + 5 minibosses |
+| `GEMS` | 62 | 11 skill, 20 support, 11 aura, 20 ability. Every gem declares a socket color. |
+| `GEAR` | 12 bases | melee / ranged / armor / `any` (shields). Each has `arm`, `sc`, `tend`. |
+| `UNIQUES` + `UNIQ2` | 24 | two per base, coin-flipped; `mod()` runs after gems so they break rules |
+| `ENEMIES` | 19 | 13 grunts + 5 minibosses + voidling. All telegraph. |
 | `ELITES` | 4 | modifier prefixes |
-| `CLASSES` | 4 | |
-| `BOONS` | 7 | shrine rewards, run-scoped in `RUNB` |
-| `TREE` | 9 nodes | 3 branches |
-| `UNLOCKS` | 39 | the shard sink |
-| `BIOMES` | 6 | |
-| `AFFIXES` | 4 | **thin — this is a known gap** |
-
----
+| `CLASSES` | 4 | each also names where it earns Focus (`foc`) |
+| `BOONS` | 12 | shrine rewards, run-scoped in `RUNB` |
+| `TREE` | 15 nodes | 3 branches x 5 |
+| `UNLOCKS` | 68 | the shard sink |
+| `BIOMES` | 6 | 3 grunts each from caves down |
+| `AFFIXES` | 12 | `pct` folds into the additive pool, `flat` adds raw |
 
 ## 5. Known gaps and traps
 
-**Gaps (deliberate, prioritized in DESIGN-PLAN §9):**
-- No crit, no flat armor, no status resist. Affixes only roll 4 things, so "+damage" is
-  effectively the only offensive axis. **This is the top content bottleneck.**
-- Enemies have **no attack telegraphs**. Damage will feel random until they do. Do this
-  before any balance tuning — no amount of number-turning fixes an unreadable hit.
-- Bosses are single-phase HP sponges.
-- Nothing stops farming the shallow caves forever. Shard drops don't scale with depth yet
-  (one-line fix, DESIGN-PLAN §3.4.1).
-- Gems don't level or fuse, so shards become worthless once the pool is bought out.
-- No sound, no service worker (manifest is inline as a data URI; offline needs a real `sw.js`).
+**Gaps (deliberate, prioritized):**
+- **Nobody has played this on a phone.** Every difficulty and pacing number is an estimate.
+  This is the single biggest open risk and no amount of further building reduces it.
+- Art is still flat `fillRect`. `drawEntity()` is the seam an atlas drops into (§8).
+- No music. SFX are synthesized; a soundtrack would need real asset files, which is the first
+  thing that would challenge the single-file rule.
+- Boss patterns fire once on transition and then only colour ongoing behaviour. They could be
+  ongoing pattern states instead.
+- No liquid simulation. Still the most Noita-shaped thing missing.
+- Enemy count per chunk doesn't scale with depth, only their stats do.
 
 **Traps for whoever edits this next:**
-- **`refreshAttacks()` after any build change.** Equipment, sockets, tree, class, boons.
-  The `ATK` cache is stale otherwise and nothing will look wrong until damage is subtly off.
-- `maxFuel()` and `maxHP()` are pure getters — keep them that way. A side effect in `maxFuel`
-  was already removed once.
-- Gems in sockets are **bare string ids**. Gem tiers (DESIGN-PLAN §3.3) require changing them
-  to `{id, tier}` objects — that's a real refactor touching save format, socket UI, and all
-  three compute functions. Budget a full session and bump the save `ver`.
-- `render()` must not mutate state.
-- The minimap samples tiles directly and is rebuilt every 8 frames. If you make it per-frame
-  it will cost more than the entire rest of the render.
-
----
+- **`refreshAttacks()` after any build change.** Equipment, sockets, tree, class, boons. It
+  also recomputes `P.armor`, `P.sres` and `P.maxfuel`, so skipping it desyncs defense too.
+- **Two pools.** A support gem must write `a.more`, never `a.dmg`. See CLAUDE.md rule 5.
+- **Sockets are `{id,tier}`.** Read them through `gemId`/`gemTier`/`gemOf`. A bare
+  `GEMS[socket]` silently returns undefined and the gem does nothing.
+- **`o.st[k]` is an array.** `o.st.burn.p` is a bug; `stSum(o,'burn')` is what you want.
+- `maxFuel()`, `maxHP()`, `armorVal()` are pure getters — keep them that way.
+- `render()` must not mutate state and must not touch `RNG()` — use `RRNG()`.
+- The minimap samples tiles directly and is rebuilt every 8 frames. Per-frame would cost more
+  than the entire rest of the render.
+- Conditional gems (Momentum, Reap, Culling, Chain, Sunder, Twin Strike) resolve in `strike()`,
+  not in `computeAttack`, because they depend on live state. Adding one to the cached path
+  will silently bake in a stale value.
+- Anything hand-constructing an enemy must set `invT`, `wind`, `act`, `swind`, `acd` — several
+  of these are decremented unguarded each frame and will go NaN otherwise.
 
 ## 6. Roadmap
 
-`DESIGN-PLAN.md` has the full reasoning. Strict order — do not skip ahead:
+`DESIGN-PLAN.md` has the full reasoning. Sessions 6-9 of that plan are now shipped. What's left:
 
-1. **Browser playtest + feel pass.** Nothing else matters until this happens.
-2. **Foundation lock:** formalize increased/more, add crit + flat armor + status resist,
-   enemy telegraphs, depth-scaled shards.
-3. **Socket colors + Focus resource** (ability cost so ABIL is a decision, not a reflex),
-   socket-screen redesign with a DPS estimate.
-4. **Content wave:** ~15 gems chosen to complete the 8 target build archetypes, new grunts
-   per biome, boss phases.
-5. **Meta depth:** gem tiers/fusion, the Vault (carry one item through death), The Weight
-   (anti-camping pressure), death summary screen.
-6. **Ship:** sound, service worker, art.
+1. **Phone playtest and a feel pass.** Nothing else should be built before this happens.
+   Judge: jump height, attack pacing, whether telegraph windups are long enough to react to,
+   whether The Weight arrives too early, whether Focus starves or never binds, and whether
+   17 tiles of view is the right zoom.
+2. **Balance from real numbers.** Check the §5 economy table against actual runs — depth-scaled
+   shards changed every figure in it and the table has not been re-derived.
+3. **Art.** Blender to sprite sheets, dropped in behind `drawEntity()`.
+4. **Music**, if it can be done without breaking the single-file property.
+5. **Liquids** (the remaining Noita layer) and ongoing boss pattern states.
 
-**Art path:** everything currently draws from `TILES[].c` and flat `fillRect`. Blender →
-sprite sheets is exactly the Dead Cells pipeline and the right call here. Add a `drawEntity()`
-indirection that falls back to rects when no atlas is loaded, so the file never loses the
-"single file, works offline, no build step" property.
-
----
+**Art path:** everything draws through `drawEntity(ctx, kind, x, y, w, h, col, face, frame)`,
+which blits from `ATLAS` when one is loaded and falls back to flat rects when it isn't. Set
+`ATLAS = {img, map:{crawler:{x,y,w,h,frames}, ...}}` and the game switches over with no other
+change. Blender to sprite sheets is exactly the Dead Cells pipeline and the right call here.
 
 ## 7. Session log
 
@@ -250,8 +259,19 @@ indirection that falls back to rects when no atlas is loaded, so the file never 
 | 4 | Depth anchors, elites, secret walls, 7 gems, 5 gear bases, minimap |
 | 5 | Status engine, ability system, uniques, 4 classes |
 | 6 | `carve()` unification, flight + fuel, fall damage, Bore/Excavate, 4 traversal abilities |
+| 7 | First browser render. Foundation lock (increased/more, crit, flat armor, status resist, stacking ailments, Shatter/Congeal/chain). Telegraphs on every attack + boss phases. Socket colors, Focus, gem tiers + fusion, the Vault, The Weight, descent bonus, death summary. 40 new gems, 10 new enemies, 12 alt uniques, 8 new affixes. Adaptive camera, depth lighting, parallax, art fallback layer, synthesized SFX, real PWA. Browser + PWA + screenshot harnesses. |
 
 Bugs the headless harness caught that a human would have spent an evening on:
 `FLY_THRUST` set exactly equal to `GRAV` (hovering perfectly cancelled gravity and never
 lifted — masked by the jump impulse in an earlier test); a tunneling projectile charging dig
 cost per tile against a 2-tile radius and burning its entire lifetime in three frames.
+
+Session 7 additions to that list, all found by reading rather than by playing:
+`render()` drew its screenshake offset from the world-generation RNG, so the contents of a
+chunk depended on how many frames had been drawn before you walked into it — the world was
+not actually reproducible from its seed. Dodge had no cooldown, and its 0.30s of i-frames
+outlasted its 0.22s duration, so holding the button was permanent invulnerability. Ailment
+potency was captured at gem-mod time from a pre-multiplier damage value, so support gems
+scaled the hit but not the burn. And the first browser render was only possible after the
+test harness learned what a canvas gradient is — `render()` crashed under the old stub, which
+looks exactly like a game bug in a failing suite and is not one.

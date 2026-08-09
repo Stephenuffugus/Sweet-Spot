@@ -72,13 +72,19 @@ try{
  closePanel();BAG.length=0;
 
  // ===== UNIQUES =====
- const u=mkItem('bow',3);
+ // Each base now has two possible uniques (UNIQUES / UNIQ2) chosen by coin flip, so pin
+ // `alt` before asserting on a specific one.
+ const u=mkItem('bow',3);u.alt=0;
  A(u.rarity===3&&u.unique==='bow','unique rolls on rarity 3');
  A(itemName(u)==="Hornet's Call",'unique has its own name');
  EQ.ranged=u;refreshAttacks();
  A(ATK.ranged.count>=3,"Hornet's Call adds arrows");
- EQ.melee=mkItem('greataxe',3);refreshAttacks();
+ EQ.melee=mkItem('greataxe',3);EQ.melee.alt=0;refreshAttacks();
  A(ATK.melee.dig===3,'Worldbreaker digs anything');
+ EQ.melee.alt=1;refreshAttacks();
+ A(ATK.melee.cull>0,'The Long Hunger (alt unique) executes instead');
+ const alts=Object.keys(UNIQ2).filter(k=>!UNIQUES[k]);
+ A(alts.length===0,'every alt unique has a base unique to pair with');
  const sk=mkItem('vest',3);A(sk.sockets.length>=3,'Second Skin grants +2 sockets');
  const noUnique=mkItem('shield',3);A(noUnique.unique==='shield','shield has a unique');
  EQ.armor=mkItem('plate',3);const hpU=maxHP();
