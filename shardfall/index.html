@@ -137,6 +137,7 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
 #xpbar{width:140px;height:3px;background:#222;border:1px solid #444;border-top:0}
 #xpfill{height:100%;background:var(--gold);width:0%}
 #weight{color:var(--bad);font-size:11px;letter-spacing:1px}
+#diss{font-size:11px;letter-spacing:2px}
 #stats{margin-top:4px;color:var(--dim)}
 #right{text-align:right;pointer-events:auto}
 #right button{pointer-events:auto}
@@ -187,8 +188,19 @@ body.titlemode #hud,body.titlemode #btns,body.titlemode #toast{display:none}
 #panel table.sum td{padding:3px 0;border-bottom:1px solid #22222c}
 #panel table.sum td:first-child{color:var(--dim);width:45%}
 /* Lore is the one place in this UI that gets to breathe. */
-#panel .lore{font-size:12.5px;line-height:1.65;color:#cfc9b8;white-space:pre-wrap;margin:2px 0 10px;
+#panel .lore{font-size:12.5px;line-height:1.65;color:#cfc9b8;margin:2px 0 10px;
  border-left:2px solid #2f2f3c;padding:2px 0 2px 10px}
+/* the lattice: the seed is an object in the fiction, so it is typeset like one */
+#panel .strand{font-weight:600}
+#panel .glyph{float:right;letter-spacing:3px;font-size:13px}
+#panel .dissw{position:relative;height:16px;background:#0d0d14;border:1px solid #2a2a36;margin:8px 0 4px}
+#panel .dissb{height:100%;background:linear-gradient(90deg,#3fc9c1,#d8a53f 55%,#e05555);transition:width .3s}
+#panel .dissl{position:absolute;inset:0;text-align:center;font-size:10px;line-height:16px;letter-spacing:2px;color:#fff;text-shadow:0 0 3px #000}
+#panel .graftbuf{font-size:26px;letter-spacing:8px;text-align:center;color:var(--gold);margin:10px 0;
+ background:#0d0d14;border:1px solid #2a2a36;padding:8px}
+#panel .glyphgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin:6px 0}
+#panel button.gk{display:block;width:auto;margin:0;padding:7px 0;text-align:center;font-size:13px}
+#panel button.escape{border-color:var(--gold);color:var(--gold);background:#241d10}
 #panel .mapwrap{background:#07070c;border:1px solid #2a2a36;padding:4px;margin:4px 0}
 #panel .bigmap{display:block;width:100%;height:auto;image-rendering:pixelated}
 /* Controller/keyboard focus cursor. Every panel is a stack of buttons, so one highlighted
@@ -207,7 +219,7 @@ body.touchmode canvas{cursor:auto}
 </style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud">
-  <div><div id="hpbar"><div id="hpfill"></div></div><div id="fuelbar"><div id="fuelfill"></div></div><div id="focbar"><div id="focfill"></div></div><div id="xpbar"><div id="xpfill"></div></div><div id="stats"></div><div id="weight"></div></div>
+  <div><div id="hpbar"><div id="hpfill"></div></div><div id="fuelbar"><div id="fuelfill"></div></div><div id="focbar"><div id="focfill"></div></div><div id="xpbar"><div id="xpfill"></div></div><div id="stats"></div><div id="weight"></div><div id="diss" style="display:none"></div></div>
   <div id="right">
     <button class="hbtn" id="mapBtn">MAP</button><button class="hbtn" id="bagBtn">BAG</button><button class="hbtn" id="campBtn" style="display:none">CAMP</button><button class="hbtn" id="pauseBtn">❚❚</button>
   </div>
@@ -983,13 +995,83 @@ It did not crash. Nothing that falls leaves a shaft that clean. It arrived, it w
 world closed over it because that is what happens when something enters something.
 
 We are not mining a corpse.`},
+  {id:'f11b',depth:2900,n:'Torn from a survey ledger',d:`We have been calling it a seed because
+that is the word the surveyors used, and the surveyors used it because a seed is a small thing
+that a large thing grows out of.
+
+Nobody stopped to notice that a seed is also the part you plant.`},
+  {id:'f12b',depth:3000,n:'Written on the wall, recently, badly',d:`IT IS NOT DEEP
+IT IS LONG
+YOU ARE NOT GOING DOWN
+YOU ARE GOING ALONG IT
+AND IT DOES NOT END BECAUSE IT IS NOT A HOLE
+
+(Below, in the same hand, much smaller:)
+i rewrote the seam four times and the fifth time it rewrote me back`},
   {id:'f13',depth:3050,n:'Last page',d:`The shards are warm because they are still connected.
 
 Every lamp in the camp. Every gem in your axe. Nine hundred years of us cutting pieces off it
 and carrying them up into the light and wiring our whole world to them.
 
 It has been very patient.`},
+  {id:'escape',depth:-1,n:'What you wrote',d:`You reached the bottom, which does not exist,
+and found it was not a floor but a surface — the outside of the thing, seen from inside.
+
+So you did the only thing left. You took the master glyph, six symbols long, and you wrote a
+different one, and reality did what reality does when something with enough of its substance in
+its hands tells it to be otherwise.
+
+It agreed.
+
+The camp is where it was. The shaft is where it was. Everything you carried down is still in
+your hands and the depth is wrong by a few hundred metres in a direction that does not have a
+name yet.
+
+Nine hundred years of us cutting pieces off it and carrying them into the light, and it turns
+out the pieces were the point. Not the shards. Us. We were the part that got planted.
+
+You have escaped exactly as far as the inside of a thing that is still growing.
+
+Descend again.`},
  ],
+ // The sigils address the player directly. Not sneering at the seed-scummer — complicit with
+ // them. The game's position is that wanting a better world is exactly how all of this started.
+ sigil:{
+  reroll:`You are holding a piece of the thing that decides what is under the rock.
+
+Break it and that part of the world stops being what it was and becomes something else. Not a
+different room. A different set of rooms that were always there instead.
+
+You will want to do this the moment a descent goes badly. Everyone does. That is not a flaw in
+you — it is the oldest thing a person does when the world is not the one they wanted.
+
+The world does not object. It simply begins to keep count.`,
+  lock:`The opposite instinct, and the rarer one.
+
+Bind a strand and no unmaking can touch it. What you have learned stays learned; the caves you
+know stay the caves you know.
+
+Delvers who survive deep tend to bind before they break. Delvers who do not, do not.`,
+  echo:`Every strand you have ever rewritten leaves a residue, and the residue keeps its shape.
+
+An echo pulls a strand back to something it was on a run you have already lost. It is the only
+sigil that makes the world smaller instead of larger, and the only one that has ever been
+described, in guild records, as a comfort.`,
+  invert:`The same world, reflected.
+
+Every wall becomes the space beside it. Every seam you memorised is still there, on the other
+side of where you were looking. It is cheaper than unmaking because it does not create anything
+— it only turns what exists around.
+
+The thing that fell does not seem to mind being mirrored. Make of that what you like.`,
+  graft:`You do not reroll. You choose.
+
+Six glyphs, written by hand, and the rock agrees to them. This is what every delver actually
+wanted from the first time a run went badly and they wished the world had been otherwise.
+
+It costs more dissonance than everything else combined, because it is not asking. Unmaking is
+vandalism. Grafting is authorship, and the world can tell the difference.`,
+ },
  class:{
   vanguard:{n:'Vanguard',d:`Guild-trained, shield-first, paid by the hour. The vanguards were the
 guild's answer to the crawler problem and they solved it so thoroughly that most of them have
@@ -1009,6 +1091,77 @@ Digs through the level design. Finds the vault, takes the shards, and has an opi
 where the shaft actually goes.`},
  },
 };
+// ============ THE LATTICE — SIGILS, DISSONANCE, ESCAPE ============
+// The mechanic this whole game is pointed at.
+//
+// Roguelite players seed-scum. They read the seed, look it up, restart until the world is
+// favourable. Shardfall's answer is not to prevent that — it is to make it the text. You are
+// mining the thing that generates reality. Of course you can eventually edit it. And of course
+// it notices.
+//
+// SIGILS are the verbs. Each edits one strand of the world seed. They are found deep, they are
+// consumed on use, and every use raises DISSONANCE — the world's awareness that it is being
+// rewritten. Dissonance is a resource you spend against yourself: it makes the world hostile in
+// escalating, legible ways, and past a threshold it is the only thing thin enough to escape
+// through. You cannot leave a world you have not damaged.
+const SIGILS_DEF={
+ reroll:{n:'Sigil of Unmaking', d:'reroll one strand — that part of the world becomes another world',
+   diss:14, col:'#e05555'},
+ lock:  {n:'Sigil of Binding',  d:'lock one strand — no later reroll may touch it',
+   diss:6,  col:'#6ad07a'},
+ echo:  {n:'Sigil of Echo',     d:'restore one strand to the value it had on a past run',
+   diss:10, col:'#6f8fe0'},
+ invert:{n:'Sigil of Inversion',d:'mirror one strand — the same world, reflected',
+   diss:12, col:'#c39ae0'},
+ graft: {n:'Sigil of Grafting', d:'write one strand to a glyph you name',
+   diss:22, col:'#d8a53f'},
+};
+// What Dissonance does, in ascending order. Each stage is a stated rule so the player can
+// reason about it — an escalation you cannot predict is just noise.
+const DISS_STAGES=[
+ {at:0,   n:'Quiet',      d:'The world has not noticed.'},
+ {at:20,  n:'Stirring',   d:'Enemies find you faster. Something is paying attention.'},
+ {at:45,  n:'Bleeding',   d:'Creatures from other depths appear where they should not.'},
+ {at:70,  n:'Unstable',   d:'The rock forgets its shape. Chunks re-form as you pass.'},
+ {at:100, n:'Unwritten',  d:'It knows your name now. The way out is open.'},
+];
+let DISSONANCE=0, SIGILS=[], WOVEN=0;   // WOVEN = strands edited this run
+function dissStage(){let s=DISS_STAGES[0];for(const d of DISS_STAGES)if(DISSONANCE>=d.at)s=d;return s}
+function dissIdx(){let i=0;DISS_STAGES.forEach((d,k)=>{if(DISSONANCE>=d.at)i=k});return i}
+// Rewriting a strand invalidates every chunk that strand touches. Terrain and boss arenas are
+// structural, so the whole world below is dropped; the rest only needs the spawn bookkeeping
+// cleared. Chunks the player is standing in are kept, or the ground vanishes underfoot.
+function reweave(strand,newSeed){
+ WEAVE[strand]=newSeed>>>0;
+ WOVEN++;
+ const pcx=Math.floor(P.x/TILE/CHUNK), pcy=Math.floor(P.y/TILE/CHUNK);
+ const structural=(strand==='terrain'||strand==='boss');
+ for(const [k,c] of CHUNKS){
+  const i=k.indexOf(','), cx=+k.slice(0,i), cy=+k.slice(i+1);
+  if(Math.abs(cx-pcx)<=1&&Math.abs(cy-pcy)<=1)continue;   // never dissolve the floor you're on
+  if(structural)CHUNKS.delete(k);
+  else{c.spawned=false;c.spawns=genChunk(cx,cy).spawns;c.dirty=true}}
+ // POIs and sleeping enemies belonging to dropped chunks go with them.
+ if(strand==='poi'){CHESTS.length=0;SHRINES.length=0}
+ if(strand==='spawn'||strand==='boss'){
+  for(let i=EN.length-1;i>=0;i--){const e=EN[i];
+   if(Math.hypot(e.x-P.x,e.y-P.y)>420)EN.splice(i,1)}}
+ shake=Math.max(shake,10);flash(0.3);sfx('shatter');rumble(0.8,0.6,300);
+ MM=null;   // the minimap is a memory of a world that no longer exists
+ return true}
+function addDissonance(n){
+ const before=dissIdx();
+ DISSONANCE=Math.min(140,DISSONANCE+n);
+ const after=dissIdx();
+ if(after>before){const st=DISS_STAGES[after];
+  toastQ(st.n.toUpperCase());toast(st.d);flash(0.4);shake=Math.max(shake,12);sfx('die');
+  discover('diss',st.n,true)}}
+// Dissonance leaks into the world through three specific, stated channels.
+function dissSpeed(){return 1+Math.min(0.5,DISSONANCE/200)}       // Stirring: enemies close faster
+function dissBleed(){return DISSONANCE>=45?Math.min(0.45,(DISSONANCE-45)/160):0}  // Bleeding: wrong-biome spawns
+function dissChurn(){return DISSONANCE>=70?Math.min(0.6,(DISSONANCE-70)/120):0}   // Unstable: chunks re-form
+function canEscape(){return DISSONANCE>=100&&(META.bosses?Object.keys(META.bosses).length:0)>=3}
+
 // ============ ATTUNEMENTS + THREAT ============
 // Two scaling axes, deliberately different in shape.
 //
@@ -1132,17 +1285,67 @@ const UNLOCKS=[
  {id:'decoy',     n:'Decoy gem (ability)',     cost:85},
  {id:'rupture',   n:'Rupture gem (ability)',   cost:120},
 ];
-// ============ RNG + NOISE ============
+// ============ RNG + NOISE + THE LATTICE ============
+// The world is not generated from one seed. It is generated from SIX — one per STRAND — and
+// the whole late game is about editing them.
+//
+// This is not an implementation detail dressed as a mechanic. It is the fiction: the thing
+// that fell is what generates the world, shards are fragments of its entropy, and nine hundred
+// years of mining it is nine hundred years of pulling randomness out of reality. A delver deep
+// enough finds SIGILS that can rewrite a strand — and the only way out of a world with no
+// bottom is to overwrite the master seed and have reality re-form around you.
+//
+// Splitting the seed is what makes that legible. Reroll `poi` and every chest moves while the
+// caves stay exactly as you learned them. Lock `terrain` and reroll everything else. The
+// player can SEE which part of reality they are editing, which is the difference between a
+// mechanic and a cheat code.
 let SEED=Date.now()>>>0;
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 let RNG=mulberry(SEED);
 const rr=(a,b)=>a+RNG()*(b-a), ri=(a,b)=>Math.floor(rr(a,b+1)), chance=p=>RNG()<p;
-function hash2(x,y){let h=(x*374761393+y*668265263+SEED*2654435761)>>>0;h=(h^(h>>>13))>>>0;h=Math.imul(h,1274126177)>>>0;return((h^(h>>>16))>>>0)/4294967296}
+
+// The six strands, in the order the codex lists them.
+const STRANDS=[
+ {k:'terrain',n:'Shape',   d:'the rock itself — caves, cliffs, the way down'},
+ {k:'ore',    n:'Seam',    d:'where the shards lie'},
+ {k:'poi',    n:'Cache',   d:'chests, shrines, vaults, the secret places'},
+ {k:'spawn',  n:'Swarm',   d:'what lives here, and where it waits'},
+ {k:'boss',   n:'Warden',  d:'the arenas, and what stands in them'},
+ {k:'flux',   n:'Drift',   d:'the small variances — texture, scatter, chance'},
+];
+// WEAVE holds one 32-bit seed per strand, derived from the master seed at run start.
+let WEAVE={}, WEAVE_LOCK={};
+function deriveWeave(master){
+ WEAVE={};WEAVE_LOCK={};
+ STRANDS.forEach((s,i)=>{
+  // Each strand is a different mixing of the master, so two strands never move together.
+  WEAVE[s.k]=(Math.imul(master^Math.imul(i+1,0x9E3779B9),2654435761)^(master>>>(i+3)))>>>0});
+ return WEAVE}
+// A short human-readable glyph for a strand seed. This string is shown in the UI and is the
+// thing a player will screenshot, compare and eventually type — so it has to be short and
+// unambiguous. 8 symbols from a 32-glyph alphabet = 40 bits of address space displayed.
+const GLYPHS='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function seedGlyph(v){let out='',x=v>>>0;
+ for(let i=0;i<6;i++){out+=GLYPHS[x&31];x=x>>>5}
+ return out}
+function glyphSeed(g){let v=0;g=String(g).toUpperCase().replace(/[^A-Z2-9]/g,'');
+ for(let i=Math.min(5,g.length-1);i>=0;i--){const d=GLYPHS.indexOf(g[i]);if(d<0)continue;v=(v<<5)|d}
+ return v>>>0}
+// Per-strand spatial hash. Everything in world generation reads through this, so a strand's
+// seed is the only thing that decides what that strand produces.
+function hashS(strand,x,y){
+ let h=(Math.imul(x,374761393)+Math.imul(y,668265263)+Math.imul(WEAVE[strand]|0,2654435761))>>>0;
+ h=(h^(h>>>13))>>>0;h=Math.imul(h,1274126177)>>>0;return((h^(h>>>16))>>>0)/4294967296}
+// Kept for anything that wants "the world" generically; terrain is the strand that IS the world.
+function hash2(x,y){return hashS('terrain',x,y)}
 function smooth(t){return t*t*(3-2*t)}
-function vnoise(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
- const a=hash2(xi,yi),b=hash2(xi+1,yi),c=hash2(xi,yi+1),d=hash2(xi+1,yi+1);
+function vnoiseS(strand,x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+ const a=hashS(strand,xi,yi),b=hashS(strand,xi+1,yi),c=hashS(strand,xi,yi+1),d=hashS(strand,xi+1,yi+1);
  const u=smooth(xf),v=smooth(yf);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
-function noise2(x,y){return vnoise(x,y)*0.65+vnoise(x*2.1,y*2.1)*0.35}
+function vnoise(x,y){return vnoiseS('terrain',x,y)}
+function noise2(x,y){return vnoiseS('terrain',x,y)*0.65+vnoiseS('terrain',x*2.1,y*2.1)*0.35}
+function noiseS(strand,x,y){return vnoiseS(strand,x,y)*0.65+vnoiseS(strand,x*2.1,y*2.1)*0.35}
+deriveWeave(SEED);
 
 // ============ WORLD / CHUNKS ============
 const CHUNKS=new Map(); // "cx,cy" -> {tiles:Uint8Array, cv:canvas, dirty, spawned, spawns:[]}
@@ -1152,9 +1355,15 @@ function genChunk(cx,cy){
  // Per-chunk RNG. The global stream is shared with combat, loot and render, and chunks are
  // generated lazily as they come into view — so using it made a chunk's contents depend on
  // how many rolls had happened before you walked there, not just on the seed.
- const CR=mulberry((SEED^Math.imul(cx,374761393)^Math.imul(cy,668265263))>>>0);
- const ri=(a,b)=>a+Math.floor(CR()*(b-a+1));
- const chance=p=>CR()<p;
+ // One RNG per strand per chunk. Sharing a stream would mean rerolling the caches also moved
+ // the monsters, which destroys the whole point of editing a single strand.
+ const CRs={};
+ for(const st of STRANDS)CRs[st.k]=mulberry((WEAVE[st.k]^Math.imul(cx,374761393)^Math.imul(cy,668265263))>>>0);
+ const rS=(st,a,b)=>a+Math.floor(CRs[st]()*(b-a+1));
+ const cS=(st,p)=>CRs[st]()<p;
+ // defaults kept so the body below reads the same; `flux` is the catch-all scatter strand
+ const ri=(a,b)=>rS('flux',a,b);
+ const chance=p=>cS('flux',p);
  const t=new Uint8Array(CHUNK*CHUNK), spawns=[];
  for(let ly=0;ly<CHUNK;ly++){const ty=cy*CHUNK+ly;
   for(let lx=0;lx<CHUNK;lx++){const tx=cx*CHUNK+lx;
@@ -1172,8 +1381,8 @@ function genChunk(cx,cy){
      if(cs>0){const n=noise2(tx*cs,ty*cs);const th=0.52-Math.min(0.10,ty/WORLD_H*0.12);if(n<th)v=0}
      if(ty<h+3&&v!==0)v=1; // topsoil
      if(v!==0){
-      if(hash2(tx*3+1,ty*3+2)<0.012)v=8;               // shard ore
-      else if(hash2(tx*5+3,ty*5+1)<0.05&&v!==7)v=2;    // hard stone flecks
+      if(hashS('ore',tx*3+1,ty*3+2)<0.012)v=8;              // shard ore — the `ore` strand
+      else if(hashS('flux',tx*5+3,ty*5+1)<0.05&&v!==7)v=2;   // hard flecks — cosmetic drift
      }
     }
    }
@@ -1183,45 +1392,45 @@ function genChunk(cx,cy){
  // enemy spawns: on air tiles above solid, away from camp
  const B0=biomeAt(cy*CHUNK+CHUNK/2), types=B0[4];
  if(cy*CHUNK> SURFACE-4){
-  const n=Math.round(ri(1,3)*(threat().dens||1));
-  for(let i=0;i<n;i++){const lx=ri(2,CHUNK-3),ly=ri(2,CHUNK-3);
+  const n=Math.round(rS('spawn',1,3)*(threat().dens||1));
+  for(let i=0;i<n;i++){const lx=rS('spawn',2,CHUNK-3),ly=rS('spawn',2,CHUNK-3);
    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
     const tx=cx*CHUNK+lx,ty=cy*CHUNK+ly;
-    if(Math.abs(tx-CAMP_X)>20||ty>SURFACE+20)spawns.push({x:tx*TILE,y:ty*TILE,type:types[ri(0,types.length-1)]})
+    if(Math.abs(tx-CAMP_X)>20||ty>SURFACE+20)spawns.push({x:tx*TILE,y:ty*TILE,type:types[rS('spawn',0,types.length-1)]})
    }}
   // treasure chest POI: rare, needs a floor cavity
-  if(hash2(cx*7+5,cy*7+3)<0.12){
-   for(let tr=0;tr<14;tr++){const lx=ri(2,CHUNK-3),ly=ri(2,CHUNK-3);
+  if(hashS('poi',cx*7+5,cy*7+3)<0.12){
+   for(let tr=0;tr<14;tr++){const lx=rS('poi',2,CHUNK-3),ly=rS('poi',2,CHUNK-3);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0&&t[(ly-1)*CHUNK+lx]===0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'chest'});break}}}
   // SHRINE POI: open cavity, grants a run boon
-  if(hash2(cx*11+2,cy*11+9)<0.16){
-   for(let tr=0;tr<14;tr++){const lx=ri(3,CHUNK-4),ly=ri(3,CHUNK-4);
+  if(hashS('poi',cx*11+2,cy*11+9)<0.16){
+   for(let tr=0;tr<14;tr++){const lx=rS('poi',3,CHUNK-4),ly=rS('poi',3,CHUNK-4);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
      for(let c=-1;c<=1;c++)t[ly*CHUNK+lx+c]=0,t[(ly-1)*CHUNK+lx+c]=0;
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'shrine'});break}}}
   // SEALED VAULT: hard-walled room w/ chest inside. Needs a digger (axe) or Fireball to crack.
-  if(hash2(cx*13+7,cy*13+4)<0.10){
-   const rw=ri(9,13),rh=ri(6,8),lx=ri(3,CHUNK-rw-3),ly=ri(3,CHUNK-rh-3);
+  if(hashS('poi',cx*13+7,cy*13+4)<0.10){
+   const rw=rS('poi',9,13),rh=rS('poi',6,8),lx=rS('poi',3,CHUNK-rw-3),ly=rS('poi',3,CHUNK-rh-3);
    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     const edge=(x===0||y===0||x===rw-1||y===rh-1);
     t[(ly+y)*CHUNK+lx+x]=edge?5:0}
    spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});
-   if(chance(.5))spawns.push({x:(cx*CHUNK+lx+2)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});}
+   if(cS('poi',.5))spawns.push({x:(cx*CHUNK+lx+2)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});}
   // SECRET CACHE: sealed pocket whose wall is a secret tile (breaks to ANY weapon)
-  if(hash2(cx*19+3,cy*19+8)<0.14){
-   const rw=5,rh=4,lx=ri(4,CHUNK-rw-4),ly=ri(4,CHUNK-rh-4);
+  if(hashS('poi',cx*19+3,cy*19+8)<0.14){
+   const rw=5,rh=4,lx=rS('poi',4,CHUNK-rw-4),ly=rS('poi',4,CHUNK-rh-4);
    let buried=true;
    for(let y=-1;y<=rh;y++)for(let x=-1;x<=rw;x++){if(t[(ly+y)*CHUNK+lx+x]===0)buried=false}
    if(buried){
     for(let y=0;y<rh;y++)for(let x=0;x<rw;x++)t[(ly+y)*CHUNK+lx+x]=0;
-    const side=chance(.5)?-1:rw;
+    const side=cS('poi',.5)?-1:rw;
     for(let y=0;y<rh;y++)t[(ly+y)*CHUNK+lx+side]=10;
     spawns.push({x:(cx*CHUNK+lx+2)*TILE,y:(cy*CHUNK+ly+rh-1)*TILE,type:'chest'})}}
   // BOSS ARENA: one miniboss per biome band, deterministic per chunk
   const bname=BIOME_BOSS[B0[1]];
-  if(bname&&hash2(cx*17+11,cy*17+6)<0.045){
-   const rw=26,rh=16,lx=ri(3,CHUNK-rw-3),ly=ri(3,CHUNK-rh-3);
+  if(bname&&hashS('boss',cx*17+11,cy*17+6)<0.045){
+   const rw=26,rh=16,lx=rS('boss',3,CHUNK-rw-3),ly=rS('boss',3,CHUNK-rh-3);
    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     const edge=(y===0||y===rh-1||x===0||x===rw-1);
     if(edge&&(y===rh-1||y===0))t[(ly+y)*CHUNK+lx+x]=B0[2];
@@ -1261,7 +1470,7 @@ function drawChunk(c,cx,cy){
   const v=c.tiles[ly*CHUNK+lx];if(v===0)continue;const T=TILES[v];
   g.fillStyle=T.c;g.fillRect(lx*TILE,ly*TILE,TILE,TILE);
   // cheap texture: darker bottom edge, subtle variance
-  if(hash2(cx*CHUNK+lx,cy*CHUNK+ly)<0.3){g.fillStyle='#00000018';g.fillRect(lx*TILE,ly*TILE,TILE,TILE)}
+  if(hashS('flux',cx*CHUNK+lx,cy*CHUNK+ly)<0.3){g.fillStyle='#00000018';g.fillRect(lx*TILE,ly*TILE,TILE,TILE)}
   g.fillStyle='#00000030';g.fillRect(lx*TILE,ly*TILE+TILE-2,TILE,2);
   if(T.ore){g.fillStyle='#ffffff70';g.fillRect(lx*TILE+5,ly*TILE+5,3,3);g.fillRect(lx*TILE+10,ly*TILE+9,2,2)}
   if(T.secret){g.fillStyle='#00000028';g.fillRect(lx*TILE+2,ly*TILE+3,1,TILE-6);g.fillRect(lx*TILE+TILE-3,ly*TILE+3,1,TILE-6)}
@@ -1281,7 +1490,8 @@ let META={ver:SAVE_VER,shards:0,unlocks:{},tree:{},cls:'vanguard',classes:{vangu
  vault:[],bosses:{},runs:0,bestDepth:0,audio:1,threat:0,maxThreat:0,
  // Codex discovery. Pages exist from the start but stay sealed until you earn them, so the
  // lore is a reward for playing rather than a wall of text on the title screen.
- seen:{en:{},item:{},biome:{},frag:{},cls:{}},set:null};
+ seen:{en:{},item:{},biome:{},frag:{},cls:{},sigil:{},diss:{}},set:null,
+ echoes:{},escapes:0};
 function saveMeta(){try{localStorage.setItem('shardfall',JSON.stringify(META))}catch(e){}}
 function migrate(m){
  if(!m.ver||m.ver<2){ // v1 -> v2: bare-string sockets become {id,tier:1}; vault starts empty
@@ -1300,7 +1510,8 @@ function loadMeta(){
  // the tiers. Idempotent, so a correct maxThreat is left alone.
  META.maxThreat=Math.max(META.maxThreat|0,Math.min(THREATS.length-1,Object.keys(META.bosses).length));
  if(!META.seen)META.seen={};
- for(const k of ['en','item','biome','frag','cls'])if(!META.seen[k])META.seen[k]={};
+ for(const k of ['en','item','biome','frag','cls','sigil','diss'])if(!META.seen[k])META.seen[k]={};
+ if(!META.echoes)META.echoes={};
  META.ver=SAVE_VER;
  AUDIO_ON=META.audio!==0;
  if(!META.startBiome||!META.anchors[META.startBiome])META.startBiome='surface'}
@@ -1324,8 +1535,17 @@ function codexTitle(kind,id){
  if(kind==='biome')return (LORE.biome[id]&&LORE.biome[id].n)||id;
  if(kind==='frag'){const f=LORE.frag.find(x=>x.id===id);return f?f.n:id}
  if(kind==='cls')return (LORE.class[id]&&LORE.class[id].n)||id;
+ if(kind==='sigil')return (SIGILS_DEF[id]&&SIGILS_DEF[id].n)||id;
+ if(kind==='diss')return id;
  if(kind==='item')return UNIQUES[id]?UNIQUES[id].n:(GEAR[id]?GEAR[id].n:id);
  return id}
+// Lore is authored as wrapped source. A blank line is a paragraph break; a single newline is
+// just where the source ran out of room and must not become a line break on screen.
+function loreHTML(t){return String(t).trim()
+ .replace(/\r/g,'')
+ .split(/\n\s*\n/)
+ .map(p=>p.replace(/\n/g,' ').replace(/\s+/g,' ').trim())
+ .join('<br><br>')}
 function gemId(g){return !g?null:(typeof g==='string'?g:g.id)}
 function gemTier(g){return (!g||typeof g==='string')?1:(g.tier||1)}
 function gemOf(g){const i=gemId(g);return i?GEMS[i]:null}
@@ -1874,6 +2094,9 @@ function killEnemy(e){
  if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitstop=0.18;
   const gp=gemPool();for(let i=0;i<2;i++)PICK.push({x:e.x+rr(-10,10),y:e.y,vy:-170,kind:'gem',id:gp[ri(0,gp.length-1)],t:60});
   const gr=gearPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gear',item:mkItem(gr[ri(0,gr.length-1)],chance(.22)?3:chance(.5)?2:1),t:60});
+  // Every warden carries one. Killing them is how the mechanic opens up.
+  {const pool=Object.keys(SIGILS_DEF);
+   PICK.push({x:e.x+10,y:e.y,vy:-190,kind:'sigil',id:pool[ri(0,pool.length-1)],t:90})}
   META.bosses=META.bosses||{};
   if(!META.bosses[e.type]){META.bosses[e.type]=1;UNLOCK_MSG.push('first '+e.type);
    // Each distinct boss felled raises the ceiling by one tier. Progress you earn by fighting,
@@ -1902,7 +2125,8 @@ function dropShards(x,y,n){
 // The next undiscovered fragment at or above your depth. Reading them in order matters more
 // than reading them all, so a chest hands you the shallowest one you haven't seen.
 function nextFrag(depth){
- for(const f of LORE.frag)if(f.depth<=depth&&!META.seen.frag[f.id])return f;
+ // depth < 0 marks a fragment that is not buried anywhere — it is written by doing something.
+ for(const f of LORE.frag)if(f.depth>=0&&f.depth<=depth&&!META.seen.frag[f.id])return f;
  return null}
 function openChest(ch){ch.opened=true;burst(ch.x,ch.y,'#d8a53f',12);shake=Math.max(shake,3);
  const f=nextFrag(Math.max(0,Math.floor(ch.y/TILE)-SURFACE));
@@ -1910,6 +2134,13 @@ function openChest(ch){ch.opened=true;burst(ch.x,ch.y,'#d8a53f',12);shake=Math.m
   toastQ('FRAGMENT FOUND');toast('Fragment: '+f.n);sfx('level');openFrag(f.id)}
  dropShards(ch.x,ch.y-6,ri(8,14));
  const gp=gemPool();PICK.push({x:ch.x,y:ch.y-8,vy:-160,kind:'gem',id:gp[ri(0,gp.length-1)],t:30});
+ // SIGILS come out of sealed places, and only once the world is deep enough to have a seam of
+ // the thing that made it. Shallow chests never carry one — the mechanic has to be earned.
+ {const d=Math.max(0,Math.floor(ch.y/TILE)-SURFACE);
+  if(d>400&&chance(Math.min(0.35,(d-400)/4000))){
+   const pool=Object.keys(SIGILS_DEF);
+   const id=d>1600?pool[ri(0,pool.length-1)]:(chance(.6)?'reroll':'lock');
+   PICK.push({x:ch.x-6,y:ch.y-8,vy:-150,kind:'sigil',id,t:60})}}
  if(chance(0.6)){const pool=gearPool();const r=chance(0.07)?3:chance(0.35)?2:1;
   PICK.push({x:ch.x+6,y:ch.y-8,vy:-140,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],r),t:30})}}
 // damageTaken = max(1, incoming - armor) x (1-blockDR) x (1-ironskin)   [DESIGN-PLAN §1.4]
@@ -1955,12 +2186,19 @@ function spawnFromChunks(){
     if(s.type==='shrine'){SHRINES.push({x:s.x,y:s.y,used:false});continue}
     const boss=!!(ENEMIES[s.type]&&ENEMIES[s.type].boss);
     if(EN.length>120&&!boss)continue;
-    const E=ENEMIES[s.type],m=depthMul(s.y);
+    const m=depthMul(s.y);
     // elite chance ramps with depth: ~2% shallow -> 22% deep. Bosses never roll elite.
     const T=threat();
     const eliteP=Math.min(0.55,(0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55)*(T.elite||1));
+    // BLEEDING (dissonance >= 45): creatures surface from bands they do not belong to. The
+    // substitution happens BEFORE E is resolved, so the intruder brings its own stats with it.
+    let stype=s.type;
+    if(!boss&&dissBleed()>0&&chance(dissBleed())){
+     const all=BIOMES[ri(0,BIOMES.length-1)][4];const pick=all[ri(0,all.length-1)];
+     if(ENEMIES[pick]&&!ENEMIES[pick].boss)stype=pick}
+    const E=ENEMIES[stype]||ENEMIES[s.type];
     const el=(!boss&&chance(eliteP))?ELITES[ri(0,ELITES.length-1)]:null;
-    EN.push({x:s.x,y:s.y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type:s.type,ai:E.ai,
+    EN.push({x:s.x,y:s.y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type:stype,ai:E.ai,
      c:el?el.c:E.c,
      hp:E.hp*m*(el?el.hp:1),maxhp:E.hp*m*(el?el.hp:1),dmg:E.dmg*m*(el?el.dmg:1),
      arm:(E.arm||0)+(el&&el.arm||0)+(T.arm||0),front:E.front||0,
@@ -2011,7 +2249,8 @@ function upEnemies(dt){
   e.invT=Math.max(0,(e.invT||0)-dt);   // `||0`: enemies built by hand in tests have no invT
   e.swind=Math.max(0,e.swind||0);
   if(e.st){tickStatus(e,dt,false);if(e.hp<=0){EN.splice(i,1);continue}}
-  const cm=chillMul(e)*(1+P.weight*0.03); // The Weight speeds enemies up, it does not slow you
+  // The Weight speeds enemies up; Dissonance does too, because the world is looking for you.
+  const cm=chillMul(e)*(1+P.weight*0.03)*dissSpeed();
   if(d>1400){continue} // sleep far enemies
   // ---- TELEGRAPHED RANGED: wind up visibly, THEN fire (DESIGN-PLAN §4.1) ----
   if(e.shoot){e.scd-=dt;
@@ -2184,6 +2423,10 @@ function upPickups(dt){
   if(k.kind==='shard'&&d<70){k.x+=(P.x-k.x)*dt*8;k.y+=(P.y-k.y)*dt*8} // magnet
   if(d<14){
    if(k.kind==='shard'){META.shards++;RUNSHARDS++;if((RUNSHARDS&7)===0)saveMeta();sfx('pick')}
+   else if(k.kind==='sigil'){SIGILS.push(k.id);sfx('level');flash(0.2);
+    toastQ('SIGIL');toast(SIGILS_DEF[k.id].n+' — '+SIGILS_DEF[k.id].d);
+    discover('sigil',k.id);
+    hint('lattice',`Open the lattice (${pr('pause')} → THE LATTICE) to rewrite the world`)}
    else if(k.kind==='gem'){BAG.push({kind:'gem',id:k.id,tier:k.tier||1});toast('Gem: '+GEMS[k.id].n);sfx('gem');
     hint('socket',`Open the bag (${pr('bag')}) and socket that gem — colors must match`)}
    else{BAG.push({kind:'gear',item:k.item});toast(itemName(k.item));sfx('gem');
@@ -2338,7 +2581,8 @@ const RUNM0=()=>({});
 // corrupted blob or a future migration — returned undefined and every threat lookup threw.
 function threat(){return THREATS[Math.max(0,Math.min(META.threat|0,THREATS.length-1))]||THREATS[0]}
 function newRun(){
- SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);
+ SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);deriveWeave(SEED);
+ DISSONANCE=0;SIGILS=[];WOVEN=0;
  CHUNKS.clear();EN.length=0;PROJ.length=0;PICK.length=0;PART.length=0;DMGN.length=0;
  BAG.length=0;CHESTS.length=0;SHRINES.length=0;SENTRY.length=0;ARCS.length=0;
  ANCHOR=null;DECOY=null;SPAWNQ.length=0;runDepth=0;RUNSHARDS=0;RUNBANDS={};UNLOCK_MSG=[];
@@ -2533,6 +2777,128 @@ function fuseGem(id,tier){
  BAG.push({kind:'gem',id,tier:tier+1});
  sfx('level');toast(GEMS[id].n+' → tier '+(tier+1));openBag()}
 
+// -------- the lattice --------
+// The screen where the player edits reality. It shows the six strands as glyph strings, which
+// is the thing they will screenshot and compare — so the seed is not a debug readout, it is
+// the object the endgame is about.
+let LAT_SEL=null;
+function dissBar(){
+ const st=dissStage(), pct=Math.min(100,Math.round(DISSONANCE/100*100));
+ return `<div class="dissw"><div class="dissb" style="width:${pct}%"></div>
+  <span class="dissl">${st.n.toUpperCase()} · ${Math.round(DISSONANCE)}</span></div>
+  <div class="sub">${st.d}</div>`}
+function openLattice(){
+ let h=`<h2>THE LATTICE</h2>
+  <div class="sub">Master glyph <b class="r3">${seedGlyph(SEED)}</b> · ${SIGILS.length} sigil${SIGILS.length===1?'':'s'} carried · ${WOVEN} strand${WOVEN===1?'':'s'} rewritten this descent</div>
+  ${dissBar()}`;
+ h+='<div class="sub" style="margin-top:10px">STRANDS</div>';
+ for(const st of STRANDS){
+  const locked=WEAVE_LOCK[st.k];
+  h+=`<button ${SIGILS.length?'':'disabled'} onclick="latPick('${st.k}')">
+   <span class="strand">${locked?'&#9632;':'&#9633;'} ${st.n}</span>
+   <span class="glyph r3">${seedGlyph(WEAVE[st.k])}</span>
+   <span class="sub"><br>${st.d}${locked?' — <b>bound</b>':''}</span></button>`}
+ if(!SIGILS.length)h+='<div class="sub" style="margin-top:8px">You carry no sigils. They are found deep, in sealed places.</div>';
+ if(canEscape())h+=`<button class="escape" onclick="openEscape()">THE WAY OUT <span class="sub">the world is thin enough</span></button>`;
+ else if(DISSONANCE>=100)h+='<div class="sub" style="color:var(--gold)">The world is thin — but you have not felled enough of its wardens to walk through.</div>';
+ h+=`<button onclick="backPanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,openLattice)}
+function latPick(k){
+ if(!SIGILS.length)return;
+ LAT_SEL=k;
+ const st=STRANDS.find(x=>x.k===k);
+ let h=`<h2>${st.n}</h2><div class="sub">${st.d}<br>Current glyph <b class="r3">${seedGlyph(WEAVE[k])}</b>${WEAVE_LOCK[k]?' · <b>bound</b>':''}</div>`;
+ const have={};for(const s2 of SIGILS)have[s2]=(have[s2]||0)+1;
+ for(const id in have){const D=SIGILS_DEF[id];
+  const blocked=WEAVE_LOCK[k]&&id!=='lock';
+  h+=`<button ${blocked?'disabled':''} onclick="useSigil('${id}','${k}')">
+   <span style="color:${D.col}">&#9670;</span> ${D.n} <span class="sub">x${have[id]}</span>
+   <span class="sub"><br>${D.d}${blocked?' — this strand is bound':''} · +${D.diss} dissonance</span></button>`}
+ h+=`<button onclick="openLattice()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,()=>latPick(k))}
+function consumeSigil(id){const i=SIGILS.indexOf(id);if(i<0)return false;SIGILS.splice(i,1);return true}
+function useSigil(id,k){
+ const D=SIGILS_DEF[id];if(!D||!consumeSigil(id))return;
+ if(id==='lock'){WEAVE_LOCK[k]=1;toast(STRANDS.find(x=>x.k===k).n+' bound');sfx('level')}
+ else if(id==='reroll'){reweave(k,(Math.imul(WEAVE[k]^0x9E3779B9,2654435761)^(Date.now()&0xffff))>>>0);
+  toast(STRANDS.find(x=>x.k===k).n+' unmade')}
+ else if(id==='invert'){reweave(k,(~WEAVE[k])>>>0);toast(STRANDS.find(x=>x.k===k).n+' inverted')}
+ else if(id==='echo'){
+  const past=(META.echoes&&META.echoes[k]);
+  if(past===undefined){toast('No echo of this strand remains');SIGILS.push(id);return latPick(k)}
+  reweave(k,past>>>0);toast(STRANDS.find(x=>x.k===k).n+' echoed')}
+ else if(id==='graft'){LAT_SEL=k;return openGraft(k)}
+ addDissonance(D.diss);
+ META.echoes=META.echoes||{};META.echoes[k]=WEAVE[k];saveMeta();
+ openLattice()}
+// GRAFTING is the moment the game stops pretending. The player types a glyph and the world
+// becomes it. This is the seed-scummer's dream handed over as a mechanic, priced in dissonance.
+let GRAFT_BUF='';
+function openGraft(k){
+ GRAFT_BUF='';
+ drawGraft(k)}
+function drawGraft(k){
+ const st=STRANDS.find(x=>x.k===k);
+ let h=`<h2>GRAFT — ${st.n}</h2>
+  <div class="sub">Name the world you want. Six glyphs.</div>
+  <div class="graftbuf">${(GRAFT_BUF+'______').slice(0,6).split('').join(' ')}</div>
+  <div class="glyphgrid">`;
+ for(const g of GLYPHS)h+=`<button class="gk" onclick="graftKey('${g}')">${g}</button>`;
+ h+='</div>';
+ h+=`<button onclick="graftKey('<')">DELETE</button>`;
+ h+=`<button ${GRAFT_BUF.length===6?'':'disabled'} onclick="graftGo('${k}')">WRITE IT</button>`;
+ h+=`<button onclick="graftCancel('${k}')">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,()=>drawGraft(k))}
+function graftKey(g){
+ if(g==='<')GRAFT_BUF=GRAFT_BUF.slice(0,-1);
+ else if(GRAFT_BUF.length<6)GRAFT_BUF+=g;
+ sfx('pick');const keep=menuIdx;drawGraft(LAT_SEL);menuFocus(keep)}
+function graftCancel(k){SIGILS.push('graft');latPick(k)}   // unspent, so back out returns it
+function graftGo(k){
+ if(GRAFT_BUF.length!==6)return;
+ reweave(k,glyphSeed(GRAFT_BUF));
+ addDissonance(SIGILS_DEF.graft.diss);
+ META.echoes=META.echoes||{};META.echoes[k]=WEAVE[k];saveMeta();
+ toastQ('GRAFTED');toast(STRANDS.find(x=>x.k===k).n+' is now '+GRAFT_BUF);
+ openLattice()}
+// THE ESCAPE. A world with no bottom cannot be walked out of — the only exit is to overwrite
+// the master seed and have reality re-form with you inside it.
+function openEscape(){
+ openPanel(`<div class="sub">DISSONANCE ${Math.round(DISSONANCE)} — ${dissStage().n.toUpperCase()}</div>
+  <h2>THE WAY OUT</h2>
+  <div class="lore">${loreHTML(`You have rewritten this place ${WOVEN} time${WOVEN===1?'':'s'} and it has stopped
+pretending not to notice.
+
+There is no bottom. There was never going to be. The shaft does not end because the thing at the
+end of it is what the shaft is made of, and you have been cutting pieces off it and carrying them
+up into the light for nine hundred years.
+
+But you have made the world thin. Thin enough to write on.
+
+Overwrite the master glyph and reality re-forms — around you, with you inside it, holding
+everything you carried down. That is not escape. That is the only kind of escape there is.`)}</div>
+  <button onclick="doEscape()">REWRITE THE WORLD</button>
+  <button onclick="openLattice()">NOT YET <span class="sub">${pr('cancel')}</span></button>`,true,null)}
+function doEscape(){
+ META.escapes=(META.escapes||0)+1;
+ META.shards+=Math.round(400+DISSONANCE*6);
+ META.maxThreat=Math.min(THREATS.length-1,(META.maxThreat||0)+1);
+ discover('frag','escape',true);
+ saveMeta();
+ flash(0.9);shake=Math.max(shake,20);sfx('level');rumble(1,1,900);
+ openPanel(`<h2>THE WORLD RE-FORMS</h2>
+  <div class="lore">${loreHTML(`You wrote a glyph and the rock agreed to it.
+
+Escape ${META.escapes}. Somewhere below, the shaft is already the wrong depth.`)}</div>
+  <table class="sum">
+   <tr><td>Depth reached</td><td>${runDepth}m</td></tr>
+   <tr><td>Strands rewritten</td><td>${WOVEN}</td></tr>
+   <tr><td>Dissonance</td><td>${Math.round(DISSONANCE)}</td></tr>
+   <tr><td>Shards torn loose</td><td class="r3">${Math.round(400+DISSONANCE*6)}◆</td></tr>
+   <tr><td>Threat ceiling</td><td>${THREATS[META.maxThreat].n}</td></tr>
+  </table>
+  <button onclick="newRun()">DESCEND AGAIN</button>`,true,null)}
+
 // -------- full map --------
 // The corner minimap is for moment-to-moment orientation. This is for deciding where to go:
 // same fog-of-war rules, four times the reach, and every POI you have found marked on it.
@@ -2628,16 +2994,18 @@ function openCodex(){
   <button onclick="openCodexList('biome')">STRATA <span class="sub">${pctSeen('biome',bT)}% — the layers you have reached</span></button>
   <button onclick="openCodexList('en')">BESTIARY <span class="sub">${pctSeen('en',eT)}% — written on first kill</span></button>
   <button onclick="openCodexList('cls')">DELVERS <span class="sub">${pctSeen('cls',cT)}%</span></button>
+  <button onclick="openCodexList('sigil')">SIGILS <span class="sub">${pctSeen('sigil',Object.keys(SIGILS_DEF).length)}% — what can be rewritten</span></button>
   <button onclick="backPanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`)}
 function openLoreWorld(){
- openPanel(`<h2>${LORE.world.n}</h2><div class="lore">${LORE.world.d.replace(/\n\n/g,'<br><br>')}</div>
+ openPanel(`<h2>${LORE.world.n}</h2><div class="lore">${loreHTML(LORE.world.d)}</div>
   <button onclick="openCodex()">BACK <span class="sub">${pr('cancel')}</span></button>`)}
-const CODEX_TITLE={frag:'FRAGMENTS',biome:'STRATA',en:'BESTIARY',cls:'DELVERS'};
+const CODEX_TITLE={frag:'FRAGMENTS',biome:'STRATA',en:'BESTIARY',cls:'DELVERS',sigil:'SIGILS'};
 function openCodexList(kind){
  let rows;
- if(kind==='frag')rows=LORE.frag.map(f=>({id:f.id,n:f.n,sub:f.depth+'m'}));
+ if(kind==='frag')rows=LORE.frag.map(f=>({id:f.id,n:f.n,sub:f.depth<0?'not buried':f.depth+'m'}));
  else if(kind==='biome')rows=BIOMES.map(b=>b[1]).filter(n=>LORE.biome[n]).map(n=>({id:n,n:LORE.biome[n].n,sub:''}));
  else if(kind==='cls')rows=Object.keys(LORE.class).map(k=>({id:k,n:LORE.class[k].n,sub:''}));
+ else if(kind==='sigil')rows=Object.keys(SIGILS_DEF).map(k=>({id:k,n:SIGILS_DEF[k].n,sub:'+'+SIGILS_DEF[k].diss+' dissonance'}));
  else rows=Object.keys(LORE.enemy).map(k=>({id:k,n:LORE.enemy[k].n,sub:LORE.enemy[k].boss?'miniboss':''}));
  let h=`<h2>${CODEX_TITLE[kind]}</h2>`;
  let any=false;
@@ -2650,19 +3018,20 @@ function openCodexList(kind){
  h+=`<button onclick="openCodex()">BACK <span class="sub">${pr('cancel')}</span></button>`;
  openPanel(h)}
 function loreEntry(kind,id){
+ if(kind==='sigil'){const D=SIGILS_DEF[id];return D&&{n:D.n,d:(LORE.sigil[id]||D.d)};}
  if(kind==='frag')return LORE.frag.find(f=>f.id===id);
  if(kind==='biome')return LORE.biome[id];
  if(kind==='cls')return LORE.class[id];
  return LORE.enemy[id]}
 function openLore(kind,id){
  const e=loreEntry(kind,id);if(!e)return openCodex();
- openPanel(`<h2>${e.n}</h2><div class="lore">${e.d.replace(/\n\n/g,'<br><br>')}</div>
+ openPanel(`<h2>${e.n}</h2><div class="lore">${loreHTML(e.d)}</div>
   <button onclick="openCodexList('${kind}')">BACK <span class="sub">${pr('cancel')}</span></button>`)}
 // Shown the moment a fragment drops — finding one should feel like an event, not a log line.
 function openFrag(id){
  const f=LORE.frag.find(x=>x.id===id);if(!f)return;
  openPanel(`<div class="sub">FRAGMENT RECOVERED</div><h2>${f.n}</h2>
-  <div class="lore">${f.d.replace(/\n\n/g,'<br><br>')}</div>
+  <div class="lore">${loreHTML(f.d)}</div>
   <button onclick="closePanel(true)">POCKET IT <span class="sub">${pr('confirm')}</span></button>`,true)}
 
 // -------- shrine --------
@@ -3080,6 +3449,7 @@ function openPause(){
  <div class="sub">${biomeName(Math.floor(P.y/TILE)).toUpperCase()} · ${Math.max(0,Math.floor(P.y/TILE)-SURFACE)}m · ${P.kills} kills · ${RUNSHARDS}◆ this run</div>
  <button onclick="closePanel()">RESUME <span class="sub">${pr('confirm')} / ${pr('pause')}</span></button>
  <button onclick="openBag()">BAG <span class="sub">${pr('bag')}</span></button>
+ <button onclick="openLattice()">THE LATTICE${SIGILS.length?' <span class="r3">('+SIGILS.length+' sigil'+(SIGILS.length===1?'':'s')+')</span>':''} <span class="sub">${seedGlyph(SEED)} · ${dissStage().n.toLowerCase()}</span></button>
  <button onclick="openMap()">MAP <span class="sub">${pr('map')} · full view</span></button>
  <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''} <span class="sub">lore, bestiary, items</span></button>
  <button onclick="openSettings()">SETTINGS</button>
@@ -3291,6 +3661,11 @@ function render(){
   if(k.kind==='shard'){const b=1+Math.sin(perf*8+k.x)*0.3;
    ctx.fillStyle='#3fc9c1';ctx.fillRect(x-2,y-2,4,4);
    ctx.fillStyle='#bffffb';ctx.fillRect(x-1,y-1,2*b,2*b)}
+  else if(k.kind==='sigil'){const D=SIGILS_DEF[k.id]||{col:'#d8a53f'};
+   const p=1+Math.sin(perf*4+k.x)*0.4;
+   ctx.fillStyle='#00000060';ctx.fillRect(x-5,y-5,10,10);
+   ctx.fillStyle=D.col;ctx.fillRect(x-3-p,y-1,6+p*2,2);ctx.fillRect(x-1,y-3-p,2,6+p*2);
+   ctx.fillStyle='#fff';ctx.fillRect(x-1,y-1,2,2)}
   else if(k.kind==='gem'){const G=GEMS[k.id];ctx.fillStyle=G?SOCK[G.col||'r'].c:'#e6d34a';
    ctx.fillRect(x-3,y-3,6,6);ctx.fillStyle='#fff';ctx.fillRect(x-1,y-1,2,2)}
   else{ctx.fillStyle=['#e8e2d0','#6f8fe0','#e6d34a','#d8a53f'][k.item.rarity];ctx.fillRect(x-4,y-4,8,8);
@@ -3471,7 +3846,15 @@ function sim(dt){
   if(Math.hypot(sh.x-P.x,sh.y-P.y)<20){openShrine(sh);break}}
  tickBuffs();
  if(GRAPPLE){GRAPPLE.t-=dt;if(GRAPPLE.t<=0)GRAPPLE=null}
- if(perf-lastSweep>2){lastSweep=perf;sweepChunks()}
+ if(perf-lastSweep>2){lastSweep=perf;sweepChunks();
+  // UNSTABLE (dissonance >= 70): distant chunks re-form. Never near the player — dissolving
+  // the floor underfoot is a bug, not a mechanic.
+  const churn=dissChurn();
+  if(churn>0&&chance(churn)){
+   const pcx=Math.floor(P.x/TILE/CHUNK),pcy=Math.floor(P.y/TILE/CHUNK);
+   for(const [k,c] of CHUNKS){const i=k.indexOf(','),cx=+k.slice(0,i),cy=+k.slice(i+1);
+    if(Math.abs(cx-pcx)<=2&&Math.abs(cy-pcy)<=2)continue;
+    CHUNKS.delete(k);break}}}
  for(let i=PART.length-1;i>=0;i--){const p=PART[i];p.t-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=600*dt;if(p.t<=0)PART.splice(i,1)}
  for(let i=DMGN.length-1;i>=0;i--){const n=DMGN[i];n.t-=dt;n.y+=n.vy*dt;if(n.t<=0)DMGN.splice(i,1)}
  for(let i=ARCS.length-1;i>=0;i--){if((ARCS[i].t-=dt)<=0)ARCS.splice(i,1)}
@@ -3500,6 +3883,11 @@ function hud(){
  if(P.st){const k=Object.keys(P.st).filter(x=>P.st[x].length);if(k.length)line+='  ['+k.join(' ')+']'}
  $('stats').textContent=line;
  $('weight').textContent=P.weight>0?'THE WEIGHT '+'▮'.repeat(P.weight):'';
+ const dEl=$('diss');
+ if(DISSONANCE>0){dEl.style.display='block';
+  dEl.textContent=dissStage().n.toUpperCase()+' '+'◆'.repeat(Math.min(5,1+Math.floor(DISSONANCE/25)));
+  dEl.style.color=DISSONANCE>=100?'#e05555':DISSONANCE>=70?'#d8a53f':'#9a8fd0'}
+ else dEl.style.display='none';
  // ABIL button carries its own state: name, cooldown, and whether Focus can pay for it.
  const b=$('bAbil');
  if(!ab){b.textContent='—';b.className='tb cold'}

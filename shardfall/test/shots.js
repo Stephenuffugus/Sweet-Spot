@@ -159,6 +159,31 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   await page.waitForTimeout(120);
   await shot('10-settings.png');
 
+  // 11a. the lattice — the seed as an object in the fiction
+  await page.evaluate(() => {
+    closePanel(true); paused = false;
+    SIGILS = ['reroll', 'lock', 'graft', 'invert'];
+    DISSONANCE = 52; WOVEN = 2; WEAVE_LOCK.terrain = 1;
+    META.bosses = { warden: 1, sporemother: 1 };
+    openLattice();
+  });
+  await page.waitForTimeout(150);
+  await shot('12-lattice.png');
+
+  // 11b. grafting: typing a world into existence
+  await page.evaluate(() => { LAT_SEL = 'ore'; GRAFT_BUF = 'KX7'; drawGraft('ore') });
+  await page.waitForTimeout(150);
+  await shot('13-graft.png');
+
+  // 11c. the way out
+  await page.evaluate(() => {
+    DISSONANCE = 118; WOVEN = 5;
+    META.bosses = { warden: 1, sporemother: 1, sentinel: 1 };
+    closePanel(true); openEscape();
+  });
+  await page.waitForTimeout(150);
+  await shot('14-escape.png');
+
   // 11. death summary
   await page.evaluate(() => { INMODE = 'kb'; closePanel(true); P.kills = 37; P.bestHit = 418; RUNSHARDS = 244; runDepth = 1612; P.level = 11; P.dead = false; die(); });
   await page.waitForTimeout(120);

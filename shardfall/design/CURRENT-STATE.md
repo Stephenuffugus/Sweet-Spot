@@ -317,4 +317,4 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | boons | 12 |
 | attunements | 22 |
 | threat tiers | 6 |
-| lore fragments | 13 |
+| lore fragments | 16 |

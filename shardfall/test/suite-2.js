@@ -33,10 +33,14 @@ try{
  EQ.armor.sockets[0]='thorns';refreshAttacks();P.inv=0;const eh=EN[0].hp;
  sim(1/60);assert(EN[0].hp<eh,'thorns reflects on contact');
  // regrowth
- EN.length=0;EQ.armor.sockets[0]='regrowth';P.hp=10;P.x=0;P.y=0; // away from camp? camp check uses tiles; move far
- P.x=(CAMP_X+300)*TILE;P.y=200*TILE;
- for(let i=0;i<120;i++)sim(1/60);
+ // Isolate the regen: this used to depend on whatever the world happened to generate at one
+ // spot, so a change to world seeding could out-damage 2hp/s and fail it for the wrong reason.
+ EQ.armor.sockets[0]='regrowth';refreshAttacks();
+ P.x=(CAMP_X+300)*TILE;P.y=200*TILE;P.hp=10;P.maxhp=Math.max(P.maxhp,100);
+ P.inv=999;P.st=null;P.dead=false;P.noFall=99;
+ for(let i=0;i<120;i++){EN.length=0;PROJ.length=0;sim(1/60)}
  assert(P.hp>10,'regrowth regens away from camp');
+ P.inv=0;
  // armor-global support: fasteratk in armor speeds up melee cd
  EQ.melee=mkItem('sword',0);EQ.armor.sockets[0]=null;refreshAttacks();const cd0=ATK.melee.cd;
  EQ.armor.sockets[0]='fasteratk';refreshAttacks();

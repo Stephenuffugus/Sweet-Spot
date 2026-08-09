@@ -250,8 +250,13 @@ console.log('\n-- codex --');
   A(noClass.length === 0, 'every class has a lore entry' + (noClass.length ? ': ' + noClass.join(',') : ''));
   const fids = LORE.frag.map(f => f.id);
   A(new Set(fids).size === fids.length, 'fragment ids are unique');
-  const depths = LORE.frag.map(f => f.depth);
-  A(depths.every((d, i) => i === 0 || d >= depths[i - 1]), 'fragments are ordered by depth');
+  // Buried fragments must be in ascending depth order so the story arrives roughly in sequence.
+  // A negative depth marks a fragment that is not buried at all — it is written by an act.
+  const depths = LORE.frag.filter(f => f.depth >= 0).map(f => f.depth);
+  A(depths.every((d, i) => i === 0 || d >= depths[i - 1]), 'buried fragments are ordered by depth');
+  A(LORE.frag.some(f => f.depth < 0), 'at least one fragment is earned rather than found');
+  A(LORE.frag.filter(f => f.depth < 0).every(f => nextFrag(99999) !== f),
+    'an unburied fragment can never drop from a chest');
   // fragments are handed out shallowest-first and never repeat
   META.seen.frag = {};
   const f1 = nextFrag(3000);
