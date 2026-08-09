@@ -89,10 +89,22 @@ const ok = (c, m) => { console.log((c ? 'ok: ' : 'FAIL: ') + m); if (!c) fails++
   await page.screenshot({ path: path.join(SHOTS, '01-spawn.png') });
 
   // Drive real input: walk right, jump, hover, swing, shoot.
+  // Clear a corridor first. The browser boots with a random seed, so whether there is a wall
+  // to the right of spawn is luck — and a test that fails on luck teaches nothing.
+  await page.evaluate(() => {
+    const ty = Math.floor(P.y / TILE);
+    for (let y = -2; y <= 0; y++) for (let x = 0; x <= 14; x++) setTile(Math.floor(P.x / TILE) + x, ty + y, 0);
+    for (let x = 0; x <= 14; x++) setTile(Math.floor(P.x / TILE) + x, ty + 1, 2);
+    P.vx = 0; P.vy = 0;
+  });
   const before = await page.evaluate(() => ({ x: P.x, y: P.y }));
   await page.keyboard.down('d'); await page.waitForTimeout(700); await page.keyboard.up('d');
   const walked = await page.evaluate(() => ({ x: P.x, y: P.y }));
-  ok(Math.abs(walked.x - before.x) > 20, `walking moves the player (${(walked.x - before.x).toFixed(0)}px)`);
+  ok(walked.x - before.x > 20, `walking moves the player (${(walked.x - before.x).toFixed(0)}px)`);
+  // and stops when the key is released
+  await page.waitForTimeout(300);
+  const drift = await page.evaluate(() => Math.abs(P.vx));
+  ok(drift < 30, `releasing the key stops the player (vx ${drift.toFixed(1)})`);
 
   await page.keyboard.down('Space'); await page.waitForTimeout(500);
   const hovering = await page.evaluate(() => ({ fuel: P.fuel, maxfuel: P.maxfuel, flying: P.flying, y: P.y }));

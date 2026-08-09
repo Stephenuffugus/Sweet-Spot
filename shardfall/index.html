@@ -178,6 +178,10 @@ body.titlemode #hud,body.titlemode #btns,body.titlemode #toast{display:none}
 #panel .sk i{width:11px;height:11px;border-radius:50%;border:2px solid;display:inline-block;font-style:normal;line-height:8px;text-align:center;font-size:8px;color:#0a0a0f}
 #panel .sk .gn{color:var(--ui)}
 #panel .sk .gn b{color:var(--gold)}
+/* Loot comparison. "Is this better than what I'm wearing" should never require equipping it. */
+#panel .cmp{display:block;font-size:10.5px;margin-top:3px}
+#panel .cmp .up{color:#6ad07a;margin-right:7px}
+#panel .cmp .dn{color:#e07070;margin-right:7px}
 #panel button.slotb{padding:8px}
 #panel table.sum{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0 8px}
 #panel table.sum td{padding:3px 0;border-bottom:1px solid #22222c}
@@ -185,6 +189,8 @@ body.titlemode #hud,body.titlemode #btns,body.titlemode #toast{display:none}
 /* Lore is the one place in this UI that gets to breathe. */
 #panel .lore{font-size:12.5px;line-height:1.65;color:#cfc9b8;white-space:pre-wrap;margin:2px 0 10px;
  border-left:2px solid #2f2f3c;padding:2px 0 2px 10px}
+#panel .mapwrap{background:#07070c;border:1px solid #2a2a36;padding:4px;margin:4px 0}
+#panel .bigmap{display:block;width:100%;height:auto;image-rendering:pixelated}
 /* Controller/keyboard focus cursor. Every panel is a stack of buttons, so one highlighted
    row is all the UI needs to become fully navigable without a pointer. */
 #panel button.foc{border-color:var(--acc);background:#1e2630;box-shadow:inset 3px 0 0 var(--acc)}
@@ -2174,6 +2180,29 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block'
 $('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!MODAL&&!P.dead)closePanel()});
 
 // -------- inventory / equip / socket --------
+// A snapshot of everything a piece of gear can move, so a bag item can be compared against
+// what you are wearing without the player having to equip it and equip it back.
+function statSnap(){
+ return {m:dpsOf(ATK.melee),r:dpsOf(ATK.ranged),hp:maxHP(),arm:armorVal(),
+         crit:Math.round(critChance()*100),fuel:maxFuel()}}
+function slotFor(it){const b=GEAR[it.base];
+ if(b.slot!=='any')return b.slot;
+ return EQ.melee&&GEAR[EQ.melee.base].shield?'ranged':'melee'}
+// Swaps the item in, measures, and swaps back. Cheap because it only runs when a panel draws.
+function compareTo(it){
+ const slot=slotFor(it),cur=EQ[slot];
+ const before=statSnap();
+ EQ[slot]=it;refreshAttacks();
+ const after=statSnap();
+ EQ[slot]=cur;refreshAttacks();
+ const parts=[];
+ const add=(label,a,b,unit)=>{const d=Math.round(b-a);if(!d)return;
+  parts.push(`<span class="${d>0?'up':'dn'}">${d>0?'+':''}${d}${unit||''} ${label}</span>`)};
+ add('melee',before.m,after.m);add('ranged',before.r,after.r);
+ add('hp',before.hp,after.hp);add('armor',before.arm,after.arm);
+ add('crit',before.crit,after.crit,'%');add('fuel',before.fuel,after.fuel);
+ return parts.length?parts.join(' '):'<span class="sub">no change</span>'}
+
 // The socket screen is the most-used screen in the game (DESIGN-PLAN §7). Item at the top,
 // sockets as colored circles, a live DPS line, gem list below, two-tap to place.
 function dpsLine(){
@@ -2197,7 +2226,9 @@ function openBag(){
  h+='<div class="sub" style="margin-top:8px">Carried:</div>';
  if(!BAG.length)h+='<div class="sub">empty</div>';
  BAG.forEach((b,i)=>{
-  if(b.kind==='gear')h+=`<button onclick="equipFromBag(${i})"><span class="r${b.item.rarity}">${itemName(b.item)}</span> <span class="sub">${itemDesc(b.item)||affixStr(b.item)} — tap to equip</span></button>`;
+  if(b.kind==='gear')h+=`<button onclick="equipFromBag(${i})"><span class="r${b.item.rarity}">${itemName(b.item)}</span>
+    <span class="sub">${itemDesc(b.item)||affixStr(b.item)||'no affixes'}</span>
+    <span class="cmp">${compareTo(b.item)}</span></button>`;
   else{const G=GEMS[b.id],col=SOCK[G.col||'r'].c;
    h+=`<button onclick="socketGem(${i})"><span style="color:${col}">◆</span> ${G.n}${(b.tier||1)>1?' T'+b.tier:''}
     <span class="sub">${G.t} · ${SOCK[G.col||'r'].n} · ${G.d||''}</span></button>`}});
@@ -2257,6 +2288,55 @@ function fuseGem(id,tier){
  META.shards-=cost;saveMeta();
  BAG.push({kind:'gem',id,tier:tier+1});
  sfx('level');toast(GEMS[id].n+' → tier '+(tier+1));openBag()}
+
+// -------- full map --------
+// The corner minimap is for moment-to-moment orientation. This is for deciding where to go:
+// same fog-of-war rules, four times the reach, and every POI you have found marked on it.
+function openMap(){
+ // Separate x and y steps: the world is 1600 tiles wide and 3200 deep, so one step for both
+ // wastes half the map on empty space past the world edge. This shows the whole shaft.
+ const W=280,H=340,SX=6,SY=10;
+ const ptx=Math.floor(P.x/TILE),pty=Math.floor(P.y/TILE);
+ const c=document.createElement('canvas');c.width=W;c.height=H;
+ const g=c.getContext('2d');
+ g.fillStyle='#07070c';g.fillRect(0,0,W,H);
+ for(let my=0;my<H;my++)for(let mx=0;mx<W;mx++){
+  const tx=ptx+(mx-W/2)*SX,ty=pty+(my-H/2)*SY;
+  if(tx<0||ty<0||tx>=WORLD_W||ty>=WORLD_H)continue;
+  // Same rule as the minimap: never getTile() here, it would generate world from a UI draw.
+  const ch=CHUNKS.get(chunkKey(Math.floor(tx/CHUNK),Math.floor(ty/CHUNK)));
+  if(!ch)continue;
+  const v=ch.tiles[(ty%CHUNK)*CHUNK+(tx%CHUNK)];if(v===0)continue;
+  const T=TILES[v];
+  g.fillStyle=(T.ore||T.secret)?'#3fc9c1':T.c;g.fillRect(mx,my,1,1)}
+ const mark=(wx,wy,col,sz)=>{const mx=(wx/TILE-ptx)/SX+W/2,my=(wy/TILE-pty)/SY+H/2;
+  if(mx>1&&mx<W-1&&my>1&&my<H-1){g.fillStyle=col;g.fillRect(mx-sz/2,my-sz/2,sz,sz)}};
+ for(const ch of CHESTS)if(!ch.opened)mark(ch.x,ch.y,'#d8a53f',3);
+ for(const sh of SHRINES)if(!sh.used)mark(sh.x,sh.y,'#ffe9a0',3);
+ for(const e of EN)if(e.boss)mark(e.x,e.y,'#e05555',5);
+ if(ANCHOR)mark(ANCHOR.x,ANCHOR.y,'#3fc9c1',5);
+ mark(CAMP_X*TILE,surfH(CAMP_X)*TILE,'#d8a53f',5);
+ // world edges, so the shaft reads as a place with sides rather than an infinite void
+ const ex0=(0-ptx)/SX+W/2, ex1=(WORLD_W-ptx)/SX+W/2;
+ g.fillStyle='#ffffff14';
+ if(ex0>0&&ex0<W)g.fillRect(ex0,0,1,H);
+ if(ex1>0&&ex1<W)g.fillRect(ex1,0,1,H);
+ g.fillStyle='#fff';g.fillRect(W/2-1,H/2-1,3,3);
+ // depth ruler down the side, so "how far down am I" has an answer on the map itself
+ g.font='7px monospace';g.textAlign='left';
+ for(let d=0;d<=WORLD_H;d+=400){const my=(d-pty)/SY+H/2;
+  if(my<8||my>H-2)continue;
+  g.fillStyle='#ffffff18';g.fillRect(0,my,W,1);
+  g.fillStyle='#8a8578';g.fillText(Math.max(0,d-SURFACE)+'m',2,my-2)}
+ openPanel(`<h2>MAP</h2>
+  <div class="sub">${biomeName(Math.floor(P.y/TILE)).toUpperCase()} · ${Math.max(0,Math.floor(P.y/TILE)-SURFACE)}m
+  ${auraHas('prospector')?' · Prospector active':''}</div>
+  <div class="mapwrap"><img src="${c.toDataURL()}" class="bigmap"></div>
+  <div class="sub"><span style="color:#d8a53f">◆</span> chest &nbsp;
+   <span style="color:#ffe9a0">◆</span> shrine &nbsp;
+   <span style="color:#e05555">◆</span> boss &nbsp;
+   <span style="color:#3fc9c1">◆</span> anchor</div>
+  <button onclick="backPanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`,false,openMap)}
 
 // -------- title + onboarding --------
 function openTitle(){
@@ -2622,7 +2702,7 @@ function pollPad(){
  if(edge(PAD.DOWN))fire('navD');
  if(edge(PAD.LEFT))fire('navL');
  if(edge(PAD.RIGHT))fire('navR')}
-let navRepeat=0;
+let navRepeat=0,lastMapT=0;
 function rumble(strong,weak,ms){
  if(!SET.rumble||INMODE!=='pad'||!navigator.getGamepads)return;
  const gp=navigator.getGamepads()[padIndex];
@@ -2674,7 +2754,12 @@ function readInput(){
  if(consumed('abil'))useAbility();
  if(consumed('bag'))openBag();
  if(consumed('camp')){if(nearCamp())openCamp();else toast('Not at camp')}
- if(consumed('map')){MMON=!MMON;toast('Minimap '+(MMON?'on':'off'))}
+ // First press toggles the corner map, a second press within a beat opens the full one —
+ // one binding, two intents, no extra button to find on a controller.
+ if(consumed('map')){
+  if(perf-(lastMapT||0)<0.45){MMON=true;openMap()}
+  else{MMON=!MMON;toast('Minimap '+(MMON?'on':'off')+' — press again for the full map')}
+  lastMapT=perf}
  if(consumed('pause'))openPause();
  consumed('confirm');consumed('cancel');consumed('navU');consumed('navD');consumed('navL');consumed('navR')}
 
@@ -2731,7 +2816,8 @@ function openPause(){
  <div class="sub">${biomeName(Math.floor(P.y/TILE)).toUpperCase()} · ${Math.max(0,Math.floor(P.y/TILE)-SURFACE)}m · ${P.kills} kills · ${RUNSHARDS}◆ this run</div>
  <button onclick="closePanel()">RESUME <span class="sub">${pr('confirm')} / ${pr('pause')}</span></button>
  <button onclick="openBag()">BAG <span class="sub">${pr('bag')}</span></button>
- <button onclick="openCodex()">CODEX <span class="sub">lore, bestiary, items</span></button>
+ <button onclick="openMap()">MAP <span class="sub">${pr('map')} · full view</span></button>
+ <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''} <span class="sub">lore, bestiary, items</span></button>
  <button onclick="openSettings()">SETTINGS</button>
  <button onclick="openControls()">CONTROLS</button>
  ${nearCamp()?'<button onclick="openCamp()">CAMP</button>':''}
@@ -3000,6 +3086,30 @@ function render(){
   ctx.globalAlpha=.18;ctx.beginPath();ctx.moveTo(P.x-ox,P.y-oy);ctx.lineTo(tx,ty);ctx.stroke();ctx.globalAlpha=1}
  // particles
  for(const p of PART){ctx.fillStyle=p.col;ctx.fillRect(p.x-ox-1,p.y-oy-1,2,2)}
+ // Off-screen threat markers, drawn BEFORE the darkness so the dark doesn't swallow them.
+ // Only for enemies close enough to matter, so the edges don't turn into a light show.
+ {const cx=VW/2,cy=VH/2,pad=9;
+  for(const e of EN){if(e.hp<=0)continue;
+   const x=e.x-ox,y=e.y-oy;
+   if(x>-8&&x<VW+8&&y>-8&&y<VH+8)continue;      // already visible
+   const d=Math.hypot(e.x-P.x,e.y-P.y);
+   if(d>440)continue;
+   const dx=x-cx,dy=y-cy,m=Math.hypot(dx,dy)||1;
+   // project onto the screen rectangle
+   const sx=Math.abs(dx)/(cx-pad),sy=Math.abs(dy)/(cy-pad),sc=Math.max(sx,sy)||1;
+   const px=cx+dx/sc,py=cy+dy/sc;
+   const a=Math.max(0.15,1-d/440);
+   ctx.globalAlpha=a;
+   ctx.fillStyle=e.boss?'#e05555':e.elite?'#ffffff':e.c;
+   const s2=e.boss?5:3;
+   // a small triangle pointing at the threat
+   const ang=Math.atan2(dy,dx);
+   ctx.beginPath();
+   ctx.moveTo(px+Math.cos(ang)*s2*1.6,py+Math.sin(ang)*s2*1.6);
+   ctx.lineTo(px+Math.cos(ang+2.4)*s2,py+Math.sin(ang+2.4)*s2);
+   ctx.lineTo(px+Math.cos(ang-2.4)*s2,py+Math.sin(ang-2.4)*s2);
+   ctx.closePath();ctx.fill();
+   ctx.globalAlpha=1}}
  drawLight();
  // damage numbers last so darkness never eats them. Crits are bigger and gold.
  ctx.textAlign='center';

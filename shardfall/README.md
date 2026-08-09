@@ -56,6 +56,9 @@ shrinks your light) and pays more shards and better loot for it.
 Everything is discoverable through the **codex**, which fills in as you play: a bestiary page on
 first kill, a lore page on first descent, and thirteen fragments buried at increasing depth.
 
+Loot tells you whether it's better before you equip it, threats off the edge of the screen get a
+marker, and pressing the map key twice opens the full shaft with fog of war and a depth ruler.
+
 ## What makes a build
 
 Gear has colored sockets. Gems go in matching sockets. A **skill** gem replaces your weapon's

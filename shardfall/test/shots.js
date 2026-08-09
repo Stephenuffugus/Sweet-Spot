@@ -125,6 +125,22 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   await page.waitForTimeout(120);
   await shot('07-pause.png');
 
+  // 7b. full map after some exploring
+  await page.evaluate(() => { closePanel(true); openMap() });
+  await page.waitForTimeout(200);
+  await shot('07b-map.png');
+
+  // 7c. loot comparison against what you are wearing
+  await page.evaluate(() => {
+    closePanel(true);
+    BAG.length = 0;
+    BAG.push({ kind: 'gear', item: mkItem('plate', 2) }, { kind: 'gear', item: mkItem('robe', 1) },
+             { kind: 'gem', id: 'chainbolt', tier: 1 });
+    openBag();
+  });
+  await page.waitForTimeout(150);
+  await shot('07c-compare.png');
+
   // 8. codex with a few pages earned
   await page.evaluate(() => {
     for (const k of ['crawler', 'bat', 'rockling', 'spitter', 'warden']) discover('en', k, true);
