@@ -1963,11 +1963,12 @@ function gainXP(n){
  if(P.dead)return;
  P.xp+=n;
  while(P.xp>=P.xpNeed){P.xp-=P.xpNeed;P.level++;P.xpNeed=xpNeed(P.level);P.picks++}
- if(P.picks>0&&!paused)offerAttune()}
+ if(P.picks>0&&!paused&&!P.dead)offerAttune()}
 // Three picks, no rerolls, chosen under whatever pressure you were already under. Anything
 // already taken is excluded, so the pool thins and later choices get sharper.
 let ATT_PICK=[];
 function offerAttune(){
+ if(P.dead)return;
  const taken=RUNM.__taken||(RUNM.__taken={});
  const pool=ATTUNE.filter(a=>!taken[a.id]);
  if(!pool.length){P.picks=0;return}
@@ -2060,7 +2061,7 @@ function upPlayer(dt){
   toast('ANCHOR SET: '+bn.toUpperCase()+' — descend from here next run');sfx('level')}
  // DESCENT BONUS (§3.4.3): reaching a new band this run is a free shrine roll. Pull, not push.
  if(!RUNBANDS[bn]){RUNBANDS[bn]=1;
-  if(bn!=='surface'){openShrine({x:P.x,y:P.y,used:false,free:1});toast('DESCENT — a boon for going deeper')}}
+  if(bn!=='surface'&&!P.dead){openShrine({x:P.x,y:P.y,used:false,free:1});toast('DESCENT — a boon for going deeper')}}
 }
 // Dodge needs a cooldown longer than its own i-frame window, or spamming it is permanent
 // invulnerability. 0.30s of i-frames on a 0.55s cycle leaves a real gap to be punished in.
@@ -2068,8 +2069,9 @@ function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
  P.dodgeT=0.22;P.dodgeCd=0.55;P.inv=Math.max(P.inv,0.30*(1+inc('iframes')));
  burst(P.x,P.y,'#ffffff50',5);sfx('swing');
  if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthMul(P.y),'#ffcf8a',{burn:8*depthMul(P.y)})}}
+let DYING=false;
 function die(){if(P.dead)return;
- P.dead=true;paused=true;P.hp=0;sfx('die');flash(0.5);
+ P.dead=true;DYING=true;paused=true;P.hp=0;sfx('die');flash(0.5);
  META.bestDepth=Math.max(META.bestDepth||0,runDepth);
  META.runs=(META.runs||0)+1;saveMeta();
  const newly=UNLOCK_MSG.length?`<div class="sub" style="color:var(--acc)">Unlocked this run: ${UNLOCK_MSG.join(', ')}</div>`:'';
@@ -2085,13 +2087,16 @@ function die(){if(P.dead)return;
   <tr><td>Run</td><td>#${META.runs}</td></tr>
  </table>${newly}
  <p class="sub">Run gear is lost. Shards, unlocks and the Vault are forever.</p>
- <button onclick="newRun()">RISE AGAIN</button>`,true)}
+ <button onclick="newRun()">RISE AGAIN</button>`,true,null);
+ DYING=false}
 let RUNBANDS={},UNLOCK_MSG=[];
 // Mechanical attunements. Kept separate from RUNB so the additive pool stays purely numeric
 // and every mechanic has one obvious hook site.
 let RUNM={};
 const RUNM0=()=>({});
-function threat(){return THREATS[Math.min(META.threat||0,THREATS.length-1)]}
+// Clamped at BOTH ends. Only the top was clamped, so a negative value in the save — from a
+// corrupted blob or a future migration — returned undefined and every threat lookup threw.
+function threat(){return THREATS[Math.max(0,Math.min(META.threat|0,THREATS.length-1))]||THREATS[0]}
 function newRun(){
  SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);
  CHUNKS.clear();EN.length=0;PROJ.length=0;PICK.length=0;PART.length=0;DMGN.length=0;
@@ -2130,18 +2135,40 @@ function newRun(){
  P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
  shake=0;hitstop=0;FLASH=0;CALLOUT=null;
+ UIROOT=null;MODAL=false;PANEL_FN=null;
  closePanel(true);
 }
 
 // ============ UI: PANELS / TOAST ============
 const $=id=>document.getElementById(id);
 let MODAL=false;
-function openPanel(html,modal){MODAL=!!modal;$('panel').innerHTML=html;$('overlay').style.display='flex';paused=true;
+// UIROOT is the screen that BACK and cancel return to: 'title' before a run has started,
+// 'pause' inside one, null for a panel opened straight from gameplay. Without it, any
+// sub-screen reached from the title (codex, settings, controls) cleared the modal flag and
+// made the title itself dismissible.
+let UIROOT=null;
+// `fn` is the function that produced this panel, kept so the screen can be redrawn in place
+// when the input device changes and every prompt on it becomes wrong.
+let PANEL_FN=null;
+// Death outranks every other modal. A shrine, a level-up or a fragment opening in the same
+// frame as death used to replace the YOU DIED panel — and satisfying that modal left the game
+// paused, dead, with no way to start a new run.
+function openPanel(html,modal,fn){
+ if(P.dead&&!DYING)return;
+ MODAL=!!modal;PANEL_FN=fn||null;
+ $('panel').innerHTML=html;$('overlay').style.display='flex';paused=true;
  menuIdx=0;menuFocus(0)}
+function backPanel(){
+ if(UIROOT==='title')return openTitle();
+ if(UIROOT==='pause')return openPause();
+ closePanel()}
 // A modal panel demands a choice. Dismissing the death screen used to hide the overlay while
 // leaving paused=true — the game was still running nothing, with no way back.
 function closePanel(force){if(MODAL&&!force)return;
- MODAL=false;$('overlay').style.display='none';if(!P.dead)paused=false}
+ // Closing anything opened from the title returns to the title. Letting it fall through would
+ // start the run with the HUD still hidden and no descent ever chosen.
+ if(UIROOT==='title'&&!force)return openTitle();
+ MODAL=false;PANEL_FN=null;$('overlay').style.display='none';if(!P.dead)paused=false}
 let toastT=null;
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',1600)}
 $('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!MODAL&&!P.dead)closePanel()});
@@ -2234,6 +2261,7 @@ function fuseGem(id,tier){
 // -------- title + onboarding --------
 function openTitle(){
  document.body.classList.add('titlemode');
+ UIROOT='title';
  const first=!META.runs;
  openPanel(`<div class="title">SHARDFALL</div>
   <div class="sub tagline">Something fell. We have been mining it for nine hundred years.</div>
@@ -2242,8 +2270,8 @@ function openTitle(){
   ${first?'':'<button onclick="openCamp()">CAMP <span class="sub">spend shards, pick a class</span></button>'}
   <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
   <button onclick="openControls()">CONTROLS</button>
-  <button onclick="openSettings()">SETTINGS</button>`,true)}
-function startRun(){document.body.classList.remove('titlemode');closePanel(true);if(SET.hints&&!META.runs)hint('move',`${pr('move')} to move · ${pr('jump')} to jump, HOLD to hover`)}
+  <button onclick="openSettings()">SETTINGS</button>`,true,openTitle)}
+function startRun(){document.body.classList.remove('titlemode');UIROOT=null;closePanel(true);if(SET.hints&&!META.runs)hint('move',`${pr('move')} to move · ${pr('jump')} to jump, HOLD to hover`)}
 // Contextual hints: each fires once per save, at the moment it is relevant, and never again.
 // Teaching by interruption is worse than teaching by timing.
 function hint(id,text){
@@ -2271,7 +2299,7 @@ function openCodex(){
   <button onclick="openCodexList('biome')">STRATA <span class="sub">${pctSeen('biome',bT)}% — the layers you have reached</span></button>
   <button onclick="openCodexList('en')">BESTIARY <span class="sub">${pctSeen('en',eT)}% — written on first kill</span></button>
   <button onclick="openCodexList('cls')">DELVERS <span class="sub">${pctSeen('cls',cT)}%</span></button>
-  <button onclick="closePanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`)}
+  <button onclick="backPanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`)}
 function openLoreWorld(){
  openPanel(`<h2>${LORE.world.n}</h2><div class="lore">${LORE.world.d.replace(/\n\n/g,'<br><br>')}</div>
   <button onclick="openCodex()">BACK <span class="sub">${pr('cancel')}</span></button>`)}
@@ -2463,7 +2491,11 @@ function loadSet(){SET=Object.assign({},SET_DEF,META.set||{});applyVol()}
 function saveSet(){META.set=SET;saveMeta()}
 function applyVol(){if(MASTER)MASTER.gain.value=(SET.vol/100)*0.9}
 
-function setMode(m){if(INMODE===m)return;INMODE=m;
+function setMode(m){if(INMODE===m)return;
+ // Whatever was held on the old device is not held on the new one. Without this, unplugging a
+ // pad mid-swing leaves the attack button stuck down for the rest of the run.
+ HELD.mel=HELD.rng=HELD.jmp=false;IN.tx=0;IN.padX=0;
+ INMODE=m;
  document.body.classList.toggle('touchmode',m==='touch');
  refreshPrompts()}
 
@@ -2483,7 +2515,7 @@ addEventListener('keydown',e=>{
  setMode('kb');
  if(e.repeat)return;
  KEYS[e.code]=true;
- if(KEYMAP.jump.includes(e.code)){P.jbuf=0.12;HELD.jmp=true}
+ if(KEYMAP.jump.includes(e.code)&&!paused){P.jbuf=0.12;HELD.jmp=true}
  if(KEYMAP.mel.includes(e.code))HELD.mel=true;
  if(KEYMAP.rng.includes(e.code))HELD.rng=true;
  if(KEYMAP.dodge.includes(e.code))fire('dodge');
@@ -2508,12 +2540,21 @@ function kbAxis(){let x=0;if(heldKey('left'))x-=1;if(heldKey('right'))x+=1;retur
 let mouseX=0,mouseY=0,mouseIn=false;
 function screenToWorld(sx,sy){
  const r=cv.getBoundingClientRect();
- return {x:camOX+(sx-r.left)/r.width*VW, y:camOY+(sy-r.top)/r.height*VH}}
-cv.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY;mouseIn=true;setMode('kb')});
-cv.addEventListener('mouseleave',()=>{mouseIn=false});
-cv.addEventListener('mousedown',e=>{setMode('kb');
+ // camOX/camOY carry the per-frame screenshake offset. Aiming through them makes the cursor's
+ // world position jitter with the shake — worst exactly when you are being hit.
+ const ox=Math.round(cam.x-VW/2), oy=Math.round(cam.y-VH/2);
+ return {x:ox+(sx-r.left)/Math.max(1,r.width)*VW, y:oy+(sy-r.top)/Math.max(1,r.height)*VH}}
+// Pointer events filtered on pointerType. A touch also emits synthetic mouse events, and
+// treating those as "a mouse appeared" deleted the touch UI out from under a phone player on
+// their very first tap.
+const isMouse=e=>!e.pointerType||e.pointerType==='mouse';
+cv.addEventListener('pointermove',e=>{if(!isMouse(e))return;
+ mouseX=e.clientX;mouseY=e.clientY;mouseIn=true;setMode('kb')});
+cv.addEventListener('pointerleave',e=>{if(isMouse(e))mouseIn=false});
+cv.addEventListener('pointerdown',e=>{if(!isMouse(e))return;setMode('kb');
  if(e.button===0)HELD.mel=true;else if(e.button===2)HELD.rng=true;else if(e.button===1)fire('dodge')});
-addEventListener('mouseup',e=>{if(e.button===0)HELD.mel=false;else if(e.button===2)HELD.rng=false});
+addEventListener('pointerup',e=>{if(!isMouse(e))return;
+ if(e.button===0)HELD.mel=false;else if(e.button===2)HELD.rng=false});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('wheel',e=>{e.preventDefault()},{passive:false});
 
@@ -2527,7 +2568,9 @@ addEventListener('gamepadconnected',e=>{
  const id=(e.gamepad.id||'').toLowerCase();
  PADTYPE=/dualshock|dualsense|playstation|sony|054c/.test(id)?'ps':'xbox';
  setMode('pad');toast('Controller connected');refreshPrompts()});
-addEventListener('gamepaddisconnected',e=>{if(e.gamepad.index===padIndex){padIndex=-1;setMode('kb');toast('Controller disconnected')}});
+addEventListener('gamepaddisconnected',e=>{if(e.gamepad.index===padIndex){
+ padIndex=-1;padPrev=[];HELD.mel=HELD.rng=HELD.jmp=false;
+ setMode('kb');toast('Controller disconnected')}});
 function dz(v){const d=SET.deadzone/100;return Math.abs(v)<d?0:(v-Math.sign(v)*d)/(1-d)}
 function pollPad(){
  if(!navigator.getGamepads)return;
@@ -2551,26 +2594,34 @@ function pollPad(){
  HELD.jmp=down(PAD.A)||down(PAD.LB);
  HELD.mel=down(PAD.X)||down(PAD.RB);
  HELD.rng=down(PAD.RT)||down(PAD.Y);
- const edge=i=>{const now=down(i),was=padPrev[i];padPrev[i]=now;return now&&!was};
- if(edge(PAD.B))fire('dodge');
- if(edge(PAD.LT))fire('abil');
- if(edge(PAD.BACK))fire('bag');
- if(edge(PAD.START))fire('pause');
- if(edge(PAD.L3))fire('map');
- if(edge(PAD.R3))fire('camp');
- // menu navigation — dpad, plus the left stick with a repeat delay so it doesn't fly past
- if(edge(PAD.A))fire('confirm');
- if(edge(PAD.B))fire('cancel');
+ // Snapshot every edge ONCE. Reading through a function that also advanced padPrev meant the
+ // second read of a button was always false — A fired 'confirm' and then failed to buffer a
+ // jump, and B fired 'dodge' and then never fired 'cancel', leaving a controller with no way
+ // to back out of any menu.
+ const ed=[];
+ for(let i=0;i<b.length;i++){const now=down(i);ed[i]=now&&!padPrev[i];padPrev[i]=now}
+ const edge=i=>!!ed[i];
+ // A face button means one thing in a menu and another in the world, so the mapping depends
+ // on whether the game is paused.
+ if(paused){
+  if(edge(PAD.A))fire('confirm');
+  if(edge(PAD.B))fire('cancel');
+  if(edge(PAD.START))fire('pause');
+  navRepeat-=DT;
+  if(Math.abs(ly)>0.6&&navRepeat<=0){fire(ly<0?'navU':'navD');navRepeat=0.18}
+  else if(Math.abs(ly)<=0.6)navRepeat=0}
+ else{
+  if(edge(PAD.B))fire('dodge');
+  if(edge(PAD.LT))fire('abil');
+  if(edge(PAD.BACK))fire('bag');
+  if(edge(PAD.START))fire('pause');
+  if(edge(PAD.L3))fire('map');
+  if(edge(PAD.R3))fire('camp');
+  if(edge(PAD.A)||edge(PAD.LB))P.jbuf=0.12}
  if(edge(PAD.UP))fire('navU');
  if(edge(PAD.DOWN))fire('navD');
  if(edge(PAD.LEFT))fire('navL');
- if(edge(PAD.RIGHT))fire('navR');
- if(paused){
-  navRepeat-=DT;
-  if(Math.abs(ly)>0.6&&navRepeat<=0){fire(ly<0?'navU':'navD');navRepeat=0.18}
-  else if(Math.abs(ly)<=0.6&&Math.abs(lx)<=0.6)navRepeat=0}
- // jump must still buffer on the press edge, not just while held
- if(edge(PAD.A)||edge(PAD.LB))P.jbuf=0.12}
+ if(edge(PAD.RIGHT))fire('navR')}
 let navRepeat=0;
 function rumble(strong,weak,ms){
  if(!SET.rumble||INMODE!=='pad'||!navigator.getGamepads)return;
@@ -2640,13 +2691,13 @@ function menuInput(){
  if(consumed('navU'))menuFocus(menuIdx-1);
  if(consumed('navD'))menuFocus(menuIdx+1);
  consumed('navL');consumed('navR');
- if(consumed('confirm')){const b=menuButtons()[menuIdx];if(b)b.click();return}
- const back=consumed('cancel'),esc=consumed('pause');
- if(back||esc){
-  // A modal panel demands a real choice; everything else backs out.
-  if(!MODAL)closePanel();
-  return}
- consumed('dodge');consumed('abil');consumed('bag');consumed('camp');consumed('map')}
+ const go=consumed('confirm'),back=consumed('cancel'),esc=consumed('pause');
+ // Drain EVERY gameplay action before acting. Returning early left them queued, so a key
+ // pressed while a menu was open fired the moment the menu closed.
+ consumed('dodge');consumed('abil');consumed('bag');consumed('camp');consumed('map');
+ if(go){const b=menuButtons()[menuIdx];if(b)b.click();return}
+ // A modal panel demands a real choice; everything else backs out to wherever it came from.
+ if((back||esc)&&!MODAL)backPanel()}
 
 // ---- device-aware prompts ----
 // The same action is SPACE, A or ✕ depending on what you last touched. Every label in the UI
@@ -2667,10 +2718,15 @@ function refreshPrompts(){
   $('bRng').textContent='RNG';$('bDodge').textContent='DODGE'}
  $('bagBtn').textContent='BAG'+(INMODE==='touch'?'':' '+pr('bag'));
  $('mapBtn').textContent='MAP'+(INMODE==='touch'?'':' '+pr('map'));
- $('pauseBtn').textContent=INMODE==='touch'?'❚❚':pr('pause')}
+ $('pauseBtn').textContent=INMODE==='touch'?'❚❚':pr('pause');
+ // A screen full of "press A" prompts is wrong the moment you unplug the pad. If one is open
+ // when the device changes, redraw it in place and keep the cursor where it was — the CONTROLS
+ // page in particular promises it updates itself.
+ if(paused&&PANEL_FN){const keep=menuIdx,fn=PANEL_FN;fn();menuFocus(keep)}}
 
 // ---- pause + settings ----
 function openPause(){
+ UIROOT='pause';
  openPanel(`<h2>PAUSED</h2>
  <div class="sub">${biomeName(Math.floor(P.y/TILE)).toUpperCase()} · ${Math.max(0,Math.floor(P.y/TILE)-SURFACE)}m · ${P.kills} kills · ${RUNSHARDS}◆ this run</div>
  <button onclick="closePanel()">RESUME <span class="sub">${pr('confirm')} / ${pr('pause')}</span></button>
@@ -2679,7 +2735,7 @@ function openPause(){
  <button onclick="openSettings()">SETTINGS</button>
  <button onclick="openControls()">CONTROLS</button>
  ${nearCamp()?'<button onclick="openCamp()">CAMP</button>':''}
- <button onclick="confirmAbandon()">ABANDON RUN <span class="sub">keep your shards, lose your gear</span></button>`)}
+ <button onclick="confirmAbandon()">ABANDON RUN <span class="sub">keep your shards, lose your gear</span></button>`,false,openPause)}
 function confirmAbandon(){
  openPanel(`<h2>ABANDON RUN?</h2>
   <p class="sub">Your ${RUNSHARDS}◆ this run are already banked. Gear and boons are lost.</p>
@@ -2700,8 +2756,8 @@ function openSettings(){
  SETTINGS.forEach((o,i)=>{h+=`<button onclick="cycleSet(${i})">${o.n}
   <span class="sub" style="float:right;color:var(--acc)">${o.fmt(SET[o.k])}</span></button>`});
  h+='<button onclick="resetSet()">RESET TO DEFAULTS</button>';
- h+=`<button onclick="openPause()">BACK <span class="sub">${pr('cancel')}</span></button>`;
- openPanel(h)}
+ h+=`<button onclick="backPanel()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,openSettings)}
 function cycleSet(i){const o=SETTINGS[i];
  let v=SET[o.k]+o.step;if(v>o.max)v=o.min;
  SET[o.k]=v;saveSet();applyVol();
@@ -2717,8 +2773,7 @@ function openControls(){
  if(INMODE==='kb')h+='<tr><td>Aim</td><td class="r3">MOUSE</td></tr>';
  if(INMODE==='pad')h+='<tr><td>Aim</td><td class="r3">R-STICK</td></tr>';
  h+='</table>';
- h+=`<button onclick="openPause()">BACK <span class="sub">${pr('cancel')}</span></button>`;
- openPanel(h)}
+ openPanel(h+`<button onclick="backPanel()">BACK <span class="sub">${pr('cancel')}</span></button>`,false,openControls)}
 // ============ RENDER ============
 let VW=0,VH=0,SCALE=2;
 // Adaptive scale. The first browser look showed only ~12 tiles across — too tight to read an

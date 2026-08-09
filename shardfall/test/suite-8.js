@@ -269,6 +269,91 @@ console.log('\n-- codex --');
   hint('t1', 'x'); A(Object.keys(META.hints).length === n, 'and does not fire twice');
 }
 
+// ---------- 6b. REGRESSIONS ----------
+// Every one of these shipped and was caught by review rather than by playing.
+console.log('\n-- regressions --');
+{
+  // menuInput used to return early on confirm/cancel without draining the rest of EDGE, so a
+  // key pressed while a menu was open fired its gameplay action on the first unpaused frame.
+  paused = true;
+  fire('dodge'); fire('abil'); fire('bag'); fire('confirm');
+  menuInput();
+  paused = false;
+  A(consumed('dodge') === 0 && consumed('abil') === 0 && consumed('bag') === 0,
+    'menu input drains queued gameplay actions instead of leaking them into the run');
+}
+{
+  // Switching device left whatever was held on the old one stuck true forever.
+  HELD.mel = true; HELD.rng = true; HELD.jmp = true; IN.tx = 1;
+  const was = INMODE;
+  setMode(INMODE === 'kb' ? 'touch' : 'kb');
+  A(!HELD.mel && !HELD.rng && !HELD.jmp, 'changing input device clears held buttons');
+  A(IN.tx === 0, 'and clears the touch axis');
+  setMode(was);
+}
+{
+  // Death has to outrank every competing modal. A shrine, level-up or fragment opening in the
+  // same frame as death replaced the YOU DIED panel and left the run paused with no way out.
+  newRun(); OFF();
+  P.hp = 1; P.inv = 0; P.armor = 0;
+  RUNM = RUNM0();
+  hurtPlayer(9999);
+  A(P.dead, 'the fatal hit kills');
+  const dead = document.getElementById('panel').innerHTML;
+  // now try to steal the panel the way a same-frame shrine would
+  openShrine({ x: P.x, y: P.y, used: false, free: 1 });
+  P.picks = 1; offerAttune();
+  A(document.getElementById('panel').innerHTML === dead, 'no modal can replace the death screen');
+  A(paused && P.dead, 'and the game stays in the death state');
+  newRun(); OFF();
+}
+{
+  // The title screen was escapable through its own sub-panels, because MODAL is one global
+  // that any non-modal child cleared. UIROOT makes BACK return to wherever it came from.
+  openTitle();
+  A(paused && UIROOT === 'title', 'the title screen sets itself as the panel root');
+  openSettings();
+  closePanel();
+  A(paused && UIROOT === 'title', 'closing a sub-panel from the title returns to the title, not the game');
+  startRun();
+  A(!paused && UIROOT === null, 'DESCEND clears the root and starts the run');
+}
+{
+  // Jump was buffered by the keydown handler regardless of pause, so the player leapt the
+  // instant a menu closed. The buffer is only armed while the game is live.
+  P.jbuf = 0;
+  paused = true;
+  // simulate what the handler does under the guard
+  if (!paused) P.jbuf = 0.12;
+  A(P.jbuf === 0, 'jump is not buffered while paused');
+  paused = false;
+  if (!paused) P.jbuf = 0.12;
+  A(P.jbuf > 0, 'and is buffered while playing');
+  P.jbuf = 0;
+}
+{
+  // The deadzone is the one bit of gamepad math that runs headless, and a bad one produces NaN
+  // that poisons movement for the rest of the session.
+  for (const d of [5, 22, 40]) {
+    SET.deadzone = d;
+    for (const v of [-1, -0.5, -0.01, 0, 0.01, 0.5, 1]) {
+      const r = dz(v);
+      if (!isFinite(r)) { A(false, `deadzone ${d} produced NaN for ${v}`); break }
+    }
+  }
+  A(true, 'the deadzone never produces NaN across its whole range');
+  SET.deadzone = SET_DEF.deadzone;
+}
+{
+  // Threat must never index outside THREATS, whatever the save says.
+  const save = META.threat;
+  META.threat = 999;
+  A(!!threat() && typeof threat().shard === 'number', 'an out-of-range threat index still resolves');
+  META.threat = -5;
+  A(!!threat(), 'a negative threat index still resolves');
+  META.threat = save;
+}
+
 // ---------- 7. INTEGRATION ----------
 console.log('\n-- integration --');
 {
