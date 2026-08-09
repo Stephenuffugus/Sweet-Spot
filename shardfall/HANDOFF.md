@@ -1,7 +1,7 @@
 # SHARDFALL — Engineering Handoff
 
 **State:** playable, ~2100 lines, sessions 1-7 shipped. Renders in a real browser, installs
-offline, 249 assertions across 6 node suites plus 15 browser and 22 PWA checks, all passing.
+offline, 261 assertions across 6 node suites plus 15 browser and 22 PWA checks, all passing.
 **Stack:** single-file vanilla HTML/CSS/JS PWA, canvas 2D, no build step, mobile-first.
 **Owner:** Stephen / Lucid Winds. Target: lucidwinds.com. Lives in `shardfall/` in the
 Sweet-Spot repo, so the live Sweet Spot page at the repo root is untouched.
@@ -275,3 +275,29 @@ potency was captured at gem-mod time from a pre-multiplier damage value, so supp
 scaled the hit but not the burn. And the first browser render was only possible after the
 test harness learned what a canvas gradient is — `render()` crashed under the old stub, which
 looks exactly like a game bug in a failing suite and is not one.
+
+A five-lens adversarial review at the end of session 7 raised 27 claims; 13 survived an
+attempt to refute each one. The ones worth remembering, because they are the shapes that
+recur in this codebase:
+
+- **A field set on the cached attack but only read on one path.** Momentum, Culling and Chain
+  were `for:'any'` supports whose payouts lived exclusively in `strike()`, the melee path.
+  `doRanged` never copied them onto the projectile, so on any ranged build all three applied
+  their `more` penalty and none of their upside — and the bow unique Windwake, whose entire
+  effect is Momentum, was strictly worse than a white bow. Anything conditional now has to be
+  handled in `strike()` **and** `projStrike()`.
+- **A stat applied twice because it was baked in earlier.** Ailment potency already carries
+  `ailmentMul()` from `resolveDmg`, so Shatter and Rupture multiplying by it again squared the
+  player's ailment stat. Same shape as `digPower()` re-adding a class bonus `computeAttack`
+  had already folded in, and as abilities passing `dkey='dmg'` into `resolveDmg`, which adds
+  `inc(dkey)` *and* `inc('dmg')`.
+- **An accumulator cleared before it was read.** `upPlayer` zeroed `P.hpDrain` at the top of
+  the frame, so any drain credited from outside that call — Shatter fires from `applyStatus`,
+  which runs during `upProj` — was silently discarded. Player Shatter dealt exactly zero while
+  the identical combo on an enemy dealt full damage.
+- **Targeting and damage disagreeing.** The Decoy changed which entity enemies measured range
+  against, but the strike still called `hurtPlayer`, so a decoy across the room let every
+  enemy hit you from wherever it stood.
+- **An id shared across two tables.** `chain` was both the Chainmail gear base and the Chain
+  support gem, and unlock ids are one namespace — 45 shards of armor also handed over a
+  100-shard gem. Suite 7 now asserts no id is ever both.

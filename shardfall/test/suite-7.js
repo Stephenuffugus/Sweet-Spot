@@ -300,7 +300,15 @@ console.log('\n-- the vault --');
   A(META.shards < 5000, 'depositing costs shards');
   newRun();
   const held = [EQ.melee, EQ.ranged, EQ.armor].concat(BAG.filter(b => b.kind === 'gear').map(b => b.item));
-  A(held.some(i => i && i.uid === keep.uid), 'the vaulted item survives death and returns next run');
+  const back = held.find(i => i && i.base === keep.base && i.rarity === keep.rarity);
+  A(!!back, 'the vaulted item survives death and returns next run');
+  // It must be a COPY. Handing out the stored object means socketing a gem into your vaulted
+  // weapon this run silently rewrites the permanent save.
+  A(back !== META.vault[0], 'the returned item is a copy, not the stored object');
+  if (back && back.sockets.length) {
+    back.sockets[0] = { id: 'pierce', tier: 1 };
+    A(!META.vault[0].sockets[0], 'socketing the returned copy does not mutate the vault');
+  }
   META.vault = [];
 }
 
@@ -321,9 +329,14 @@ console.log('\n-- new enemies --');
   const E = ENEMIES.voidspawn;
   const e = mkE({ type: 'voidspawn', hp: 1, maxhp: E.hp, dmg: E.dmg });
   EN.push(e); killEnemy(e);
+  // Splits are QUEUED, not pushed straight into EN — killEnemy runs from inside `for..of EN`
+  // loops, and appending there makes the live iteration walk into the enemies it just made.
+  A(SPAWNQ.length === E.split, 'void spawn queues its splits instead of mutating EN mid-iteration');
+  flushSpawns();
   A(EN.filter(x => x.type === 'voidling').length === E.split, 'void spawn splits into voidlings');
   const half = EN.find(x => x.type === 'voidling');
-  EN.length = 0; if (half) { half.hp = 1; killEnemy(half) }
+  EN.length = 0; SPAWNQ.length = 0; if (half) { half.hp = 1; killEnemy(half) }
+  flushSpawns();
   A(EN.filter(x => x.type === 'voidling').length === 0, 'voidlings do not split again (no infinite chain)');
 }
 { // shieldman blocks from the front
@@ -355,7 +368,7 @@ console.log('\n-- new gems --');
   P.mcd = 0; doMelee();
   A(weak.hp <= 0, 'Culling executes an enemy under the threshold');
   // Chain jumps to a neighbour
-  EN.length = 0; EQ.melee.sockets = [{ id: 'chain', tier: 1 }, null, null]; refreshAttacks();
+  EN.length = 0; EQ.melee.sockets = [{ id: 'chainbolt', tier: 1 }, null, null]; refreshAttacks();
   const a1 = mkE({ x: P.x + 20 }), a2 = mkE({ x: P.x + 60 });
   EN.push(a1, a2); P.mcd = 0; doMelee();
   A(a2.hp < 5000, 'Chain carries damage to a second enemy');
@@ -469,6 +482,130 @@ console.log('\n-- cache coherence --');
   A(EQ.melee.sockets[1] === null && BAG.length === 1, 'a mismatched gem is refused and stays in the bag');
   unsocket('melee', 0); closePanel();
   A(near(ATK.melee.dmg, d2, 0.001), 'unsocketing refreshes back');
+}
+
+// ---------- 13c. REGRESSIONS ----------
+// Each of these is a bug that shipped and was caught by review rather than by play.
+console.log('\n-- regressions --');
+{
+  // Abilities passed dkey='dmg' into resolveDmg, which adds inc(dkey) AND inc('dmg') — so
+  // every point of increased damage counted twice for abilities and once for weapons.
+  OFF(); RUNB = RUNB0(); META.tree = {}; refreshAttacks();
+  EQ.armor = mkItem('robe', 0); EQ.armor.sc = ['b', 'b', 'b'];
+  EQ.armor.sockets = [{ id: 'meteor', tier: 1 }, null, null]; refreshAttacks();
+  const a0 = ATK.abil.dmg;
+  RUNB.dmg = 1.0; refreshAttacks();
+  const a1 = ATK.abil.dmg;
+  A(near(a1 / a0, 2.0, 0.02), `+100% increased doubles ability damage, not quadruples it (${(a1 / a0).toFixed(2)}x)`);
+  RUNB = RUNB0(); refreshAttacks();
+}
+{
+  // Tunneling projectiles took their own branch in upProj and skipped enemy collision
+  // entirely, so Bore and Excavate carved a corridor and could never damage anything in it.
+  OFF(); EN.length = 0; PROJ.length = 0; NOCRIT();
+  EQ.ranged = mkItem('bow', 0); EQ.ranged.sc = ['r', 'r']; EQ.ranged.sockets = [{ id: 'bore', tier: 1 }, null];
+  refreshAttacks();
+  A(ATK.ranged.digR > 0, 'Bore produces a tunneling projectile');
+  const target = mkE({ x: P.x + 60, hp: 4000, maxhp: 4000 });
+  EN.push(target); P.rcd = 0; P.face = 1; doRanged();
+  A(PROJ.length > 0, 'Bore fires');
+  for (let i = 0; i < 60 && target.hp === 4000; i++) upProj(1 / 60);
+  A(target.hp < 4000, 'a tunneling projectile can still damage an enemy in its path');
+  // and it still digs
+  EN.length = 0; PROJ.length = 0;
+  const tx = Math.floor(P.x / TILE) + 4, ty = Math.floor(P.y / TILE);
+  for (let x = 0; x < 6; x++) setTile(tx + x, ty, 2);
+  P.rcd = 0; doRanged();
+  for (let i = 0; i < 60; i++) upProj(1 / 60);
+  A(getTile(tx, ty) === 0, 'a tunneling projectile still carves terrain');
+  EQ.ranged = mkItem('bow', 0); refreshAttacks();
+}
+
+// ---------- 13d. MORE REGRESSIONS ----------
+console.log('\n-- regressions II --');
+{
+  // `chain` was both the Chainmail gear id and the Chain support gem id, and unlock ids are
+  // shared across gems and gear — so 45 shards of Chainmail also handed over a 100-shard gem.
+  const ids = UNLOCKS.map(u => u.id);
+  const dupes = ids.filter((x, i) => ids.indexOf(x) !== i);
+  A(dupes.length === 0, 'no duplicate unlock ids' + (dupes.length ? ': ' + dupes.join(',') : ''));
+  const collide = Object.keys(GEMS).filter(g => GEAR[g]);
+  A(collide.length === 0, 'no id is both a gem and a gear base' + (collide.length ? ': ' + collide.join(',') : ''));
+}
+{
+  // Aftershock's explosion was hard-coded to 0 damage: the gem was a strict downgrade.
+  OFF(); NOCRIT(); EN.length = 0;
+  EQ.melee = mkItem('sword', 0); EQ.melee.sc = ['r', 'r']; EQ.melee.sockets = [null, null];
+  refreshAttacks();
+  let e = mkE({ x: P.x + 20 }); EN.push(e); P.mcd = 0; doMelee(); const plain = 5000 - e.hp;
+  EN.length = 0;
+  EQ.melee.sockets[0] = { id: 'aftershock', tier: 1 }; refreshAttacks();
+  e = mkE({ x: P.x + 20 }); EN.push(e); P.mcd = 0; doMelee(); const shocked = 5000 - e.hp;
+  A(ATK.melee.explode > 0, 'Aftershock adds an explosion');
+  A(shocked > 0, 'Aftershock still deals damage');
+  // it costs 15% `more`, so it should not be a pure loss on a single target either
+  A(shocked >= plain * 0.85, `Aftershock is not a strict downgrade (${plain.toFixed(1)} -> ${shocked.toFixed(1)})`);
+  EQ.melee.sockets = [null, null]; refreshAttacks();
+}
+{
+  // Shatter fires from applyStatus, which is called from upProj and killEnemy — outside the
+  // window where upPlayer used to zero P.hpDrain. The damage was silently discarded.
+  OFF(); P.st = null; P.hpDrain = 0; RUNB = RUNB0(); refreshAttacks();
+  P.maxhp = 500; P.hp = 400; P.inv = 0;
+  applyStatus(P, { burn: 30 }, true);
+  applyStatus(P, { chill: 0.5 }, true);   // triggers Shatter on the player
+  const before = P.hp;
+  upPlayer(1 / 60);
+  A(P.hp < before, 'Shatter actually damages the player instead of being discarded');
+  P.st = null; P.hpDrain = 0;
+}
+{
+  // Chunk contents must be a pure function of (SEED, cx, cy). Generating from the shared
+  // global RNG made a chunk depend on how many rolls had happened before you walked into it.
+  const key = '40,40';
+  CHUNKS.delete(key);
+  const a = Array.from(getChunk(40, 40).tiles);
+  CHUNKS.delete(key);
+  for (let i = 0; i < 5000; i++) RNG();          // burn the global stream
+  for (let i = 0; i < 40; i++) getChunk(60 + i, 70);  // and generate unrelated chunks
+  CHUNKS.delete(key);
+  const b = Array.from(getChunk(40, 40).tiles);
+  A(a.length === b.length && a.every((v, i) => v === b[i]),
+    'a chunk generates identically regardless of what happened to the global RNG first');
+}
+{
+  // Enemy explosive shots used to call explode(), which only ever damages ENEMIES — so a
+  // hostile shell bursting on rock friendly-fired its own side and never touched the player.
+  OFF(); EN.length = 0; PROJ.length = 0; P.inv = 0; P.hp = P.maxhp; P.armor = 0;
+  const bystander = mkE({ x: P.x + 20, hp: 3000, maxhp: 3000 });
+  EN.push(bystander);
+  const hp0 = P.hp, ehp0 = bystander.hp;
+  PROJ.push({ x: P.x + 6, y: P.y, vx: 40, vy: 0, dmg: 30, pierce: 0, explode: 60, st: null,
+    col: '#f00', t: 3, friendly: 0 });
+  for (let i = 0; i < 8 && PROJ.length; i++) upProj(1 / 60);
+  A(P.hp < hp0, 'a hostile explosive shot damages the player');
+  A(bystander.hp === ehp0, 'a hostile explosive shot does not friendly-fire other enemies');
+}
+{
+  // Decoy measured melee range against the decoy but always damaged the player.
+  OFF(); EN.length = 0; P.inv = 0; P.hp = P.maxhp;
+  // Keep the decoy inside the carved arena — outside it the enemy spawns embedded in rock.
+  DECOY = { x: P.x + 110, y: P.y, t: perf + 60, hp: 500 };
+  const E = ENEMIES.crawler;
+  const e = mkE({ x: DECOY.x + 12, hp: 500, maxhp: 500, dmg: 40, atk: E.atk, acd: 0, spd: 0 });
+  EN.push(e);
+  const hp0 = P.hp, dhp0 = DECOY.hp;
+  for (let i = 0; i < 120; i++) { P.inv = 0; upEnemies(1 / 60) }
+  A(P.hp === hp0, 'an enemy attacking the decoy cannot reach the player across the room');
+  A(DECOY.hp < dhp0, 'the decoy takes the hit instead');
+  DECOY = null;
+}
+{
+  // digPower() added the Delver bonus on top of a.dig, which computeAttack had already folded in.
+  META.cls = 'delver'; newRun(); OFF();
+  EQ.melee = mkItem('axe', 0); refreshAttacks();
+  A(digPower() === ATK.melee.dig, 'digPower matches the resolved weapon dig, no double count');
+  META.cls = 'vanguard'; newRun(); OFF();
 }
 
 // ---------- 14. BOSS PHASES ----------

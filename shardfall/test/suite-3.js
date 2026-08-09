@@ -5,7 +5,10 @@ try{
  // --- boons ---
  const cd0=ATK.melee.cd;
  const sh={x:P.x,y:P.y,used:false};SHRINES.push(sh);sim(1/60);
- A(sh.used&&paused,'shrine triggers on touch + pauses');
+ // The shrine is no longer consumed on contact — only on taking a boon — so that dismissing
+ // the panel can't destroy the reward. It still pauses immediately and is modal.
+ A(paused&&SHRINE_PICK.length===3,'shrine triggers on touch + pauses with 3 choices');
+ A(!sh.used,'the shrine is not consumed until a boon is chosen');
  A(SHRINE_PICK.length===3,'shrine offers 3 distinct boons');
  // force a known boon
  SHRINE_PICK=[BOONS.find(b=>b.id==='haste')];takeBoon(0);

@@ -332,7 +332,9 @@ const GEMS={
  siphon:   {t:'skill',for:'ranged',n:'Siphon Beam', col:'b', d:'continuous beam, leeches, drains focus',
    mod:a=>{a.dmg*=0.30;a.cd*=0.16;a.speed*=2.2;a.life=0.22;a.pierce+=2;a.leech=(a.leech||0)+0.10;a.chan=22;a.col='#bfe8ff'}},
  // ---- SUPPORT ----
- chain:    {t:'sup',for:'any', n:'Chain', col:'b', d:'hits jump to 2 more enemies',
+ // id is `chainbolt`, not `chain`: GEAR already has a `chain` (Chainmail), and unlock ids
+ // are shared across gems and gear, so `chain` unlocked both for one price.
+ chainbolt:{t:'sup',for:'any', n:'Chain', col:'b', d:'hits jump to 2 more enemies',
    mod:a=>{a.chain=(a.chain||0)+2;a.more*=0.9}},
  fork:     {t:'sup',for:'ranged',n:'Fork', col:'g', d:'projectiles split on first hit',
    mod:a=>{a.fork=1;a.more*=0.85}},
@@ -619,7 +621,7 @@ const UNLOCKS=[
  {id:'frostlance',n:'Frost Lance gem',         cost:95},
  {id:'sporeburst',n:'Spore Burst gem',         cost:90},
  {id:'siphon',    n:'Siphon Beam gem (channel)',cost:115},
- {id:'chain',     n:'Chain support',           cost:100},
+ {id:'chainbolt', n:'Chain support',           cost:100},
  {id:'fork',      n:'Fork support',            cost:85},
  {id:'ret',       n:'Return support',          cost:85},
  {id:'conc',      n:'Concentrated support',    cost:105},
@@ -656,6 +658,12 @@ const CHUNKS=new Map(); // "cx,cy" -> {tiles:Uint8Array, cv:canvas, dirty, spawn
 function biomeAt(ty){for(const b of BIOMES){if(ty<b[0])return b}return BIOMES[BIOMES.length-1]}
 function surfH(tx){return Math.floor(SURFACE+noise2(tx*0.02,7.7)*14-7)}
 function genChunk(cx,cy){
+ // Per-chunk RNG. The global stream is shared with combat, loot and render, and chunks are
+ // generated lazily as they come into view — so using it made a chunk's contents depend on
+ // how many rolls had happened before you walked there, not just on the seed.
+ const CR=mulberry((SEED^Math.imul(cx,374761393)^Math.imul(cy,668265263))>>>0);
+ const ri=(a,b)=>a+Math.floor(CR()*(b-a+1));
+ const chance=p=>CR()<p;
  const t=new Uint8Array(CHUNK*CHUNK), spawns=[];
  for(let ly=0;ly<CHUNK;ly++){const ty=cy*CHUNK+ly;
   for(let lx=0;lx<CHUNK;lx++){const tx=cx*CHUNK+lx;
@@ -848,6 +856,12 @@ let EQ={melee:null,ranged:null,armor:null};
 let BAG=[]; // {kind:'gear',item} | {kind:'gem',id}
 let EN=[],PROJ=[],PICK=[],PART=[],DMGN=[],CHESTS=[],SHRINES=[],ANCHOR=null,GRAPPLE=null;
 let SENTRY=[],DECOY=null;
+// Deferred spawn queue. killEnemy runs from inside `for (const e of EN)` loops in doMelee,
+// explode and tickStatus; pushing to EN there means the live iteration walks straight into
+// the newly spawned enemies. Queue them and flush once per frame instead.
+let SPAWNQ=[];
+function queueEnemy(e){if(EN.length+SPAWNQ.length<120)SPAWNQ.push(e)}
+function flushSpawns(){if(SPAWNQ.length){for(const e of SPAWNQ)EN.push(e);SPAWNQ.length=0}}
 let RUNB={dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0};
 const RUNB0=()=>({dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0});
 let shake=0,hitstop=0,runDepth=0,paused=false;
@@ -881,7 +895,9 @@ function isShield(slot){const it=EQ[slot];return !!(it&&GEAR[it.base].shield)}
 function maxFuel(){let f=60+inc('fuel');if(auraHas('updraft'))f+=70;return f}
 function digPower(){ // best dig stat across equipped weapons — used by abilities/traversal
  let d=0;for(const k of ['melee','ranged']){const a=ATK[k];if(a&&a.dig!==undefined)d=Math.max(d,a.dig)}
- return d+classFx('digBonus')}
+ // computeAttack has ALREADY folded classFx('digBonus') into a.dig. Adding it again here gave
+ // the Delver double credit and let Shaft/Quake/Burrow chew through hardness they shouldn't.
+ return d}
 function moveSpd(){let m=MOVE*(1+inc('ms'))*chillMul(P);
  if(auraHas('swiftness'))m*=1.15;
  if(auraHas('undertow')&&P.hp<P.maxhp*0.4)m*=1.25;
@@ -896,7 +912,9 @@ function moveSpd(){let m=MOVE*(1+inc('ms'))*chillMul(P);
 // `a.more` is the ONLY multiplicative accumulator. `a.inc` is the additive one. resolveDmg()
 // is the single place they combine, so no caller can get the order wrong.
 function resolveDmg(a,dkey){
- a.inc=(a.inc||0)+inc(dkey)+inc('dmg');
+ // `dmg` is the universal increased-damage stat; dkey adds the type-specific one on top.
+ // Passing dkey==='dmg' (abilities do) must NOT count the universal pool twice.
+ a.inc=(a.inc||0)+inc('dmg')+(dkey&&dkey!=='dmg'?inc(dkey):0);
  a.dmg=a.dmg*(1+a.inc)*a.more;
  // ailment potencies are ratios of FINAL damage, so a support gem's `more` feeds the DoT too.
  // Deep Cut's `ailMore` lands here and nowhere else — that's what lets it trade hit damage
@@ -924,6 +942,8 @@ function computeAttack(slot){
  const b=GEAR[it.base];
  const kind=b.shield?'melee':b.slot; // shield attacks like melee (bash) in either slot
  const a=baseAttack(b,kind);
+ // Warding is a `more` penalty so it lands BEFORE ailment potency is derived from damage.
+ if(auraHas('warding'))a.more*=0.9;
  const gems=it.sockets.filter(g=>gemOf(g));
  for(const g of gems){const G=gemOf(g);if(G.t==='skill'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
  for(const g of gems){const G=gemOf(g);if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
@@ -937,9 +957,10 @@ function computeAttack(slot){
  a.cd*=1/(1+inc('cdr'));
  a.kb*=1+inc('kb');
  if(a.pierce!==undefined)a.pierce+=inc('pierce');
- a.crit=critChance()+(a.critAdd||0);a.critMult=critMultVal()+(a.critMultAdd||0);
+ // cap AFTER critAdd: clamping inside critChance() alone let Precision push past 95%
+ a.crit=Math.max(0,Math.min(0.95,critChance()+(a.critAdd||0)));
+ a.critMult=critMultVal()+(a.critMultAdd||0);
  a.leech=(a.leech||0)+inc('leech');
- if(auraHas('warding'))a.dmg*=0.9;   // Warding buys status resist with raw damage
  return a}
 // Cached attack params — recompute only when build changes (equip/socket/tree)
 let ATK={melee:null,ranged:null,abil:null};
@@ -1009,7 +1030,8 @@ function useAbility(){
    let pot=0;for(const k of ['burn','bleed'])pot+=stSum(e,k);
    if(pot<=0)continue;
    delete e.st.burn;delete e.st.bleed;
-   const d=pot*3.2*ailmentMul();total+=d;n++;
+   // potency already carries ailmentMul() from resolveDmg — same double-count as Shatter had
+   const d=pot*3.2;total+=d;n++;
    hurtEnemy(e,d,0,'#e05555',null,true,true);burst(e.x,e.y,'#e05555',14)}
   shake=Math.max(shake,10);flash(0.2);
   toast(n?'Rupture — '+Math.round(total)+' across '+n:'Rupture — nothing to consume')}
@@ -1124,7 +1146,8 @@ function statusCombo(o,k,isPlayer){
  if((k==='chill'&&S.burn&&S.burn.length)||(k==='burn'&&S.chill&&S.chill.length)){
   const pot=(S.burn||[]).reduce((s,x)=>s+x.p,0);
   delete S.burn;delete S.chill;
-  const d=pot*1.6*ailmentMul();
+  // potency already carries ailmentMul() from resolveDmg; applying it again squares it
+  const d=pot*1.6;
   burst(o.x,o.y,'#bfe8ff',14);
   if(isPlayer){o.hpDrain=(o.hpDrain||0)+d}
   else{o.hp-=d;dmgNum(o.x,o.y-o.h,d,'#bfe8ff');if(o.hp<=0)killEnemy(o)}
@@ -1181,7 +1204,9 @@ function doMelee(){
   const ang=Math.atan2(dy,dx),diff=Math.abs(Math.atan2(Math.sin(ang-fang),Math.cos(ang-fang)));
   if(diff<=half||d<12){
    strike(e,a,Math.sign(dx||P.face)*a.kb);hit=true;
-   if(a.explode)explode(e.x,e.y,a.explode,0,a.col,a.st)}}
+   // Aftershock's blast used to be hard-coded to 0 damage, so the gem cost 15% less damage
+   // and gave literally nothing back. `skip` keeps it from double-hitting the enemy already struck.
+   if(a.explode)explode(e.x,e.y,a.explode,a.dmg*0.6,a.col,a.st,a,e)}}
  for(const ch of CHESTS){if(!ch.opened&&Math.hypot(ch.x-P.x,ch.y-P.y)<a.range+10)openChest(ch)}
  // dig soft tiles in front
  const cut=carve(P.x+P.face*a.range*0.8,P.y,a.digR||TILE*1.5,a.dig>=0?a.dig:-1);
@@ -1209,6 +1234,10 @@ function doRanged(){
   PROJ.push({x:P.x,y:P.y-4,vx:(v.x*c-v.y*s)*a.speed,vy:(v.x*s+v.y*c)*a.speed,
    dmg:a.dmg,crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:a.leech||0,st:a.st||null,
    digR:a.digR||0,dig:a.dig,digCost:a.digCost||0,grav:a.grav||0,homing:a.homing||0,fork:a.fork||0,ret:a.ret||0,
+   bounce:a.bounce||0,
+   // Conditional gems ride along on the projectile — they resolve at impact, not at fire time.
+   // Without this, Momentum/Culling/Chain/Reap/Sunder are pure `more` penalties when ranged.
+   momentum:a.momentum||0,cull:a.cull||0,chain:a.chain||0,reap:a.reap||0,sunder:a.sunder||0,
    ox:P.x,oy:P.y,col:a.col,t:a.life||2,friendly:1})}
  shake=Math.max(shake,2);sfx('shoot')}
 function doMeleeAs(a){if(P.rcd>0)return;P.rcd=a.cd;
@@ -1283,8 +1312,8 @@ function killEnemy(e){
    applyStatus(P,D.burnDeath?{burn:e.dmg*0.4}:{chill:0.7},true)}}
  // Void spawn: splits into halves, so killing it fast in a corner is a mistake.
  if(D.split&&!e.isSplit){const H=ENEMIES.voidling,m=depthMul(e.y);
-  for(let i=0;i<D.split;i++){if(EN.length>=120)break;
-   EN.push({x:e.x+rr(-14,14),y:e.y-6,vx:rr(-90,90),vy:-140,w:H.w,h:H.h,type:'voidling',ai:H.ai,c:H.c,
+  for(let i=0;i<D.split;i++){
+   queueEnemy({x:e.x+rr(-14,14),y:e.y-6,vx:rr(-90,90),vy:-140,w:H.w,h:H.h,type:'voidling',ai:H.ai,c:H.c,
     hp:H.hp*m,maxhp:H.hp*m,dmg:H.dmg*m,arm:0,spd:H.spd,onG:false,flash:0,dir:i?1:-1,
     boss:false,elite:null,shoot:null,scd:0,atk:H.atk,acd:rr(.2,.6),wind:0,act:0,invT:0,phase:0,ph:null,isSplit:1})}}
  if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitstop=0.18;
@@ -1382,8 +1411,8 @@ function bossPattern(e,pat){
   PROJ.push({x:e.x+k*26,y:e.y-10,vx:0,vy:-40,dmg:e.dmg*0.45,pierce:0,explode:34,stR:null,st:{burn:e.dmg*0.3},col:'#ff8a3f',t:2.4,friendly:0})}
  else if(pat==='summon'){const t=BIOMES.find(b=>b[1]===biomeName(Math.floor(e.y/TILE)));
   const types=(t&&t[4])||['crawler'];
-  for(let k=0;k<3;k++){if(EN.length>=120)break;const ty=types[ri(0,types.length-1)],E2=ENEMIES[ty];
-   EN.push({x:e.x+rr(-60,60),y:e.y-20,vx:0,vy:0,w:E2.w,h:E2.h,type:ty,ai:E2.ai,c:E2.c,
+  for(let k=0;k<3;k++){const ty=types[ri(0,types.length-1)],E2=ENEMIES[ty];
+   queueEnemy({x:e.x+rr(-60,60),y:e.y-20,vx:0,vy:0,w:E2.w,h:E2.h,type:ty,ai:E2.ai,c:E2.c,
     hp:E2.hp*dm,maxhp:E2.hp*dm,dmg:E2.dmg*dm,arm:E2.arm||0,spd:E2.spd,onG:false,flash:0,dir:1,
     boss:false,elite:null,shoot:E2.shoot||null,scd:rr(.5,1.5),atk:E2.atk||null,acd:rr(.3,1),
     wind:0,act:0,invT:0,phase:0,ph:null})}}}
@@ -1392,6 +1421,7 @@ function upEnemies(dt){
   if(e.hp<=0){EN.splice(i,1);continue}
   // Decoy steals aggro from anything close enough to notice it.
   const tgt=(DECOY&&Math.hypot(DECOY.x-e.x,DECOY.y-e.y)<260)?DECOY:P;
+  const onDecoy=tgt!==P;   // range is measured against the target; damage must follow it
   const dx=tgt.x-e.x,dy=tgt.y-e.y,d=Math.hypot(dx,dy);
   e.flash=Math.max(0,e.flash-dt);
   e.invT=Math.max(0,(e.invT||0)-dt);   // `||0`: enemies built by hand in tests have no invT
@@ -1417,13 +1447,16 @@ function upEnemies(dt){
   let lunging=false;
   if(e.atk){e.acd=Math.max(0,e.acd-dt);
    if(e.act>0){e.act-=dt;lunging=true;
-    if(Math.abs(dx)<(e.w+P.w)/2+6&&Math.abs(dy)<(e.h+P.h)/2+6){
-     const before=P.inv;hurtPlayer(e.dmg);
-     if(P.inv>before){
-      P.vx+=Math.sign(-dx||1)*-(e.atk.kb||150);
-      if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
-      if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a');
-      e.act=0}}}
+    const tw=onDecoy?12:P.w, th=onDecoy?20:P.h;
+    if(Math.abs(dx)<(e.w+tw)/2+6&&Math.abs(dy)<(e.h+th)/2+6){
+     if(onDecoy){DECOY.hp-=e.dmg;burst(DECOY.x,DECOY.y,'#e8e2d0',5);e.act=0}
+     else{
+      const before=P.inv;hurtPlayer(e.dmg);
+      if(P.inv>before){
+       P.vx+=Math.sign(-dx||1)*-(e.atk.kb||150);
+       if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
+       if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a');
+       e.act=0}}}}
    else if(e.wind>0){e.wind-=dt;
     e.vx*=0.82;                                  // brace: the enemy visibly commits
     if(e.wind<=0){e.act=e.atk.act;e.vx=Math.sign(dx||e.dir)*(e.atk.lunge||160)}}
@@ -1441,7 +1474,7 @@ function upEnemies(dt){
    collideMove(e,e.vx*dt,Math.min(e.vy*dt,14));
   }else{ // fly
    if(winding){e.vx*=0.8;e.vy*=0.8}
-   else if(d<380){e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}
+   else if(d<380&&d>0.001){e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}
    else{e.vx+=Math.sin(perf*2+e.x)*10*dt;e.vy+=Math.cos(perf*1.7+e.y)*10*dt}
    // Wraiths ignore terrain entirely — there is no wall to put between you and the abyss.
    if(ENEMIES[e.type]&&ENEMIES[e.type].phase){e.x+=e.vx*dt;e.y+=e.vy*dt;e.onG=false;
@@ -1449,7 +1482,7 @@ function upEnemies(dt){
    else collideMove(e,e.vx*dt,e.vy*dt);
    e.vy*=0.98;e.vx*=0.98}
   // Enemies with no attack block at all still body-check, so nothing is harmless by omission.
-  if(!e.atk&&Math.abs(dx)<(e.w+P.w)/2&&Math.abs(dy)<(e.h+P.h)/2){const before=P.inv;hurtPlayer(e.dmg);
+  if(!e.atk&&!onDecoy&&Math.abs(dx)<(e.w+P.w)/2&&Math.abs(dy)<(e.h+P.h)/2){const before=P.inv;hurtPlayer(e.dmg);
    if(P.inv>before){
     if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
     if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a')}}}}
@@ -1475,14 +1508,20 @@ function upProj(dt){
    const cut=carve(p.x,p.y,p.digR,p.dig!==undefined?p.dig:0);
    if(cut>0&&p.digCost)p.t-=p.digCost*cut;
    tunneled=true}
-  if(tunneled&&p.t>0){}
-  else if(solidAt(p.x,p.y)){
+  // A tunneling projectile is not stopped by terrain — but it must STILL be able to hit
+  // things. The old chain made "tunneled" its own branch, so Bore and Excavate carved a
+  // beautiful corridor and could never damage a single enemy standing in it.
+  if(!tunneled&&solidAt(p.x,p.y)){
    if(p.bounce>0&&!p.returning){ // Grenade bounces off geometry instead of dying on it
     p.bounce--;
     if(solidAt(p.x,p.y-p.vy*dt))p.vx*=-0.6;else p.vy*=-0.55;
     p.x-=p.vx*dt;p.y-=p.vy*dt;burst(p.x,p.y,p.col,2)}
    else{dead=true;
-    if(p.explode)explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p);
+    // explode() only damages ENEMIES, so an enemy shell bursting on rock would friendly-fire
+    // its own side. A hostile blast checks the player instead.
+    if(p.explode&&p.friendly)explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p);
+    else if(p.explode){burst(p.x,p.y,p.col,14);shake=Math.max(shake,5);carve(p.x,p.y,p.explode*0.55,0);
+     if(Math.hypot(P.x-p.x,P.y-p.y)<p.explode){hurtPlayer(p.dmg);if(p.st)applyStatus(P,p.st,true)}}
     else burst(p.x,p.y,p.col,3)}}
   else if(!p.friendly){
    if(Math.abs(p.x-P.x)<P.w/2+3&&Math.abs(p.y-P.y)<P.h/2+3&&!P.dead){
@@ -1490,7 +1529,9 @@ function upProj(dt){
     const facing=Math.sign(p.x-P.x)===P.face;
     if(P.block&&facing){burst(p.x,p.y,'#9fd0ff',5);dead=true;sfx('block');
      if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2)}
-    else{hurtPlayer(p.dmg);if(p.st)applyStatus(P,p.st,true);if(p.explode)explode(p.x,p.y,p.explode,0,p.col);dead=true}}}
+    else{hurtPlayer(p.dmg);if(p.st)applyStatus(P,p.st,true);
+     if(p.explode){burst(p.x,p.y,p.col,14);shake=Math.max(shake,5);carve(p.x,p.y,p.explode*0.55,0)}
+     dead=true}}}
   else{for(const e of EN){if(e.hp<=0||e.invT>0)continue;
    if(p.hitList&&p.hitList.indexOf(e)>=0)continue;   // pierced targets are never hit twice
    if(Math.abs(e.x-p.x)<e.w/2+3&&Math.abs(e.y-p.y)<e.h/2+3){
@@ -1504,18 +1545,27 @@ function upProj(dt){
     if(p.pierce>0){p.pierce--;(p.hitList||(p.hitList=[])).push(e)}else{dead=true}break}}}
   if(dead)PROJ.splice(i,1)}}
 // One place where a projectile turns into damage, so crit/leech/focus can't be forgotten.
+// Mirrors strike(): the same conditional gems must pay out on a ranged build, or Momentum,
+// Culling, Chain, Reap and Sunder are strictly negative for every ranged skill in the game.
 function projStrike(e,p){
  const crit=p.crit>0&&chance(p.crit);
- const dmg=p.dmg*(crit?(p.critMult||CRIT_MULT):1);
+ let dmg=p.dmg*(crit?(p.critMult||CRIT_MULT):1);
+ if(p.momentum)dmg*=1+Math.min(1,Math.abs(P.vx)/Math.max(1,MOVE))*p.momentum;
+ if(p.reap&&e.maxhp)dmg*=1+(1-e.hp/e.maxhp)*p.reap;
+ if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))dmg*=1.3;
  let st=p.st;
  if(crit&&st){st={};for(const k in p.st)st[k]=p.st[k]*(k==='chill'?1:CRIT_ST)}
+ if(p.sunder)e.arm=Math.max(0,(e.arm||0)-p.sunder);
  hurtEnemy(e,dmg,Math.sign(p.vx)*60,crit?'#d8a53f':p.col,st,false,crit);
  if(p.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*p.leech);
+ if(p.cull&&e.hp>0&&e.maxhp&&e.hp<e.maxhp*p.cull){
+  dmgNum(e.x,e.y-e.h,e.hp,'#ffe9a0',true);e.hp=0;burst(e.x,e.y,'#ffe9a0',12);killEnemy(e)}
+ if(p.chain)chainFrom(e,dmg*0.6,p.col,p.chain);
  gainFocus(FOCUS_HIT*0.6);
  if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT)}
-function explode(x,y,r,dmg,col,st,src){
+function explode(x,y,r,dmg,col,st,src,skip){
  burst(x,y,col,14);shake=Math.max(shake,5);
- if(dmg>0)for(const e of EN){if(e.hp<=0||e.invT>0)continue;
+ if(dmg>0)for(const e of EN){if(e.hp<=0||e.invT>0||e===skip)continue;
   if(Math.hypot(e.x-x,e.y-y)<r+e.w/2){
    const crit=src?(src.crit>0&&chance(src.crit)):false;
    const d=dmg*(crit?(src.critMult||CRIT_MULT):1);
@@ -1577,8 +1627,10 @@ function upPlayer(dt){
  if(P.shield>0&&perf>P.shieldT)P.shield=0;
  gainFocus(FOCUS_REGEN*dt);                            // slow trickle out of combat
  applyWeight(dt);
- if(P.st){P.hpDrain=0;tickStatus(P,dt,true);
-  if(P.hpDrain>0){P.hp-=P.hpDrain;if(P.hp<=0){die();return}}}
+ // Drain, don't clear. Zeroing first discarded anything credited between frames — which is
+ // most of the interesting cases, since ailments are applied from upProj and killEnemy.
+ if(P.st)tickStatus(P,dt,true);
+ if(P.hpDrain>0){const d=P.hpDrain;P.hpDrain=0;P.hp-=d;if(P.hp<=0){die();return}}
  const ms=moveSpd();
  if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*2.4;P.vy=Math.min(P.vy,0)}
  else{
@@ -1642,13 +1694,13 @@ function die(){if(P.dead)return;
   <tr><td>Run</td><td>#${META.runs}</td></tr>
  </table>${newly}
  <p class="sub">Run gear is lost. Shards, unlocks and the Vault are forever.</p>
- <button onclick="newRun()">RISE AGAIN</button>`)}
+ <button onclick="newRun()">RISE AGAIN</button>`,true)}
 let RUNBANDS={},UNLOCK_MSG=[];
 function newRun(){
  SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);
  CHUNKS.clear();EN.length=0;PROJ.length=0;PICK.length=0;PART.length=0;DMGN.length=0;
  BAG.length=0;CHESTS.length=0;SHRINES.length=0;SENTRY.length=0;ARCS.length=0;
- ANCHOR=null;DECOY=null;runDepth=0;RUNSHARDS=0;RUNBANDS={};UNLOCK_MSG=[];
+ ANCHOR=null;DECOY=null;SPAWNQ.length=0;runDepth=0;RUNSHARDS=0;RUNBANDS={};UNLOCK_MSG=[];
  RUNB=RUNB0();BUFFS.length=0;
  const C=CLASSES[META.cls]||CLASSES.vanguard;
  const kit=META.useClassKit!==false?C.kit:META.loadout;
@@ -1660,10 +1712,13 @@ function newRun(){
  if(C.gem&&EQ[C.gem.slot]&&EQ[C.gem.slot].sockets.length){
   const it=EQ[C.gem.slot];it.sockets[0]={id:C.gem.id,tier:1};it.sc[0]=GEMS[C.gem.id].col||'r'}
  // THE VAULT (§3.5): whatever you banked before dying comes back with you.
+ // Deep-copy on withdrawal. Handing out the stored object itself means socketing a gem into
+ // your vaulted axe this run edits the permanent save, and the next saveMeta() writes it.
  for(const v of (META.vault||[])){if(v&&GEAR[v.base]){
-  const sl=GEAR[v.base].slot==='any'?(EQ.melee?'ranged':'melee'):GEAR[v.base].slot;
-  if(!EQ[sl]||EQ[sl].rarity<v.rarity){if(EQ[sl])BAG.push({kind:'gear',item:EQ[sl]});EQ[sl]=v}
-  else BAG.push({kind:'gear',item:v})}}
+  const copy=JSON.parse(JSON.stringify(v));copy.uid=itemUid++;copy.fromVault=1;
+  const sl=GEAR[copy.base].slot==='any'?(EQ.melee?'ranged':'melee'):GEAR[copy.base].slot;
+  if(!EQ[sl]||EQ[sl].rarity<copy.rarity){if(EQ[sl])BAG.push({kind:'gear',item:EQ[sl]});EQ[sl]=copy}
+  else BAG.push({kind:'gear',item:copy})}}
  refreshAttacks();
  const sb=META.startBiome||'surface';
  if(sb==='surface'){P.x=CAMP_X*TILE;P.y=(surfH(CAMP_X)-3)*TILE}
@@ -1678,16 +1733,20 @@ function newRun(){
  P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
  shake=0;hitstop=0;FLASH=0;CALLOUT=null;
- closePanel();
+ closePanel(true);
 }
 
 // ============ UI: PANELS / TOAST ============
 const $=id=>document.getElementById(id);
-function openPanel(html){$('panel').innerHTML=html;$('overlay').style.display='flex';paused=true}
-function closePanel(){$('overlay').style.display='none';if(!P.dead)paused=false}
+let MODAL=false;
+function openPanel(html,modal){MODAL=!!modal;$('panel').innerHTML=html;$('overlay').style.display='flex';paused=true}
+// A modal panel demands a choice. Dismissing the death screen used to hide the overlay while
+// leaving paused=true — the game was still running nothing, with no way back.
+function closePanel(force){if(MODAL&&!force)return;
+ MODAL=false;$('overlay').style.display='none';if(!P.dead)paused=false}
 let toastT=null;
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',1600)}
-$('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!P.dead)closePanel()});
+$('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!MODAL&&!P.dead)closePanel()});
 
 // -------- inventory / equip / socket --------
 // The socket screen is the most-used screen in the game (DESIGN-PLAN §7). Item at the top,
@@ -1775,18 +1834,21 @@ function fuseGem(id,tier){
  sfx('level');toast(GEMS[id].n+' → tier '+(tier+1));openBag()}
 
 // -------- shrine --------
-let SHRINE_PICK=[];
+let SHRINE_PICK=[],SHRINE_SRC=null;
 function openShrine(sh){
- sh.used=true;const pool=BOONS.slice(),pick=[];
+ // Marked used in takeBoon, not here. Consuming it up front meant any dismissal — a stray
+ // tap on the backdrop — destroyed the boon and left a dead shrine behind.
+ SHRINE_SRC=sh;const pool=BOONS.slice(),pick=[];
  for(let i=0;i<3&&pool.length;i++)pick.push(pool.splice(ri(0,pool.length-1),1)[0]);
  SHRINE_PICK=pick;
  let h='<h2>SHRINE</h2><div class="sub">Choose a boon. Lasts this run only.</div>';
  pick.forEach((b,i)=>{h+=`<button onclick="takeBoon(${i})">${b.n} <span class="sub">— ${b.d}</span></button>`});
- openPanel(h)}
+ openPanel(h,true)}
 function takeBoon(i){const b=SHRINE_PICK[i];if(!b)return;
+ if(SHRINE_SRC)SHRINE_SRC.used=true;SHRINE_SRC=null;
  for(const k in b.fx)RUNB[k]=(RUNB[k]||0)+b.fx[k];
  P.maxhp=maxHP();P.hp=Math.min(Math.max(1,P.hp+(b.fx.hp>0?b.fx.hp:0)),P.maxhp);
- refreshAttacks();toast('Boon: '+b.n);closePanel()}
+ refreshAttacks();sfx('level');toast('Boon: '+b.n);closePanel(true)}
 
 // -------- camp --------
 function nearCamp(){
@@ -1861,6 +1923,10 @@ function openVault(){
  if(META.vault.length>=3)h+='<div class="sub">Vault full — remove something first.</div>';
  else if(!carried.length)h+='<div class="sub">nothing carried</div>';
  else carried.forEach((c,i)=>{const cost=VAULT_COST[c.item.rarity]||100;
+  // An item that CAME from the vault cannot go back in — otherwise every run mints another
+  // permanent copy of it for shards, which is unlimited item duplication.
+  if(c.item.fromVault){h+=`<button disabled><span class="r${c.item.rarity}">${itemName(c.item)}</span>
+   <span class="sub">already stored in the vault</span></button>`;return}
   h+=`<button ${META.shards<cost?'disabled':''} onclick="vaultPut(${i})">
    <span class="r${c.item.rarity}">${itemName(c.item)}</span>
    <span class="sub">${c.from?'equipped '+c.from:'in bag'} — ${cost}◆</span></button>`});
@@ -1868,6 +1934,7 @@ function openVault(){
  VAULT_SRC=carried;openPanel(h)}
 let VAULT_SRC=[];
 function vaultPut(i){const c=VAULT_SRC[i];if(!c||META.vault.length>=3)return;
+ if(c.item.fromVault)return;   // see openVault: re-depositing would duplicate the item
  const cost=VAULT_COST[c.item.rarity]||100;
  if(META.shards<cost)return;
  META.shards-=cost;META.vault.push(c.item);
@@ -1875,7 +1942,9 @@ function vaultPut(i){const c=VAULT_SRC[i];if(!c||META.vault.length>=3)return;
  else BAG.splice(c.bag,1);
  saveMeta();sfx('level');toast('Vaulted: '+itemName(c.item));openVault()}
 function vaultTake(i){const v=META.vault[i];if(!v)return;
- META.vault.splice(i,1);saveMeta();BAG.push({kind:'gear',item:v});toast('Withdrawn to bag');openVault()}
+ META.vault.splice(i,1);saveMeta();
+ delete v.fromVault;   // no longer stored, so it may be deposited again later
+ BAG.push({kind:'gear',item:v});toast('Withdrawn to bag');openVault()}
 function buyUnlock(id){const u=UNLOCKS.find(x=>x.id===id);if(META.shards>=u.cost&&!META.unlocks[id]){META.shards-=u.cost;META.unlocks[id]=1;saveMeta();toast('Unlocked: '+u.n)}openCamp()}
 function buyNode(id){const n=TREE.find(x=>x.id===id);if(META.shards>=n.cost&&!META.tree[id]){META.shards-=n.cost;META.tree[id]=1;saveMeta();P.maxhp=maxHP();refreshAttacks();toast(n.n)}openCamp()}
 // ============ INPUT ============
@@ -1889,10 +1958,11 @@ addEventListener('keydown',e=>{if(e.repeat)return;KEYS[e.code]=true;
  if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp'){P.jbuf=0.12;HELD.jmp=true}
  if(e.code==='KeyJ'||e.code==='KeyZ')HELD.mel=true;
  if(e.code==='KeyK'||e.code==='KeyX')HELD.rng=true;
- if(e.code==='ShiftLeft'||e.code==='KeyL')dodge();
- if(e.code==='KeyF'||e.code==='KeyQ')useAbility();
+ if(!paused){
+  if(e.code==='ShiftLeft'||e.code==='KeyL')dodge();
+  if(e.code==='KeyF'||e.code==='KeyQ')useAbility()}
  if(e.code==='KeyE')($('overlay').style.display==='flex')?closePanel():openBag();
- if(e.code==='KeyC'&&nearCamp())openCamp();
+ if(e.code==='KeyC'&&!paused&&nearCamp())openCamp();
  if(e.code==='Escape')closePanel()});
 addEventListener('keyup',e=>{KEYS[e.code]=false;
  if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp')HELD.jmp=false;
@@ -1916,8 +1986,8 @@ function bindBtn(id,down,up){const el=$(id);
 bindBtn('bJump',()=>{P.jbuf=0.12;HELD.jmp=true},()=>HELD.jmp=false);
 bindBtn('bMel',()=>HELD.mel=true,()=>HELD.mel=false);
 bindBtn('bRng',()=>HELD.rng=true,()=>HELD.rng=false);
-bindBtn('bDodge',dodge);
-bindBtn('bAbil',useAbility);
+bindBtn('bDodge',()=>{if(!paused)dodge()});
+bindBtn('bAbil',()=>{if(!paused)useAbility()});
 $('bagBtn').addEventListener('click',openBag);
 $('mapBtn').addEventListener('click',()=>{MMON=!MMON;toast('Minimap '+(MMON?'on':'off'))});
 $('campBtn').addEventListener('click',openCamp);
@@ -1963,9 +2033,14 @@ function drawMinimap(){
   const tx=ptx+(mx-MMW/2)*MMSTEP,ty=pty+(my-MMH/2)*MMSTEP;
   if(tx<0||ty<0||tx>=WORLD_W||ty>=WORLD_H)continue;
   const cx=Math.floor(tx/CHUNK),cy=Math.floor(ty/CHUNK);
-  if(!CHUNKS.has(chunkKey(cx,cy))&&!pros)continue;   // undiscovered chunks stay dark
-  const v=getTile(tx,ty);if(v===0)continue;
+  // NEVER getTile() here. getTile generates the chunk on demand, and generation draws from
+  // the world RNG — so a render-path read would change what the world contains. Only ever
+  // sample chunks that already exist. (Prospector reveals detail WITHIN discovered chunks,
+  // it does not conjure new ones.)
+  const c=CHUNKS.get(chunkKey(cx,cy));if(!c)continue;
+  const v=c.tiles[(ty%CHUNK)*CHUNK+(tx%CHUNK)];if(v===0)continue;
   const T=TILES[v];
+  if(!pros&&(T.ore||T.secret)){g.fillStyle=T.c;g.fillRect(mx,my,1,1);continue}
   g.fillStyle=(T.ore||T.secret)?'#3fc9c1':T.c;g.fillRect(mx,my,1,1)}
  const mark=(wx,wy,col,sz)=>{const mx=(wx/TILE-ptx)/MMSTEP+MMW/2,my=(wy/TILE-pty)/MMSTEP+MMH/2;
   if(mx>0&&mx<MMW&&my>0&&my<MMH){g.fillStyle=col;g.fillRect(mx-1,my-1,sz,sz)}};
@@ -2163,7 +2238,7 @@ function sim(dt){
  P.block=(HELD.mel&&isShield('melee')&&HOLDm>0.18)||(HELD.rng&&isShield('ranged')&&HOLDr>0.18);
  PREVm=HELD.mel;PREVr=HELD.rng;
  IN.x=IN.tx!==undefined&&IN.tx!==0?IN.tx:kbAxis();
- upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upSentry(dt);upDecoy(dt);upPickups(dt);
+ upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);
  if(!P.dead){if(auraHas('regrowth'))P.hp=Math.min(P.maxhp,P.hp+2*dt);
   if(auraHas('staticfield')&&(staticT-=dt)<=0){staticT=1.6;   // Static Field: periodic shock pulse
    burst(P.x,P.y,'#e6d34a',8);
