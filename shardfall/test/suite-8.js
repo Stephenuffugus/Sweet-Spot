@@ -354,6 +354,39 @@ console.log('\n-- regressions --');
   META.threat = save;
 }
 
+{
+  // One swing can kill an enemy (level-up modal) and crack a chest (fragment modal) in the
+  // same frame. The second used to replace the first, losing the level-up UI while P.picks
+  // stayed above zero — an unspendable pick and a silently eaten reward.
+  newRun(); OFF(); NOCRIT();
+  EN.length = 0; CHESTS.length = 0; PANEL_Q.length = 0;
+  META.seen.frag = {};
+  EQ.melee = mkItem('sword', 0); refreshAttacks();
+  const e = mkE({ x: P.x + 16, hp: 1, maxhp: 40 }); EN.push(e);
+  CHESTS.push({ x: P.x + 12, y: P.y, opened: false });
+  P.xp = P.xpNeed - 1;   // the kill will level us
+  P.mcd = 0; doMelee(); flushSpawns();
+  const first = document.getElementById('panel').innerHTML;
+  A(P.picks > 0 || PANEL_Q.length > 0, 'the swing produced at least one modal');
+  A(paused, 'and paused the game');
+  // whatever queued behind it must still be reachable
+  const queued = PANEL_Q.length;
+  if (queued) {
+    closePanel(true);
+    A(paused, 'closing the first modal presents the queued one rather than resuming');
+    A(document.getElementById('panel').innerHTML !== first, 'and it is a different panel');
+  } else {
+    A(true, 'only one modal was raised this frame');
+  }
+  // dying clears anything still queued
+  PANEL_Q.push(['<h2>ghost</h2>', true, null]);
+  P.dead = false; P.hp = 1; P.inv = 0; P.armor = 0; RUNM = RUNM0();
+  hurtPlayer(9999);
+  A(P.dead && PANEL_Q.length === 0, 'death discards any queued modal');
+  A(document.getElementById('panel').innerHTML.includes('YOU DIED'), 'and the death screen is what is showing');
+  newRun(); OFF(); CHESTS.length = 0;
+}
+
 // ---------- 7. INTEGRATION ----------
 console.log('\n-- integration --');
 {

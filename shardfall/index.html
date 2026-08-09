@@ -2077,7 +2077,8 @@ function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
  if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthMul(P.y),'#ffcf8a',{burn:8*depthMul(P.y)})}}
 let DYING=false;
 function die(){if(P.dead)return;
- P.dead=true;DYING=true;paused=true;P.hp=0;sfx('die');flash(0.5);
+ // A queued fragment or level-up must not resurface over — or after — the death screen.
+ P.dead=true;DYING=true;PANEL_Q.length=0;paused=true;P.hp=0;sfx('die');flash(0.5);
  META.bestDepth=Math.max(META.bestDepth||0,runDepth);
  META.runs=(META.runs||0)+1;saveMeta();
  const newly=UNLOCK_MSG.length?`<div class="sub" style="color:var(--acc)">Unlocked this run: ${UNLOCK_MSG.join(', ')}</div>`:'';
@@ -2141,7 +2142,7 @@ function newRun(){
  P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
  shake=0;hitstop=0;FLASH=0;CALLOUT=null;
- UIROOT=null;MODAL=false;PANEL_FN=null;
+ UIROOT=null;MODAL=false;PANEL_FN=null;PANEL_Q.length=0;
  closePanel(true);
 }
 
@@ -2159,8 +2160,13 @@ let PANEL_FN=null;
 // Death outranks every other modal. A shrine, a level-up or a fragment opening in the same
 // frame as death used to replace the YOU DIED panel — and satisfying that modal left the game
 // paused, dead, with no way to start a new run.
+let PANEL_Q=[];
 function openPanel(html,modal,fn){
  if(P.dead&&!DYING)return;
+ // A second modal raised in the SAME FRAME queues instead of replacing the first. One swing
+ // can kill an enemy (level-up) and crack a chest (fragment) at once, and the fragment used to
+ // silently eat the level-up panel — leaving P.picks above zero with no UI to spend it in.
+ if(MODAL&&modal&&!DYING){PANEL_Q.push([html,modal,fn||null]);return}
  MODAL=!!modal;PANEL_FN=fn||null;
  $('panel').innerHTML=html;$('overlay').style.display='flex';paused=true;
  menuIdx=0;menuFocus(0)}
@@ -2174,7 +2180,8 @@ function closePanel(force){if(MODAL&&!force)return;
  // Closing anything opened from the title returns to the title. Letting it fall through would
  // start the run with the HUD still hidden and no descent ever chosen.
  if(UIROOT==='title'&&!force)return openTitle();
- MODAL=false;PANEL_FN=null;$('overlay').style.display='none';if(!P.dead)paused=false}
+ MODAL=false;PANEL_FN=null;$('overlay').style.display='none';if(!P.dead)paused=false;
+ if(PANEL_Q.length&&!P.dead){const q=PANEL_Q.shift();openPanel(q[0],q[1],q[2])}}
 let toastT=null;
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',1600)}
 $('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!MODAL&&!P.dead)closePanel()});
