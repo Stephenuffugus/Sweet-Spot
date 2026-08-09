@@ -921,7 +921,7 @@ const ENEMIES={
    atk:{cd:2.4,range:34,wind:.50,act:.20,rec:.44,kb:280,lunge:140}},
  // RUINS — the two units that make target priority a thing you have to think about
  chanter:{hp:42,dmg:10,spd:34,w:13,h:18,ai:'walk',c:'#bfb595',shards:8,
-   heal:{cd:2.6,amt:.10,range:180},
+   heal:{cd:2.6,amt:.55,cap:.25,range:180},
    atk:{cd:2.4,range:24,wind:.38,act:.14,rec:.30,kb:120,lunge:110}},
  warder:{hp:60,dmg:12,spd:22,w:14,h:16,ai:'walk',c:'#6f7889',shards:8,arm:4,
    ward:{range:150,arm:6,dr:.25},
@@ -1829,7 +1829,7 @@ function genChunk(cx,cy){
    // chunk's spawn list is an honest description of what will be standing there — which is what
    // the encounter budget is accounting for, and what the Lattice fingerprints.
    for(let q=0;q<pk;q++)
-    spawns.push({x:tx*TILE+(q?rS('spawn',-26,26):0),y:ty*TILE-(q?rS('spawn',0,10):0),type:pick.ty})
+    spawns.push({x:tx*TILE+(q?rS('spawn',-26,26):0),y:ty*TILE-(q?rS('spawn',0,10):0),type:pick.ty,pk:q?1:0})
   }
   // treasure chest POI: rare, needs a floor cavity
   if(hashS('poi',cx*7+5,cy*7+3)<0.12){
@@ -2910,7 +2910,9 @@ function spawnFromChunks(){
      const all=BIOMES[ri(0,BIOMES.length-1)][4];const pick=all[ri(0,all.length-1)];
      if(ENEMIES[pick]&&!ENEMIES[pick].boss)stype=pick}
     const E=ENEMIES[stype]||ENEMIES[s.type];
-    const el=(!boss&&chance(eliteP))?eliteFor(E):null;
+    // Only a pack LEADER may be elite. Rolling each member independently meant a four-strong
+    // swarm arrived with three elites in it about a fifth of the time at Threat IV.
+    const el=(!boss&&!s.pk&&chance(eliteP))?eliteFor(E):null;
     EN.push(mkEnemy(stype,s.x,s.y,el,T,s.by||null))}}}}
 // One place where a table row becomes a live enemy. Splits, summons, packs and world spawns all
 // come through here, so a new field can never be live in one spawn path and undefined in another.
@@ -3073,7 +3075,11 @@ function upEnemies(dt){
     for(const o of EN){if(o===e||o.hp<=0||!o.maxhp)continue;
      const f=o.hp/o.maxhp;
      if(f<worst&&Math.hypot(o.x-e.x,o.y-e.y)<ED.heal.range){worst=f;t=o}}
-    if(t){t.hp=Math.min(t.maxhp,t.hp+t.maxhp*ED.heal.amt);
+    if(t){
+     // Output scales with the CHANTER (so it grows with depth like everything else), capped as a
+     // share of the target so it still reads as a big heal on something small.
+     const amt=Math.min(e.maxhp*ED.heal.amt,t.maxhp*(ED.heal.cap||0.25));
+     t.hp=Math.min(t.maxhp,t.hp+amt);
      arc(e.x,e.y,t.x,t.y,'#8fdc6a');burst(t.x,t.y,'#8fdc6a',6)}}}
   // ---- TELEGRAPHED RANGED: wind up visibly, THEN fire (DESIGN-PLAN §4.1) ----
   if(e.shoot){e.scd-=dt;

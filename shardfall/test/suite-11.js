@@ -377,5 +377,41 @@ console.log('\n-- regressions --');
   A(Math.sign(e.vx) === told || e.vx === 0, 'and lunges the way the marker pointed, not the way you went');
 }
 
+{ // a healer's output must come from the HEALER, not from whatever it is standing next to
+  META.cls = 'vanguard'; META.threat = 0; newRun(); OFF(2600); P.inv = 999;
+  const boss = mkEnemy('voidmaw', P.x + 60, P.y, null, threat(), null);
+  const ch = mkEnemy('chanter', P.x + 100, P.y, null, threat(), null);
+  ch.hcd = 0; ch.spd = 0; ch.acd = 99; boss.spd = 0; boss.acd = 99; boss.scd = 99;
+  EN.length = 0; EN.push(boss); EN.push(ch);
+  boss.hp = boss.maxhp * 0.3;
+  const before = boss.hp;
+  for (let i = 0; i < 60 * 10; i++) upEnemies(DT);
+  const rate = (boss.hp - before) / 10;
+  console.log('   chanter heals a voidmaw at ' + rate.toFixed(0) + ' hp/s (was 249)');
+  A(rate > 0, 'a chanter does heal a boss — it is a support unit, not a decoration');
+  A(rate < 90, 'but nowhere near enough to outheal a build (' + rate.toFixed(0) + ' hp/s)');
+  // and it is still a real heal on something its own size
+  OFF(2600); const br = mkEnemy('brute', P.x + 40, P.y, null, threat(), null);
+  const c2 = mkEnemy('chanter', P.x + 80, P.y, null, threat(), null);
+  c2.hcd = 0; c2.spd = 0; c2.acd = 99; br.spd = 0; br.acd = 99;
+  EN.length = 0; EN.push(br); EN.push(c2);
+  br.hp = br.maxhp * 0.3; const b0 = br.hp;
+  for (let i = 0; i < 60 * 3; i++) upEnemies(DT);
+  A((br.hp - b0) / br.maxhp > 0.15, 'a grunt-sized target still gets a heal worth killing it over');
+}
+{ // only a pack leader may be elite
+  META.cls = 'vanguard'; META.threat = 4; newRun(); CHUNKS.clear();
+  let worst = 0, packsSeen = 0;
+  for (let cx = 6; cx < 40; cx++) for (let cy = 9; cy < 14; cy++) {
+    const es = genChunk(cx, cy).spawns.filter(s => s.type === 'delvemite');
+    if (!es.length) continue;
+    packsSeen++;
+    worst = Math.max(worst, es.filter(s => !s.pk).length);
+  }
+  A(packsSeen > 0, 'packs generate at Threat IV');
+  A(worst <= 1, 'at most one member of a pack is eligible to be elite (' + worst + ')');
+  META.threat = 0;
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
