@@ -11,7 +11,7 @@ if ! node --check "$TMP/game.js"; then echo "SYNTAX ERROR in index.html"; exit 1
 echo "syntax OK"
 
 FAIL=0
-SUITES="${1:-2 3 4 5 6 7}"
+SUITES="${1:-2 3 4 5 6 7 8}"
 for n in $SUITES; do
   S="$ROOT/test/suite-$n.js"
   [ -f "$S" ] || continue

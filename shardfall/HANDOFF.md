@@ -1,8 +1,9 @@
 # SHARDFALL — Engineering Handoff
 
-**State:** playable, ~2100 lines, sessions 1-7 shipped. Renders in a real browser, installs
-offline, 261 assertions across 6 node suites plus 15 browser and 22 PWA checks, all passing.
-**Stack:** single-file vanilla HTML/CSS/JS PWA, canvas 2D, no build step, mobile-first.
+**State:** playable, ~3000 lines, sessions 1-8 shipped. Renders in a real browser, installs
+offline, plays on touch / keyboard+mouse / gamepad. 368 node assertions across 7 suites plus
+32 browser and 21 PWA checks, all passing.
+**Stack:** single-file vanilla HTML/CSS/JS PWA, canvas 2D, no build step, multi-device.
 **Owner:** Stephen / Lucid Winds. Target: lucidwinds.com. Lives in `shardfall/` in the
 Sweet-Spot repo, so the live Sweet Spot page at the repo root is untouched.
 
@@ -45,6 +46,8 @@ are the navigation.
 |---|---|
 | CONSTANTS | tile size, world dims, gravity/movement, flight + fall tuning, crit/armor/focus/weight |
 | **DATA TABLES** | tiles, status types, elites, biomes, enemies, gems, gear, uniques, affixes, classes, boons, tree, unlocks. **All content goes here.** |
+| **LORE** | world, biomes, bestiary, fragments, classes — the codex reads from here |
+| **ATTUNEMENTS + THREAT** | in-run level-up picks, and the across-run difficulty tiers |
 | RNG + NOISE | seeded mulberry32, value noise, `hash2` for deterministic per-chunk decisions |
 | AUDIO + FX | synthesized WebAudio SFX (no asset files), arcs, screen flash, callouts |
 | WORLD / CHUNKS | chunk generation, POI stamping, chunk canvas rendering, canvas eviction |
@@ -57,8 +60,8 @@ are the navigation.
 | COMBAT | status engine + interactions, `strike`, crit, flat armor, melee/ranged, explosions, drops |
 | ENEMIES / PROJECTILES / PICKUPS | spawning, AI, enemy shooting, projectile stepping |
 | PLAYER UPDATE | movement, hover/fuel, fall damage, burrow phasing, death, `newRun` |
-| UI | panels, bag/socket screens, shrine, camp, class/anchor/loadout pickers |
-| INPUT | keyboard, virtual stick, touch buttons |
+| UI | title, pause, settings, controls, codex, panels, bag/socket, shrine, camp, vault, threat |
+| INPUT | device abstraction: keyboard, mouse aim, gamepad, touch; `readInput()`, menu nav, prompts |
 | RENDER | adaptive camera, sky + parallax, chunk blitting, `drawEntity` (art fallback), depth lighting, minimap |
 | MAIN LOOP | fixed-timestep `sim()`, `hud()`, `frame()` |
 
@@ -260,6 +263,7 @@ change. Blender to sprite sheets is exactly the Dead Cells pipeline and the righ
 | 5 | Status engine, ability system, uniques, 4 classes |
 | 6 | `carve()` unification, flight + fuel, fall damage, Bore/Excavate, 4 traversal abilities |
 | 7 | First browser render. Foundation lock (increased/more, crit, flat armor, status resist, stacking ailments, Shatter/Congeal/chain). Telegraphs on every attack + boss phases. Socket colors, Focus, gem tiers + fusion, the Vault, The Weight, descent bonus, death summary. 40 new gems, 10 new enemies, 12 alt uniques, 8 new affixes. Adaptive camera, depth lighting, parallax, art fallback layer, synthesized SFX, real PWA. Browser + PWA + screenshot harnesses. |
+| 8 | Multi-device input (gamepad, mouse aim with assist, keyboard, touch) behind one abstraction, with prompts that follow the last device used. Title / pause / settings / controls screens, all controller-navigable from a single focus cursor. Codex: world, strata, bestiary, delvers and 13 depth-gated fragments, unlocked by playing. In-run levelling with three-choice attunements, and five Threat tiers unlocked by felling distinct bosses. |
 
 Bugs the headless harness caught that a human would have spent an evening on:
 `FLY_THRUST` set exactly equal to `GRAV` (hovering perfectly cancelled gravity and never

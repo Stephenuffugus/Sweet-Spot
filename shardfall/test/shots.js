@@ -63,6 +63,11 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
 
   const shot = n => page.screenshot({ path: path.join(OUT, n) });
 
+  // 0. title screen — first thing anyone sees
+  await shot('00-title.png');
+  await page.evaluate(() => { startRun(); closePanel(true) });
+  await page.waitForTimeout(200);
+
   // 1. spawn / surface
   await shot('01-surface.png');
 
@@ -110,10 +115,38 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   await page.waitForTimeout(120);
   await shot('05-socket-screen.png');
 
-  // 6. death summary
-  await page.evaluate(() => { P.kills = 37; P.bestHit = 418; RUNSHARDS = 244; runDepth = 1612; P.dead = false; die(); });
+  // 6. level-up: the choice that arrives inside a run
+  await page.evaluate(() => { P.dead = false; paused = false; closePanel(true); P.level = 6; P.picks = 1; offerAttune(); });
   await page.waitForTimeout(120);
-  await shot('06-death-summary.png');
+  await shot('06-attune.png');
+
+  // 7. pause menu, keyboard prompts
+  await page.evaluate(() => { closePanel(true); P.kills = 21; RUNSHARDS = 180; openPause(); });
+  await page.waitForTimeout(120);
+  await shot('07-pause.png');
+
+  // 8. codex with a few pages earned
+  await page.evaluate(() => {
+    for (const k of ['crawler', 'bat', 'rockling', 'spitter', 'warden']) discover('en', k, true);
+    for (const k of ['surface', 'caves', 'fungal']) discover('biome', k, true);
+    discover('frag', 'f1', true); discover('frag', 'f2', true); discover('cls', 'vanguard', true);
+    openCodexList('frag');
+  });
+  await page.waitForTimeout(120);
+  await shot('08-codex.png');
+  await page.evaluate(() => openLore('frag', 'f2'));
+  await page.waitForTimeout(120);
+  await shot('09-lore.png');
+
+  // 10. settings, controller-navigable
+  await page.evaluate(() => { INMODE = 'pad'; PADTYPE = 'xbox'; openSettings(); });
+  await page.waitForTimeout(120);
+  await shot('10-settings.png');
+
+  // 11. death summary
+  await page.evaluate(() => { INMODE = 'kb'; closePanel(true); P.kills = 37; P.bestHit = 418; RUNSHARDS = 244; runDepth = 1612; P.level = 11; P.dead = false; die(); });
+  await page.waitForTimeout(120);
+  await shot('11-death-summary.png');
 
   await browser.close(); srv.close();
   if (errs.length) { console.log('ERRORS:\n  ' + errs.join('\n  ')); process.exit(1); }

@@ -50,6 +50,15 @@ const ok = (c, m) => { console.log((c ? 'ok: ' : 'FAIL: ') + m); if (!c) fails++
 
   ok(errors.length === 0, 'no console/page errors on boot' + (errors.length ? '\n    ' + errors.join('\n    ') : ''));
 
+  // The game now boots to a title screen. Confirm it is there, shoot it, then dismiss it —
+  // everything below this line assumes the run has actually started.
+  const titled = await page.evaluate(() => paused && document.getElementById('panel').innerHTML.includes('SHARDFALL'));
+  ok(titled, 'boots to a title screen');
+  await page.screenshot({ path: path.join(SHOTS, '00-title.png') });
+  await page.evaluate(() => startRun());
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => !paused), 'DESCEND starts the run');
+
   // The game must have booted its globals and be running a real loop.
   const boot = await page.evaluate(() => ({
     hasP: typeof P === 'object' && P !== null,
@@ -126,6 +135,72 @@ const ok = (c, m) => { console.log((c ? 'ok: ' : 'FAIL: ') + m); if (!c) fails++
   }));
   ok(!health.nan, 'no NaN leaked into player state after live play');
   ok(health.part <= 350 && health.proj <= 220, `entity caps hold (PART ${health.part}, PROJ ${health.proj})`);
+
+  // ---- UI/UX: the parts only a real DOM can exercise ----
+  await page.evaluate(() => { P.dead = false; P.hp = P.maxhp; paused = false; closePanel(true); openSettings(); });
+  await page.waitForTimeout(150);
+  const focus0 = await page.evaluate(() => menuIdx);
+  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(80);
+  const focus1 = await page.evaluate(() => menuIdx);
+  ok(focus1 !== focus0, `arrow keys move the menu cursor (${focus0} -> ${focus1})`);
+  const focusMarked = await page.evaluate(() => !!document.querySelector('#panel button.foc'));
+  ok(focusMarked, 'the focused row is visibly marked');
+  // wrapping: pressing up from the top lands on the last row
+  await page.evaluate(() => menuFocus(0));
+  await page.keyboard.press('ArrowUp'); await page.waitForTimeout(80);
+  const wrapped = await page.evaluate(() => ({ idx: menuIdx, n: menuButtons().length }));
+  ok(wrapped.idx === wrapped.n - 1, 'the cursor wraps around the ends');
+  // Enter activates the focused row — cycle a setting and confirm it changed and persisted
+  await page.evaluate(() => menuFocus(1));   // screen shake
+  const shakeBefore = await page.evaluate(() => SET.shake);
+  await page.keyboard.press('Enter'); await page.waitForTimeout(150);
+  const shakeAfter = await page.evaluate(() => ({ v: SET.shake, saved: JSON.parse(localStorage.getItem('shardfall')).set.shake }));
+  ok(shakeAfter.v !== shakeBefore, `Enter activates the focused row (shake ${shakeBefore} -> ${shakeAfter.v})`);
+  ok(shakeAfter.saved === shakeAfter.v, 'the changed setting is persisted immediately');
+  ok(await page.evaluate(() => menuIdx === 1), 'cycling a setting keeps the cursor where it was');
+  await page.evaluate(() => { SET.shake = 100; saveSet(); closePanel(); });
+
+  // Escape backs out of a normal panel but not a modal one
+  await page.evaluate(() => { openBag() });
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => !paused), 'Escape closes an ordinary panel');
+  await page.evaluate(() => { P.picks = 1; offerAttune() });
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => paused && document.getElementById('panel').innerHTML.includes('ATTUNE')),
+    'a modal panel refuses to be dismissed without a choice');
+  await page.evaluate(() => { takeAttune(0) });
+  await page.waitForTimeout(120);
+  ok(await page.evaluate(() => !paused && P.picks === 0), 'choosing an attunement closes the modal');
+
+  // mouse aim: moving the cursor takes over from auto-aim and points where it points
+  await page.mouse.move(60, 300); await page.waitForTimeout(120);
+  const aimed = await page.evaluate(() => ({ manual: IN.manual, ax: IN.aimX }));
+  ok(aimed.manual, 'moving the mouse switches to manual aim');
+  ok(aimed.ax < 0, 'aiming left of the player produces a leftward aim vector');
+  await page.mouse.move(340, 300); await page.waitForTimeout(120);
+  ok(await page.evaluate(() => IN.aimX) > 0, 'and aiming right flips it');
+
+  // touch controls must not be on screen for a keyboard player
+  const touchHidden = await page.evaluate(() => getComputedStyle(document.getElementById('btns')).display === 'none');
+  ok(touchHidden, 'touch controls are hidden in keyboard mode');
+  await page.evaluate(() => setMode('touch'));
+  await page.waitForTimeout(80);
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('btns')).display !== 'none'),
+    'and shown again in touch mode');
+  await page.evaluate(() => setMode('kb'));
+
+  // the codex opens, gates unseen pages, and reveals them once discovered
+  await page.evaluate(() => { META.seen = { en: {}, item: {}, biome: {}, frag: {}, cls: {} }; openCodexList('en') });
+  await page.waitForTimeout(120);
+  const sealed = await page.evaluate(() => document.getElementById('panel').innerHTML.includes('???'));
+  ok(sealed, 'undiscovered codex pages stay sealed');
+  await page.evaluate(() => { discover('en', 'crawler', true); openCodexList('en') });
+  await page.waitForTimeout(120);
+  const revealed = await page.evaluate(() => document.getElementById('panel').innerHTML.includes('Crawler'));
+  ok(revealed, 'a discovered page becomes readable');
+  await page.evaluate(() => closePanel());
 
   ok(errors.length === 0, 'no errors across the whole session' + (errors.length ? '\n    ' + errors.join('\n    ') : ''));
 

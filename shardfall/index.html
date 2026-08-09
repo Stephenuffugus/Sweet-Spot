@@ -134,6 +134,8 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
 #fuelfill{height:100%;background:var(--acc);width:100%}
 #focbar{width:140px;height:5px;background:#222;border:1px solid #444;border-top:0}
 #focfill{height:100%;background:var(--magic);width:100%}
+#xpbar{width:140px;height:3px;background:#222;border:1px solid #444;border-top:0}
+#xpfill{height:100%;background:var(--gold);width:0%}
 #weight{color:var(--bad);font-size:11px;letter-spacing:1px}
 #stats{margin-top:4px;color:var(--dim)}
 #right{text-align:right;pointer-events:auto}
@@ -156,6 +158,12 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
 #overlay{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:10}
 #panel{background:#12121a;border:1px solid #444;max-width:420px;width:92vw;max-height:80vh;overflow-y:auto;padding:14px;font-size:13px;line-height:1.5}
 #panel h2{margin:0 0 8px;font-size:15px;color:var(--acc)}
+#panel .title{font-size:30px;letter-spacing:5px;color:var(--acc);text-align:center;margin:6px 0 2px;
+ text-shadow:0 0 18px #3fc9c155}
+#panel .tagline{text-align:center;margin:0 0 12px;font-style:italic}
+/* On the title screen there is no run yet, so a health bar and a minimap of somewhere you
+   have not been are pure noise. */
+body.titlemode #hud,body.titlemode #btns,body.titlemode #toast{display:none}
 #panel button{display:block;width:100%;text-align:left;background:#1a1a24;border:1px solid #3a3a48;color:var(--ui);font:inherit;font-size:12px;padding:8px;margin:5px 0}
 #panel button:disabled{opacity:.4}
 #panel .row{display:flex;gap:6px}
@@ -174,13 +182,28 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
 #panel table.sum{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0 8px}
 #panel table.sum td{padding:3px 0;border-bottom:1px solid #22222c}
 #panel table.sum td:first-child{color:var(--dim);width:45%}
+/* Lore is the one place in this UI that gets to breathe. */
+#panel .lore{font-size:12.5px;line-height:1.65;color:#cfc9b8;white-space:pre-wrap;margin:2px 0 10px;
+ border-left:2px solid #2f2f3c;padding:2px 0 2px 10px}
+/* Controller/keyboard focus cursor. Every panel is a stack of buttons, so one highlighted
+   row is all the UI needs to become fully navigable without a pointer. */
+#panel button.foc{border-color:var(--acc);background:#1e2630;box-shadow:inset 3px 0 0 var(--acc)}
+#panel button.foc::after{content:'';}
+/* Touch controls only exist in touch mode — on a desktop they were dead weight over the
+   play area, and on a controller they are worse than dead weight. */
+#btns,#stickzone,#stick{display:none}
+body.touchmode #btns{display:grid}
+body.touchmode #stickzone{display:block}
+body.touchmode #bAbil{grid-column:2}
+canvas{cursor:none}
+body.touchmode canvas{cursor:auto}
 #toast{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);background:#12121add;border:1px solid #444;padding:6px 12px;font-size:12px;display:none;pointer-events:none;white-space:nowrap}
 </style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud">
-  <div><div id="hpbar"><div id="hpfill"></div></div><div id="fuelbar"><div id="fuelfill"></div></div><div id="focbar"><div id="focfill"></div></div><div id="stats"></div><div id="weight"></div></div>
+  <div><div id="hpbar"><div id="hpfill"></div></div><div id="fuelbar"><div id="fuelfill"></div></div><div id="focbar"><div id="focfill"></div></div><div id="xpbar"><div id="xpfill"></div></div><div id="stats"></div><div id="weight"></div></div>
   <div id="right">
-    <button class="hbtn" id="mapBtn">MAP</button><button class="hbtn" id="bagBtn">BAG</button><button class="hbtn" id="campBtn" style="display:none">CAMP</button>
+    <button class="hbtn" id="mapBtn">MAP</button><button class="hbtn" id="bagBtn">BAG</button><button class="hbtn" id="campBtn" style="display:none">CAMP</button><button class="hbtn" id="pauseBtn">❚❚</button>
   </div>
 </div>
 <div id="stickzone"></div><div id="stick"><div id="nub"></div></div>
@@ -567,6 +590,245 @@ const CLASSES={
    kit:{melee:'axe',ranged:'bow',armor:'vest'}, gem:{slot:'armor',id:'swiftness'},
    foc:'dig', fx:{ms:.15,greed:.35,digBonus:1,meleeDmg:.10,fuel:40}},
 };
+// ============ LORE ============
+// The fiction, in one table. Entries unlock by playing: a bestiary page on first kill, an item
+// page on first find, a biome page on first descent, and fragments that drop in the world.
+// Nothing here is required reading — it is all opt-in through the codex — but it is the reason
+// the currency is called shards and the reason the world resents you for lingering.
+const LORE={
+ world:{
+  n:'The Shardfall',
+  d:`Something fell. Not a star — stars burn out politely, at a distance. This came down whole
+and kept going, and the ground closed over it like water over a stone.
+
+That was nine hundred years ago, and the hole is still open.
+
+What we mine down there is not ore. Shards are pieces of the thing itself, and they are warm,
+and they hold a charge, and if you set two of them in the same socket they argue. Every lamp in
+the camp, every gem in your axe, every road east of here runs on the shattered body of whatever
+it was we killed by catching it.
+
+We call ourselves delvers, which is a polite word for what we do.`},
+ biome:{
+  surface:{n:'The Rim',d:`Grass grew back over the impact within a generation, which everyone
+took as forgiveness. The camp sits on the lip because nobody has ever found a reason to build
+further in, and several reasons not to.
+
+Look down the shaft at night and you can see the glow. It has not dimmed in nine centuries.`},
+  caves:{n:'The Caves',d:`Not caves. Cracks — the shape the bedrock made getting out of the way,
+still holding that shape long after the thing that pushed it stopped moving.
+
+The first two hundred metres are picked clean and safe, which is why most delvers die at three
+hundred. The crawlers down here are the ones that learned to wait.`},
+  fungal:{n:'The Bloom',d:`Fungus grows where shard-light reaches and nothing else does. It is
+not alive in any way a physician would sign off on: cut it and it flinches, burn it and the
+spores in the next chamber flinch too.
+
+The sporemother is what happens when a colony gets old enough to have opinions. She does not
+hunt. She simply grows in the direction of the noise.`},
+  ruins:{n:'The Ruins',d:`Someone was down here first.
+
+The brickwork is older than the fall — which is not possible, and has been reconfirmed by four
+separate expeditions, three of which did not come back. The sentinels still patrol corridors to
+rooms that no longer exist. They were not built to keep us out. The doors face inward.`},
+  forge:{n:'The Forge',d:`The heat has no source. Survey after survey finds no magma, no vent, no
+chemistry that would explain it — just rock at a steady seven hundred degrees, and things living
+in it that should not be able to.
+
+The forgelord was a delver once. There is a name plate riveted to what used to be its chest,
+and the guild has quietly stopped publishing the list of who is missing.`},
+  abyss:{n:'The Abyss',d:`Here the rock stops pretending.
+
+There is no ore this deep because there is no stone this deep — only the compacted dark that
+sits directly against the thing itself, and the wraiths that pass through it as though it were
+a rumour. Voidmaw is not the guardian. Voidmaw is a symptom.
+
+Whatever fell is below this. Nobody has been below this.`},
+ },
+ // Bestiary. Written from a delver's field notes, because a monster you have been warned about
+ // is a different monster.
+ enemy:{
+  crawler:{n:'Crawler',d:`Six legs, no eyes, follows heat. Harmless in the open and lethal in a
+corridor, which describes most of what kills people down here. It telegraphs — they all do —
+and delvers who die to crawlers died looking at something else.`},
+  bat:{n:'Cave Bat',d:`Roosts in shard-light and dives at movement. Individually trivial.
+The problem is that they are never individual.`},
+  rockling:{n:'Rockling',d:`Sits still and looks exactly like the wall for as long as it takes.
+Ambushes from further away than seems reasonable. The armour is real; the patience is worse.`},
+  brute:{n:'Brute',d:`Slow, armoured, and committed. Once it winds up it is going to finish the
+swing whether you are still there or not — which is the whole trick to it.`},
+  spitter:{n:'Spitter',d:`Keeps its distance and lobs something caustic. Kill it first. Every
+veteran says this and every novice learns it anyway.`},
+  sporeling:{n:'Sporeling',d:`Dies into a cloud. The cloud is the point; the sporeling is just
+the delivery. Do not kill it next to you, and do not kill it next to a door you need.`},
+  stalker:{n:'Stalker',d:`Fast, fragile, and it has already decided. Standing still in the Bloom
+is a decision you get to make once.`},
+  archer:{n:'Ruin Archer',d:`Outranges you. Still guarding a wall that fell down four hundred
+years ago, still hitting what it aims at.`},
+  shieldman:{n:'Shieldman',d:`Blocks everything from the front and nothing from behind. The
+ruins are full of narrow rooms and this is not a coincidence.`},
+  ember:{n:'Ember',d:`Runs at you and detonates. It is not a suicide attack — the ember does not
+consider itself to have died. Something down here keeps making more.`},
+  smith:{n:'Smith',d:`Huge, armoured, unhurried, and it throws fire. The name is a guess. It has
+hands and it uses them on something out of sight, and nobody has stayed long enough to see what.`},
+  wraith:{n:'Wraith',d:`Goes through the rock. There is no wall you can put between yourself and
+the Abyss, and the wraith is how the Abyss makes that point.`},
+  voidspawn:{n:'Void Spawn',d:`Splits when killed. Kill it in the open. Kill it early. Do not
+kill it in a dead end, and do not kill three at once because you were in a hurry.`},
+  voidling:{n:'Voidling',d:`The halves. Faster, angrier, and there are now two problems.`},
+  warden:{n:'The Warden',d:`First thing down here big enough to have a name.
+
+It stands in a room it carved itself and it does not leave, which suggests it is guarding
+something, which suggests the caves are a door. Nobody has found what it opens onto.`,boss:1},
+  sporemother:{n:'The Sporemother',d:`A colony that got old. She does not chase; she simply
+grows toward the noise you are making, and the Bloom grows with her.
+
+Burn her and the whole chamber burns. This is usually a mistake.`,boss:1},
+  sentinel:{n:'The Sentinel',d:`Still on duty. Its armour bears a maker's mark that predates the
+fall by an amount the guild refuses to print, and it fights like something that has done this
+many times and expects to again.
+
+It does not pursue past the threshold of its room. Whatever it was told to hold, it is holding.`,boss:1},
+  forgelord:{n:'The Forgelord',d:`There is a name plate. It reads like a person's name.
+
+Every delver who gets this deep goes quiet for a while afterward, and then most of them stop
+going down. The ones who keep going are the ones this game is actually about.`,boss:1},
+  voidmaw:{n:'Voidmaw',d:`Not a guardian. A symptom.
+
+It phases, it chills, it comes apart and reassembles slightly wrong, and it is the last thing
+between a delver and whatever is actually down there. Killing it does not open anything.
+It just means you get to keep going.`,boss:1},
+ },
+ // Fragments, found in the world. Depth-gated so the story arrives roughly in order.
+ frag:[
+  {id:'f1',depth:0,   n:'Guild Notice, posted at the rim',d:`SHARD PRICES ARE FIXED BY WEIGHT AND
+NOT BY GLOW. Delvers presenting unusually bright material will be paid standard rate and asked
+where they found it. Answering is not optional.`},
+  {id:'f2',depth:120, n:"Delver's tally, scratched into stone",d:`Forty-one down. Forty-one back.
+Wife says stop at fifty. Fifty is a stupid number to stop at, it's just round.
+
+(Beneath, in a different hand: he stopped at forty-nine.)`},
+  {id:'f3',depth:300, n:'Torn survey page',d:`— and the readings do not decay with distance from
+the shaft, which is the part I cannot get anyone at the guild to look at. A buried object gets
+fainter as you walk away from it. This does not. Either the source is far larger than the
+impact site, or the source is not an object.`},
+  {id:'f4',depth:520, n:'Spore-eaten letter',d:`Tell them the Bloom is not a hazard, it is a
+census. It grows toward sound. Every chamber it fills, it fills evenly — like something checking
+how much room there is.
+
+I am well. Do not come down.`},
+  {id:'f5',depth:760, n:'Brick fragment, pre-fall',d:`The mark is a maker's stamp. We have four
+of them now, all identical, all from strata that the fall should have destroyed.
+
+Someone built down here before there was a down here to build in.`},
+  {id:'f6',depth:1000,n:'Sentinel maintenance log',d:`ROTATION 4,112. NO BREACH. NO ENTRY.
+NO EGRESS. HOLDING.
+
+(The rotation count continues on the reverse for eleven more pages. The final entry is the same
+as the first.)`},
+  {id:'f7',depth:1300,n:'Expedition roster, water-damaged',d:`Eleven names. Six struck through.
+Four annotated "RETURNED". The eleventh is annotated "RETURNED", struck through, and annotated
+"RETURNED" again in the same hand.`},
+  {id:'f8',depth:1650,n:'Name plate, riveted',d:`It reads like a person's name.
+
+You have seen this plate before. It was on something that swung a hammer at you.`},
+  {id:'f9',depth:1900,n:'Heat survey, abandoned mid-sentence',d:`No magma. No vent. No exothermic
+reaction of any kind that we can identify. The rock is simply seven hundred degrees and has been
+for as long as anyone has measured it.
+
+The most parsimonious explanation is that something down here is still`},
+  {id:'f10',depth:2200,n:'Charcoal drawing on a wall',d:`A figure, drawn very small, at the top.
+Below it, taking up the rest of the wall, a shape with no clear edges.
+
+The small figure is drawn facing down.`},
+  {id:'f11',depth:2500,n:'Delver testimony, transcribed',d:`It's not that it noticed me. It's
+that I could tell exactly when it started. There's a weight to it. You feel it come on and you
+know you've been standing still too long, and the only thing that makes it stop is going
+further in.
+
+That's the joke, isn't it. The only cure for its attention is to get closer.`},
+  {id:'f12',depth:2800,n:'Unsigned note, recent',d:`We have had this backwards for nine hundred
+years.
+
+It did not crash. Nothing that falls leaves a shaft that clean. It arrived, it went in, and the
+world closed over it because that is what happens when something enters something.
+
+We are not mining a corpse.`},
+  {id:'f13',depth:3050,n:'Last page',d:`The shards are warm because they are still connected.
+
+Every lamp in the camp. Every gem in your axe. Nine hundred years of us cutting pieces off it
+and carrying them up into the light and wiring our whole world to them.
+
+It has been very patient.`},
+ ],
+ class:{
+  vanguard:{n:'Vanguard',d:`Guild-trained, shield-first, paid by the hour. The vanguards were the
+guild's answer to the crawler problem and they solved it so thoroughly that most of them have
+never seen the Bloom.
+
+They descend behind a wall and they earn their focus by holding it.`},
+  marksman:{n:'Marksman',d:`Kills at the far end of the corridor and never learns what the near
+end smells like. Fragile, precise, and quietly the highest-mortality guild rank — because the
+build only fails once.`},
+  pyromancer:{n:'Pyromancer',d:`Burned a wand-socket into their own forearm to get closer to the
+shard-charge, which the guild does not endorse and cannot stop. Everything they touch keeps
+burning after they have moved on.`},
+  delver:{n:'Delver',d:`Not a rank. The word the guild uses for someone who goes down without
+being told to.
+
+Digs through the level design. Finds the vault, takes the shards, and has an opinion about
+where the shaft actually goes.`},
+ },
+};
+// ============ ATTUNEMENTS + THREAT ============
+// Two scaling axes, deliberately different in shape.
+//
+// ATTUNEMENTS are the WITHIN-RUN curve. Kills grant XP; every level offers three picks from a
+// shared pool. They stack, they are chosen under pressure, and they are gone when you die —
+// so a run has an arc even before you own any gems. This is what makes the game readable in
+// its first ten minutes: you always understand the choice in front of you.
+//
+// THREAT is the ACROSS-RUN curve. Killing a biome boss unlocks the next tier, each of which
+// makes the world meaner in a specific, named way and pays better for it. This is where the
+// ceiling lives once the unlock pool is bought out.
+//
+// `m` marks a mechanical attunement — it writes to RUNM and is read at a specific hook rather
+// than folding into the additive pool.
+const ATTUNE=[
+ {id:'edge',   n:'Whetted',      d:'+15% damage',                  fx:{dmg:.15}},
+ {id:'quick',  n:'Quickened',    d:'+12% attack speed',            fx:{cdr:.12}},
+ {id:'stride', n:'Long Stride',  d:'+12% move speed',              fx:{ms:.12}},
+ {id:'hide',   n:'Thick Hide',   d:'+30 max HP',                   fx:{hp:30}},
+ {id:'plate',  n:'Plated',       d:'+5 armor',                     fx:{arm:5}},
+ {id:'keen',   n:'Keen',         d:'+6% crit chance',              fx:{crit:.06}},
+ {id:'cruel',  n:'Cruel',        d:'+35% crit damage',             fx:{critMult:.35}},
+ {id:'venom',  n:'Envenomed',    d:'+30% ailment damage',          fx:{ailment:.30}},
+ {id:'ward',   n:'Warded',       d:'+25% status resist',           fx:{sres:.25}},
+ {id:'zeal',   n:'Zealous',      d:'+35% focus gain',              fx:{focus:.35}},
+ {id:'greed',  n:'Covetous',     d:'+30% shard drops',             fx:{greed:.30}},
+ {id:'punch',  n:'Punch-Through',d:'+1 pierce',                    fx:{pierce:1}},
+ // mechanical picks — these are what make a level-up feel like a decision, not a stat menu
+ {id:'feast',  n:'Feast',        d:'kills heal you for 4% of max HP',        m:{feast:.04}},
+ {id:'burst',  n:'Backdraft',    d:'dodging detonates where you were',       m:{dodgeBlast:1}},
+ {id:'cornered',n:'Cornered',    d:'+30% damage below half health',          m:{cornered:.30}},
+ {id:'momentum',n:'Momentum',    d:'+25% damage while moving fast',          m:{moving:.25}},
+ {id:'overflow',n:'Overflow',    d:'full focus adds +20% damage',            m:{overflow:.20}},
+ {id:'echo',   n:'Echo',         d:'kills cut 0.6s from your ability',       m:{echo:.6}},
+ {id:'thorn',  n:'Bramble',      d:'attackers take damage back',             m:{thorn:1}},
+ {id:'scav',   n:'Scavenger',    d:'chests and elites drop more',            m:{scav:1}},
+ {id:'second', n:'Second Wind',  d:'once per run, survive a fatal hit',      m:{secondWind:1}},
+ {id:'siphon', n:'Siphon',       d:'+4% life leech on everything',           fx:{leech:.04}},
+];
+// Threat tiers. Each one is a named world rule, not a difficulty slider — you should be able to
+// say what tier 3 does without looking it up.
+const THREATS=[
+ {n:'None',        d:'The deep as it is.',                             req:0, shard:1.00, rare:1.00},
+ {n:'I — Watched', d:'The Weight arrives twice as fast.',              req:1, shard:1.25, rare:1.10, weight:2},
+ {n:'II — Armed',  d:'Everything down here has armor.',                req:2, shard:1.55, rare:1.20, arm:6},
+ {n:'III — Swift', d:'Enemies move and strike noticeably faster.',     req:3, shard:1.90, rare:1.35, spd:1.25, wind:0.8},
+ {n:'IV — Teeming',d:'Elites are common. Grunts come in numbers.',     req:4, shard:2.35, rare:1.55, elite:2.2, dens:1.6},
+ {n:'V — Buried',  d:'Your light is smaller. The dark reaches further.',req:5, shard:2.90, rare:1.80, dark:1.35, elite:2.2, dens:1.6, arm:6, spd:1.25, wind:0.8, weight:2},
+];
 const DEFAULT_GEAR_POOL=['sword','bow','vest'];
 const DEFAULT_GEM_POOL=['cleave','multishot','addedfire'];
 const UNLOCKS=[
@@ -692,7 +954,7 @@ function genChunk(cx,cy){
  // enemy spawns: on air tiles above solid, away from camp
  const B0=biomeAt(cy*CHUNK+CHUNK/2), types=B0[4];
  if(cy*CHUNK> SURFACE-4){
-  const n=ri(1,3);
+  const n=Math.round(ri(1,3)*(threat().dens||1));
   for(let i=0;i<n;i++){const lx=ri(2,CHUNK-3),ly=ri(2,CHUNK-3);
    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
     const tx=cx*CHUNK+lx,ty=cy*CHUNK+ly;
@@ -787,7 +1049,10 @@ function sweepChunks(){ // evict offscreen chunk canvases (~2.3MB each) — tile
 const SAVE_VER=2;
 let META={ver:SAVE_VER,shards:0,unlocks:{},tree:{},cls:'vanguard',classes:{vanguard:1},
  loadout:{melee:'sword',ranged:'bow',armor:'vest'},anchors:{surface:1},startBiome:'surface',
- vault:[],bosses:{},runs:0,bestDepth:0,audio:1};
+ vault:[],bosses:{},runs:0,bestDepth:0,audio:1,threat:0,maxThreat:0,
+ // Codex discovery. Pages exist from the start but stay sealed until you earn them, so the
+ // lore is a reward for playing rather than a wall of text on the title screen.
+ seen:{en:{},item:{},biome:{},frag:{},cls:{}},set:null};
 function saveMeta(){try{localStorage.setItem('shardfall',JSON.stringify(META))}catch(e){}}
 function migrate(m){
  if(!m.ver||m.ver<2){ // v1 -> v2: bare-string sockets become {id,tier:1}; vault starts empty
@@ -802,6 +1067,8 @@ function loadMeta(){
  if(!META.cls||!META.classes[META.cls])META.cls='vanguard';
  if(!Array.isArray(META.vault))META.vault=[];
  if(!META.bosses)META.bosses={};
+ if(!META.seen)META.seen={};
+ for(const k of ['en','item','biome','frag','cls'])if(!META.seen[k])META.seen[k]={};
  META.ver=SAVE_VER;
  AUDIO_ON=META.audio!==0;
  if(!META.startBiome||!META.anchors[META.startBiome])META.startBiome='surface'}
@@ -811,6 +1078,22 @@ function biomeName(ty){return biomeAt(ty)[1]}
 function classFx(key){const c=CLASSES[META.cls];return (c&&c.fx[key])||0}
 // A socket holds either a bare id (v1 saves) or {id,tier} (v2+). Every read goes through these
 // two accessors, which is what keeps gem tiers from touching all three compute functions.
+// One discovery funnel. Returns true the FIRST time only, so callers can toast on it.
+function discover(kind,id,quiet){
+ if(!id)return false;
+ const bag=META.seen[kind]||(META.seen[kind]={});
+ if(bag[id])return false;
+ bag[id]=1;saveMeta();
+ if(!quiet){CODEX_NEW++;toast('CODEX: '+codexTitle(kind,id));sfx('level')}
+ return true}
+let CODEX_NEW=0;
+function codexTitle(kind,id){
+ if(kind==='en')return (LORE.enemy[id]&&LORE.enemy[id].n)||id;
+ if(kind==='biome')return (LORE.biome[id]&&LORE.biome[id].n)||id;
+ if(kind==='frag'){const f=LORE.frag.find(x=>x.id===id);return f?f.n:id}
+ if(kind==='cls')return (LORE.class[id]&&LORE.class[id].n)||id;
+ if(kind==='item')return UNIQUES[id]?UNIQUES[id].n:(GEAR[id]?GEAR[id].n:id);
+ return id}
 function gemId(g){return !g?null:(typeof g==='string'?g:g.id)}
 function gemTier(g){return (!g||typeof g==='string')?1:(g.tier||1)}
 function gemOf(g){const i=gemId(g);return i?GEMS[i]:null}
@@ -821,6 +1104,9 @@ function gemPool(){return DEFAULT_GEM_POOL.concat(Object.keys(GEMS).filter(g=>ME
 // ============ ITEMS ============
 let itemUid=1;
 function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
+ // Threat pays out in rarity, not just shards — otherwise the harder world is a worse deal.
+ const rr2=threat().rare||1;
+ if(rarity<3&&rr2>1&&chance(Math.min(0.5,(rr2-1)*0.55)))rarity=Math.min(3,rarity+1);
  const b=GEAR[baseId];
  if(rarity===3&&!UNIQUES[baseId])rarity=2;
  // Two uniques per base, coin-flipped, so a rarity-3 drop isn't a single known outcome.
@@ -862,8 +1148,8 @@ let SENTRY=[],DECOY=null;
 let SPAWNQ=[];
 function queueEnemy(e){if(EN.length+SPAWNQ.length<120)SPAWNQ.push(e)}
 function flushSpawns(){if(SPAWNQ.length){for(const e of SPAWNQ)EN.push(e);SPAWNQ.length=0}}
-let RUNB={dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0};
-const RUNB0=()=>({dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0});
+let RUNB={dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0};
+const RUNB0=()=>({dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0});
 let shake=0,hitstop=0,runDepth=0,paused=false;
 const P={x:0,y:0,vx:0,vy:0,w:12,h:20,hp:100,maxhp:100,face:1,onG:false,coyote:0,jbuf:0,dodgeT:0,dodgeCd:0,inv:0,mcd:0,rcd:0,acd:0,dead:false,block:false,st:null,fuel:60,maxfuel:60,focus:FOCUS_MAX,flying:false,noFall:0,levT:0,burrowT:0,kills:0,bestHit:0,weight:0,weightT:0,band:''};
 
@@ -1181,7 +1467,7 @@ function stSum(o,k){const a=o.st&&o.st[k];if(!a||!a.length)return 0;return a.red
 function hasSt(o,k){return !!(o.st&&o.st[k]&&o.st[k].length)}
 function chillMul(o){const a=o.st&&o.st.chill;return a&&a.length?a[0].p:1}
 function shockMul(o){const a=o.st&&o.st.shock;return a&&a.length?a[0].p:1}
-function dmgNum(x,y,v,col,crit){DMGN.push({x,y,vy:crit?-58:-40,t:crit?1.0:0.8,v:Math.round(v),col:col||'#fff',crit:!!crit})}
+function dmgNum(x,y,v,col,crit){if(!SET.dmgnum)return;DMGN.push({x,y,vy:crit?-58:-40,t:crit?1.0:0.8,v:Math.round(v),col:col||'#fff',crit:!!crit})}
 // ---- the two damage gates. Everything that hurts anything goes through one of these. ----
 function rollCrit(a){return a&&a.crit>0&&chance(a.crit)}
 function applyArmor(raw,armor){return Math.max(ARMOR_FLOOR,raw-(armor||0))}
@@ -1218,9 +1504,34 @@ function doMelee(){
 // phone reached well past the edge of the screen — you fired at things you had no way to know
 // were there. Half the viewport width keeps every auto-target on screen.
 function aimRange(){return Math.max(140,Math.min(320,VW*0.55))}
-function aimVec(){
- let best=null,bd=aimRange();
+function nearestEnemy(range){
+ let best=null,bd=range;
  for(const e of EN){if(e.hp<=0)continue;const d=Math.hypot(e.x-P.x,e.y-P.y);if(d<bd){bd=d;best=e}}
+ return best}
+function aimVec(){
+ const R=aimRange();
+ // MANUAL AIM (mouse cursor or right stick). Aim assist bends the shot toward a nearby enemy
+ // within a cone — enough to feel good on a stick, small enough that pointing still matters.
+ if(IN.manual){
+  let ax=IN.aimX,ay=IN.aimY;
+  const m=Math.hypot(ax,ay)||1;ax/=m;ay/=m;
+  const assist=SET.aimassist/100;
+  if(assist>0){
+   const cone=Math.PI*0.5*assist;
+   let best=null,bestAng=cone;
+   for(const e of EN){if(e.hp<=0)continue;
+    const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,dy);
+    if(d>R*1.3||d<1)continue;
+    const ang=Math.abs(Math.atan2(dx*ay-dy*ax,dx*ax+dy*ay));
+    if(ang<bestAng){bestAng=ang;best={x:dx/d,y:dy/d}}}
+   if(best){const t=assist*(1-bestAng/cone);
+    ax+=(best.x-ax)*t;ay+=(best.y-ay)*t;
+    const n=Math.hypot(ax,ay)||1;ax/=n;ay/=n}}
+  return{x:ax,y:ay}}
+ // AUTO-AIM — the touch default, and what keyboard-only players get. Never targets anything
+ // off-screen: aimRange() is derived from the viewport.
+ if(!SET.autoaim)return{x:P.face,y:0};
+ const best=nearestEnemy(R);
  if(best){const d=Math.max(1,Math.hypot(best.x-P.x,best.y-P.y));return{x:(best.x-P.x)/d,y:(best.y-P.y)/d}}
  return{x:P.face,y:0}}
 function doRanged(){
@@ -1290,7 +1601,12 @@ function hurtEnemy(e,dmg,kb,col,st,chained,crit){
  // Shieldman blocks hard from the side it's facing — you have to get behind it. That's the
  // whole lesson of the ruins band, and it's one line because `front` is a table field.
  if(e.front&&Math.sign(P.x-e.x)===e.dir&&!e.wind)dmg*=0.25;
- dmg=applyArmor(dmg,e.arm)*shockMul(e)*(1-P.weight*0.03);
+ // Mechanical attunements resolve here, on live state, rather than in the cached ATK.
+ let mm=1;
+ if(RUNM.cornered&&P.hp<P.maxhp*0.5)mm+=RUNM.cornered;
+ if(RUNM.moving&&Math.abs(P.vx)>MOVE*0.6)mm+=RUNM.moving;
+ if(RUNM.overflow&&P.focus>=FOCUS_MAX-1)mm+=RUNM.overflow;
+ dmg=applyArmor(dmg,e.arm)*shockMul(e)*(1-P.weight*0.03)*mm;
  e.hp-=dmg;e.vx+=kb;e.vy-=60;e.flash=crit?0.20:0.12;
  if(st)applyStatus(e,st,false);
  dmgNum(e.x,e.y-e.h,dmg,col,crit);burst(e.x,e.y,e.c,crit?9:5);
@@ -1303,6 +1619,11 @@ function killEnemy(e){
  if(e.dying)return;e.dying=1;
  burst(e.x,e.y,e.c,e.boss?40:12);shake=Math.max(shake,e.boss?12:3);
  P.kills++;gainFocus(FOCUS_KILL);sfx(e.boss?'bosskill':'kill');
+ discover('en',e.type);
+ gainXP(Math.max(1,Math.round((ENEMIES[e.type].shards||2)*(e.boss?6:e.elite?2.5:1))));
+ if(RUNM.feast)P.hp=Math.min(P.maxhp,P.hp+P.maxhp*RUNM.feast);
+ if(RUNM.echo)P.acd=Math.max(0,P.acd-RUNM.echo);
+ if(e.boss)rumble(0.9,0.7,400);else rumble(0.25,0.15,70);
  const D=ENEMIES[e.type]||{};
  // Sporeling / Ember: the corpse is the attack. Area denial you have to walk around.
  if(D.burstOnDeath){
@@ -1319,7 +1640,14 @@ function killEnemy(e){
  if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitstop=0.18;
   const gp=gemPool();for(let i=0;i<2;i++)PICK.push({x:e.x+rr(-10,10),y:e.y,vy:-170,kind:'gem',id:gp[ri(0,gp.length-1)],t:60});
   const gr=gearPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gear',item:mkItem(gr[ri(0,gr.length-1)],chance(.22)?3:chance(.5)?2:1),t:60});
-  META.bosses=META.bosses||{};if(!META.bosses[e.type]){META.bosses[e.type]=1;UNLOCK_MSG.push('first '+e.type);saveMeta()}}
+  META.bosses=META.bosses||{};
+  if(!META.bosses[e.type]){META.bosses[e.type]=1;UNLOCK_MSG.push('first '+e.type);
+   // Each distinct boss felled raises the ceiling by one tier. Progress you earn by fighting,
+   // not by buying — which is what keeps the shard economy from being the only ladder.
+   const n=Object.keys(META.bosses).length;
+   if(n>(META.maxThreat||0)&&n<THREATS.length){META.maxThreat=n;
+    UNLOCK_MSG.push('THREAT '+THREATS[n].n);toastQ('THREAT UNLOCKED')}
+   saveMeta()}}
  dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?3:1)*rr(0.7,1.3)));
  if(e.elite){
   toast(e.elite.n+' '+e.type+' slain');
@@ -1335,9 +1663,17 @@ function killEnemy(e){
 // SHARD VALUE SCALES WITH DEPTH (DESIGN-PLAN §3.4.1). This one multiplier is what stops the
 // shallow-farm strategy from being optimal — a deep run should out-earn a surface loop ~4x.
 function dropShards(x,y,n){
- const total=Math.max(1,Math.round(n*greedVal()*depthMul(y)));
+ const total=Math.max(1,Math.round(n*greedVal()*depthMul(y)*threat().shard*(RUNM.scav?1.3:1)));
  for(let i=0;i<total;i++)PICK.push({x:x+rr(-6,6),y,vy:rr(-160,-80),vx:rr(-50,50),kind:'shard',t:20})}
+// The next undiscovered fragment at or above your depth. Reading them in order matters more
+// than reading them all, so a chest hands you the shallowest one you haven't seen.
+function nextFrag(depth){
+ for(const f of LORE.frag)if(f.depth<=depth&&!META.seen.frag[f.id])return f;
+ return null}
 function openChest(ch){ch.opened=true;burst(ch.x,ch.y,'#d8a53f',12);shake=Math.max(shake,3);
+ const f=nextFrag(Math.max(0,Math.floor(ch.y/TILE)-SURFACE));
+ if(f&&chance(0.55)){discover('frag',f.id,true);CODEX_NEW++;
+  toastQ('FRAGMENT FOUND');toast('Fragment: '+f.n);sfx('level');openFrag(f.id)}
  dropShards(ch.x,ch.y-6,ri(8,14));
  const gp=gemPool();PICK.push({x:ch.x,y:ch.y-8,vy:-160,kind:'gem',id:gp[ri(0,gp.length-1)],t:30});
  if(chance(0.6)){const pool=gearPool();const r=chance(0.07)?3:chance(0.35)?2:1;
@@ -1353,9 +1689,16 @@ function hurtPlayer(dmg,noArmor){if(P.inv>0||P.dead)return;
  if(P.block){dmg*=0.3*(1-classFx('blockDR'));burst(P.x+P.face*8,P.y,'#9fd0ff',6);shake=Math.max(shake,2);
   P.blockedT=perf;P.riposteWarned=0;      // opens the Riposte counter window
   if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2);sfx('block')}
- else{shake=Math.max(shake,6);hitstop=0.06;burst(P.x,P.y,'#e05555',8);sfx('hurt')}
+ else{shake=Math.max(shake,6);hitstop=0.06;burst(P.x,P.y,'#e05555',8);sfx('hurt');rumble(0.6,0.3,140)}
  P.hp-=dmg;P.inv=0.7;
  dmgNum(P.x,P.y-P.h,dmg,'#e05555');
+ if(RUNM.thorn)for(const e of EN){if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<44)
+  hurtEnemy(e,14*depthMul(P.y),Math.sign(e.x-P.x)*120,'#8fdc6a',null,true)}
+ // Second Wind fires once and is loud about it — a save you don't notice is a save wasted.
+ if(P.hp<=0&&RUNM.secondWind&&!P.secondWind){
+  P.secondWind=1;P.hp=Math.round(P.maxhp*0.35);P.inv=2.0;
+  flash(0.5);shake=Math.max(shake,16);burst(P.x,P.y,'#ffe9a0',36);
+  sfx('level');toastQ('SECOND WIND');rumble(1,1,600);return}
  if(P.hp<=0)die()}
 // ---- FOCUS: the ability resource (DESIGN-PLAN §3.2) ----
 // Cooldown-only abilities mean "press ABIL whenever it's up", which is not a decision.
@@ -1376,15 +1719,18 @@ function spawnFromChunks(){
     if(EN.length>120&&!boss)continue;
     const E=ENEMIES[s.type],m=depthMul(s.y);
     // elite chance ramps with depth: ~2% shallow -> 22% deep. Bosses never roll elite.
-    const eliteP=Math.min(0.22,0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55);
+    const T=threat();
+    const eliteP=Math.min(0.55,(0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55)*(T.elite||1));
     const el=(!boss&&chance(eliteP))?ELITES[ri(0,ELITES.length-1)]:null;
     EN.push({x:s.x,y:s.y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type:s.type,ai:E.ai,
      c:el?el.c:E.c,
      hp:E.hp*m*(el?el.hp:1),maxhp:E.hp*m*(el?el.hp:1),dmg:E.dmg*m*(el?el.dmg:1),
-     arm:(E.arm||0)+(el&&el.arm||0),front:E.front||0,
-     spd:E.spd*(el?el.spd:1),onG:false,flash:0,dir:chance(.5)?1:-1,
+     arm:(E.arm||0)+(el&&el.arm||0)+(T.arm||0),front:E.front||0,
+     spd:E.spd*(el?el.spd:1)*(T.spd||1),onG:false,flash:0,dir:chance(.5)?1:-1,
      boss:boss,elite:el,shoot:E.shoot||null,scd:E.shoot?rr(.5,1.5):0,
-     atk:E.atk||null,acd:E.atk?rr(.3,1.0):0,wind:0,act:0,invT:0,phase:0,ph:E.ph||null,
+     // Threat III shortens every windup. The tell is still there — you just have less of it.
+     atk:E.atk?(T.wind?Object.assign({},E.atk,{wind:E.atk.wind*T.wind}):E.atk):null,
+     acd:E.atk?rr(.3,1.0):0,wind:0,act:0,invT:0,phase:0,ph:E.ph||null,
      spawnedBy:s.by||null})}}}}
 // BOSS PHASES (DESIGN-PLAN §4.3). At 66% and 33% HP: brief invuln + roar, shoot cooldown drops
 // 25%, and one new pattern unlocks. Turns HP sponges into fights with a shape.
@@ -1600,12 +1946,50 @@ function upPickups(dt){
   if(k.kind==='shard'&&d<70){k.x+=(P.x-k.x)*dt*8;k.y+=(P.y-k.y)*dt*8} // magnet
   if(d<14){
    if(k.kind==='shard'){META.shards++;RUNSHARDS++;if((RUNSHARDS&7)===0)saveMeta();sfx('pick')}
-   else if(k.kind==='gem'){BAG.push({kind:'gem',id:k.id,tier:k.tier||1});toast('Gem: '+GEMS[k.id].n);sfx('gem')}
-   else{BAG.push({kind:'gear',item:k.item});toast(itemName(k.item));sfx('gem')}
+   else if(k.kind==='gem'){BAG.push({kind:'gem',id:k.id,tier:k.tier||1});toast('Gem: '+GEMS[k.id].n);sfx('gem');
+    hint('socket',`Open the bag (${pr('bag')}) and socket that gem — colors must match`)}
+   else{BAG.push({kind:'gear',item:k.item});toast(itemName(k.item));sfx('gem');
+    discover('item',k.item.unique?k.item.base+(k.item.alt?'#2':''):k.item.base,true)}
    PICK.splice(i,1);continue}
   if(k.t<=0)PICK.splice(i,1)}}
 // ============ PLAYER UPDATE ============
 let perf=0,RUNSHARDS=0;
+// ---- IN-RUN LEVELS ----
+// The curve is tuned so a competent 8-12 minute run reaches roughly level 10. Levels are the
+// only power source available on run one, before a single unlock has been bought — which is
+// what lets a brand-new player feel the build tighten inside their first descent.
+function xpNeed(lv){return Math.round(30*Math.pow(1.30,lv-1))}
+function gainXP(n){
+ if(P.dead)return;
+ P.xp+=n;
+ while(P.xp>=P.xpNeed){P.xp-=P.xpNeed;P.level++;P.xpNeed=xpNeed(P.level);P.picks++}
+ if(P.picks>0&&!paused)offerAttune()}
+// Three picks, no rerolls, chosen under whatever pressure you were already under. Anything
+// already taken is excluded, so the pool thins and later choices get sharper.
+let ATT_PICK=[];
+function offerAttune(){
+ const taken=RUNM.__taken||(RUNM.__taken={});
+ const pool=ATTUNE.filter(a=>!taken[a.id]);
+ if(!pool.length){P.picks=0;return}
+ const pick=[];const bag=pool.slice();
+ for(let i=0;i<3&&bag.length;i++)pick.push(bag.splice(ri(0,bag.length-1),1)[0]);
+ ATT_PICK=pick;
+ let h=`<div class="sub">LEVEL ${P.level}</div><h2>ATTUNE</h2>
+  <div class="sub">Choose one. It lasts the run.</div>`;
+ pick.forEach((a,i)=>{h+=`<button onclick="takeAttune(${i})">${a.n}
+   <span class="sub">— ${a.d}</span></button>`});
+ openPanel(h,true)}
+function takeAttune(i){
+ const a=ATT_PICK[i];if(!a)return;
+ (RUNM.__taken||(RUNM.__taken={}))[a.id]=1;
+ if(a.fx)for(const k in a.fx)RUNB[k]=(RUNB[k]||0)+a.fx[k];
+ if(a.m)for(const k in a.m)RUNM[k]=(RUNM[k]||0)+a.m[k];
+ P.maxhp=maxHP();P.hp=Math.min(P.maxhp,P.hp+(a.fx&&a.fx.hp?a.fx.hp:0));
+ refreshAttacks();sfx('level');flash(0.18);toast(a.n+' — '+a.d);
+ P.picks--;
+ closePanel(true);
+ if(P.picks>0)offerAttune()}
+
 // THE WEIGHT (DESIGN-PLAN §3.4.2) — Risk-of-Rain pressure with no visible timer, framed as the
 // world noticing you. Linger in one biome band and it stacks; descend and it resets. This is
 // what makes "farm the safe layer forever" stop being the optimal strategy.
@@ -1616,7 +2000,8 @@ function applyWeight(dt){
   P.band=band;P.weightT=0;P.weight=0;return}
  if(nearCamp())  {P.weightT=0;P.weight=0;return}  // camp and anchors are safe by design
  P.weightT+=dt;
- const target=Math.max(0,Math.min(WEIGHT_MAX,Math.floor((P.weightT-WEIGHT_GRACE)/WEIGHT_EVERY)+1));
+ const T=threat(),wm=T.weight||1;
+ const target=Math.max(0,Math.min(WEIGHT_MAX,Math.floor((P.weightT*wm-WEIGHT_GRACE)/WEIGHT_EVERY)+1));
  if(target>P.weight){P.weight=target;
   toast('THE WEIGHT ×'+P.weight+' — descend');flash(0.12);sfx('deny')}}
 function upPlayer(dt){
@@ -1639,7 +2024,8 @@ function upPlayer(dt){
   P.vy+=GRAV*dt;
  }
  if(P.onG)P.coyote=0.1;
- if(P.jbuf>0&&P.coyote>0){P.vy=-JUMPV;P.jbuf=0;P.coyote=0;P.fuel=Math.max(0,P.fuel-6)}
+ if(P.jbuf>0&&P.coyote>0){P.vy=-JUMPV;P.jbuf=0;P.coyote=0;P.fuel=Math.max(0,P.fuel-6);
+  hint('hover','Hold jump in the air to hover — the blue bar is fuel')}
  // --- HOVER: hold jump in the air to burn fuel and thrust. The Noita traversal beat. ---
  const lev=(P.levT||0)>perf;
  if(lev)P.fuel=P.maxfuel;
@@ -1668,6 +2054,8 @@ function upPlayer(dt){
  P.noFall=Math.max(0,P.noFall-dt);
  runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
  const bn=biomeName(Math.floor(P.y/TILE));
+ discover('biome',bn);
+ if(bn!=='surface')hint('depth','Deeper enemies hit harder and drop far more. Anchors let you start here.');
  if(!META.anchors[bn]){META.anchors[bn]=1;saveMeta();UNLOCK_MSG.push(bn+' anchor');
   toast('ANCHOR SET: '+bn.toUpperCase()+' — descend from here next run');sfx('level')}
  // DESCENT BONUS (§3.4.3): reaching a new band this run is a free shrine roll. Pull, not push.
@@ -1678,7 +2066,8 @@ function upPlayer(dt){
 // invulnerability. 0.30s of i-frames on a 0.55s cycle leaves a real gap to be punished in.
 function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
  P.dodgeT=0.22;P.dodgeCd=0.55;P.inv=Math.max(P.inv,0.30*(1+inc('iframes')));
- burst(P.x,P.y,'#ffffff50',5);sfx('swing')}}
+ burst(P.x,P.y,'#ffffff50',5);sfx('swing');
+ if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthMul(P.y),'#ffcf8a',{burn:8*depthMul(P.y)})}}
 function die(){if(P.dead)return;
  P.dead=true;paused=true;P.hp=0;sfx('die');flash(0.5);
  META.bestDepth=Math.max(META.bestDepth||0,runDepth);
@@ -1687,6 +2076,8 @@ function die(){if(P.dead)return;
  openPanel(`<h2>YOU DIED</h2>
  <table class="sum">
   <tr><td>Depth</td><td>${runDepth}m <span class="sub">(best ${META.bestDepth}m)</span></td></tr>
+  <tr><td>Level</td><td>${P.level}</td></tr>
+  <tr><td>Threat</td><td>${threat().n}</td></tr>
   <tr><td>Kills</td><td>${P.kills}</td></tr>
   <tr><td>Best hit</td><td>${Math.round(P.bestHit)}</td></tr>
   <tr><td>Shards earned</td><td class="r3">${RUNSHARDS}◆</td></tr>
@@ -1696,12 +2087,18 @@ function die(){if(P.dead)return;
  <p class="sub">Run gear is lost. Shards, unlocks and the Vault are forever.</p>
  <button onclick="newRun()">RISE AGAIN</button>`,true)}
 let RUNBANDS={},UNLOCK_MSG=[];
+// Mechanical attunements. Kept separate from RUNB so the additive pool stays purely numeric
+// and every mechanic has one obvious hook site.
+let RUNM={};
+const RUNM0=()=>({});
+function threat(){return THREATS[Math.min(META.threat||0,THREATS.length-1)]}
 function newRun(){
  SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);
  CHUNKS.clear();EN.length=0;PROJ.length=0;PICK.length=0;PART.length=0;DMGN.length=0;
  BAG.length=0;CHESTS.length=0;SHRINES.length=0;SENTRY.length=0;ARCS.length=0;
  ANCHOR=null;DECOY=null;SPAWNQ.length=0;runDepth=0;RUNSHARDS=0;RUNBANDS={};UNLOCK_MSG=[];
- RUNB=RUNB0();BUFFS.length=0;
+ RUNB=RUNB0();RUNM=RUNM0();BUFFS.length=0;
+ P.level=1;P.xp=0;P.xpNeed=xpNeed(1);P.picks=0;P.secondWind=0;
  const C=CLASSES[META.cls]||CLASSES.vanguard;
  const kit=META.useClassKit!==false?C.kit:META.loadout;
  for(const sl of ['melee','ranged','armor']){const id=kit[sl];
@@ -1739,7 +2136,8 @@ function newRun(){
 // ============ UI: PANELS / TOAST ============
 const $=id=>document.getElementById(id);
 let MODAL=false;
-function openPanel(html,modal){MODAL=!!modal;$('panel').innerHTML=html;$('overlay').style.display='flex';paused=true}
+function openPanel(html,modal){MODAL=!!modal;$('panel').innerHTML=html;$('overlay').style.display='flex';paused=true;
+ menuIdx=0;menuFocus(0)}
 // A modal panel demands a choice. Dismissing the death screen used to hide the overlay while
 // leaving paused=true — the game was still running nothing, with no way back.
 function closePanel(force){if(MODAL&&!force)return;
@@ -1833,6 +2231,83 @@ function fuseGem(id,tier){
  BAG.push({kind:'gem',id,tier:tier+1});
  sfx('level');toast(GEMS[id].n+' → tier '+(tier+1));openBag()}
 
+// -------- title + onboarding --------
+function openTitle(){
+ document.body.classList.add('titlemode');
+ const first=!META.runs;
+ openPanel(`<div class="title">SHARDFALL</div>
+  <div class="sub tagline">Something fell. We have been mining it for nine hundred years.</div>
+  ${first?'':`<div class="dps">Best ${META.bestDepth||0}m · ${META.runs} run${META.runs===1?'':'s'} · ${META.shards}◆ banked · ${threat().n}</div>`}
+  <button onclick="startRun()">${first?'DESCEND':'DESCEND AGAIN'} <span class="sub">${pr('confirm')}</span></button>
+  ${first?'':'<button onclick="openCamp()">CAMP <span class="sub">spend shards, pick a class</span></button>'}
+  <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
+  <button onclick="openControls()">CONTROLS</button>
+  <button onclick="openSettings()">SETTINGS</button>`,true)}
+function startRun(){document.body.classList.remove('titlemode');closePanel(true);if(SET.hints&&!META.runs)hint('move',`${pr('move')} to move · ${pr('jump')} to jump, HOLD to hover`)}
+// Contextual hints: each fires once per save, at the moment it is relevant, and never again.
+// Teaching by interruption is worse than teaching by timing.
+function hint(id,text){
+ if(!SET.hints)return;
+ META.hints=META.hints||{};
+ if(META.hints[id])return;
+ META.hints[id]=1;saveMeta();
+ toast(text)}
+
+// -------- codex --------
+// Sealed pages show their shape but not their contents, so the codex reads as a map of what
+// you have not done yet rather than a list of things you cannot have.
+function pctSeen(kind,total){return Math.round(Object.keys(META.seen[kind]||{}).length/Math.max(1,total)*100)}
+function openCodex(){
+ CODEX_NEW=0;
+ const eT=Object.keys(LORE.enemy).length, bT=Object.keys(LORE.biome).length,
+       fT=LORE.frag.length, cT=Object.keys(LORE.class).length;
+ const done=Object.keys(META.seen.en||{}).length+Object.keys(META.seen.biome||{}).length+
+            Object.keys(META.seen.frag||{}).length+Object.keys(META.seen.cls||{}).length;
+ const tot=eT+bT+fT+cT;
+ openPanel(`<h2>CODEX</h2>
+  <div class="dps">${done} / ${tot} discovered &nbsp;·&nbsp; <b>${Math.round(done/tot*100)}%</b></div>
+  <button onclick="openLoreWorld()">THE SHARDFALL <span class="sub">what fell, and what we did about it</span></button>
+  <button onclick="openCodexList('frag')">FRAGMENTS <span class="sub">${pctSeen('frag',fT)}% — found in the deep</span></button>
+  <button onclick="openCodexList('biome')">STRATA <span class="sub">${pctSeen('biome',bT)}% — the layers you have reached</span></button>
+  <button onclick="openCodexList('en')">BESTIARY <span class="sub">${pctSeen('en',eT)}% — written on first kill</span></button>
+  <button onclick="openCodexList('cls')">DELVERS <span class="sub">${pctSeen('cls',cT)}%</span></button>
+  <button onclick="closePanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`)}
+function openLoreWorld(){
+ openPanel(`<h2>${LORE.world.n}</h2><div class="lore">${LORE.world.d.replace(/\n\n/g,'<br><br>')}</div>
+  <button onclick="openCodex()">BACK <span class="sub">${pr('cancel')}</span></button>`)}
+const CODEX_TITLE={frag:'FRAGMENTS',biome:'STRATA',en:'BESTIARY',cls:'DELVERS'};
+function openCodexList(kind){
+ let rows;
+ if(kind==='frag')rows=LORE.frag.map(f=>({id:f.id,n:f.n,sub:f.depth+'m'}));
+ else if(kind==='biome')rows=BIOMES.map(b=>b[1]).filter(n=>LORE.biome[n]).map(n=>({id:n,n:LORE.biome[n].n,sub:''}));
+ else if(kind==='cls')rows=Object.keys(LORE.class).map(k=>({id:k,n:LORE.class[k].n,sub:''}));
+ else rows=Object.keys(LORE.enemy).map(k=>({id:k,n:LORE.enemy[k].n,sub:LORE.enemy[k].boss?'miniboss':''}));
+ let h=`<h2>${CODEX_TITLE[kind]}</h2>`;
+ let any=false;
+ for(const r of rows){
+  const known=!!(META.seen[kind]||{})[r.id];
+  if(known){any=true;
+   h+=`<button onclick="openLore('${kind}','${r.id}')">${r.n} <span class="sub">${r.sub}</span></button>`}
+  else h+=`<button disabled>??? <span class="sub">${kind==='frag'?'somewhere below '+r.sub:'undiscovered'}</span></button>`}
+ if(!any)h+='<div class="sub">Nothing here yet. Go down.</div>';
+ h+=`<button onclick="openCodex()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h)}
+function loreEntry(kind,id){
+ if(kind==='frag')return LORE.frag.find(f=>f.id===id);
+ if(kind==='biome')return LORE.biome[id];
+ if(kind==='cls')return LORE.class[id];
+ return LORE.enemy[id]}
+function openLore(kind,id){
+ const e=loreEntry(kind,id);if(!e)return openCodex();
+ openPanel(`<h2>${e.n}</h2><div class="lore">${e.d.replace(/\n\n/g,'<br><br>')}</div>
+  <button onclick="openCodexList('${kind}')">BACK <span class="sub">${pr('cancel')}</span></button>`)}
+// Shown the moment a fragment drops — finding one should feel like an event, not a log line.
+function openFrag(id){
+ const f=LORE.frag.find(x=>x.id===id);if(!f)return;
+ openPanel(`<div class="sub">FRAGMENT RECOVERED</div><h2>${f.n}</h2>
+  <div class="lore">${f.d.replace(/\n\n/g,'<br><br>')}</div>
+  <button onclick="closePanel(true)">POCKET IT <span class="sub">${pr('confirm')}</span></button>`,true)}
+
 // -------- shrine --------
 let SHRINE_PICK=[],SHRINE_SRC=null;
 function openShrine(sh){
@@ -1859,7 +2334,9 @@ function openCamp(){
  <button onclick="openClasses()">CLASS — ${(CLASSES[META.cls]||CLASSES.vanguard).n}</button>
  <button onclick="openAnchors()">DESCEND FROM — ${(META.startBiome||'surface').toUpperCase()}</button>
  <button onclick="openLoadout()">STARTING LOADOUT — ${['melee','ranged','armor'].map(s=>META.loadout[s]?GEAR[META.loadout[s]].n:'—').join(' / ')}</button>
+ <button onclick="openThreat()">THREAT — ${threat().n}</button>
  <button onclick="openVault()">THE VAULT — ${META.vault.length}/3 stored</button>
+ <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
  <button onclick="toggleAudio()">SOUND — ${AUDIO_ON?'on':'off'}</button>
  <div class="sub" style="margin-top:6px">UNLOCK INTO DROP POOL</div>`;
  for(const u of UNLOCKS){const owned=META.unlocks[u.id];
@@ -1882,7 +2359,7 @@ function openClasses(){
 // just on the next run. Without this the cached ATK, maxHP and armor all go stale the moment
 // you pick a class and walk away from camp without descending.
 function applyClass(){refreshAttacks();P.maxhp=maxHP();P.hp=Math.min(P.hp,P.maxhp);P.fuel=Math.min(P.fuel,P.maxfuel)}
-function pickClass(id){if(META.classes[id]){META.cls=id;saveMeta();applyClass();toast(CLASSES[id].n)}openClasses()}
+function pickClass(id){if(META.classes[id]){META.cls=id;discover('cls',id,true);saveMeta();applyClass();toast(CLASSES[id].n)}openClasses()}
 function buyClass(id){const C=CLASSES[id];
  if(!META.classes[id]&&META.shards>=C.cost){META.shards-=C.cost;META.classes[id]=1;META.cls=id;saveMeta();applyClass();sfx('level');toast('Unlocked '+C.n)}
  openClasses()}
@@ -1906,6 +2383,17 @@ function openLoadout(){
    h+=`<button onclick="setLoad('${sl}','${id}')">${META.loadout[sl]===id?'▸ ':''}${b.n} <span class="sub">${b.sockets} socket(s)</span></button>`}}
  h+='<button onclick="openCamp()">BACK</button>';openPanel(h)}
 function setLoad(slot,id){META.loadout[slot]=id;saveMeta();openLoadout()}
+function openThreat(){
+ let h=`<h2>THREAT</h2><div class="sub">Each biome boss you fell raises the ceiling by one tier.
+  Higher threat pays more shards and better loot.</div>`;
+ THREATS.forEach((t,i)=>{
+  const ok=i<=(META.maxThreat||0);
+  h+=`<button ${ok?'':'disabled'} onclick="setThreat(${i})">
+   ${META.threat===i?'▸ ':''}${t.n} <span class="sub">— ${ok?t.d:'kill '+t.req+' distinct minibosses'}
+   <br>${Math.round(t.shard*100)}% shards · ${Math.round(t.rare*100)}% rarity</span></button>`});
+ h+=`<button onclick="openCamp()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h)}
+function setThreat(i){if(i<=(META.maxThreat||0)){META.threat=i;saveMeta();sfx('level')}openThreat()}
 function toggleAudio(){AUDIO_ON=!AUDIO_ON;META.audio=AUDIO_ON?1:0;saveMeta();if(AUDIO_ON){audioInit();sfx('pick')}openCamp()}
 // THE VAULT (DESIGN-PLAN §3.5). Dead Cells' real hook is that death is a scene change, not a
 // reset. Three slots; deposit costs shards scaled by rarity so a great early unique becomes an
@@ -1947,32 +2435,153 @@ function vaultTake(i){const v=META.vault[i];if(!v)return;
  BAG.push({kind:'gear',item:v});toast('Withdrawn to bag');openVault()}
 function buyUnlock(id){const u=UNLOCKS.find(x=>x.id===id);if(META.shards>=u.cost&&!META.unlocks[id]){META.shards-=u.cost;META.unlocks[id]=1;saveMeta();toast('Unlocked: '+u.n)}openCamp()}
 function buyNode(id){const n=TREE.find(x=>x.id===id);if(META.shards>=n.cost&&!META.tree[id]){META.shards-=n.cost;META.tree[id]=1;saveMeta();P.maxhp=maxHP();refreshAttacks();toast(n.n)}openCamp()}
+// The canvas is grabbed here rather than in RENDER because the mouse listeners below need it,
+// and a `const` declared further down would be in the temporal dead zone at this point.
+const cv=$('cv'),ctx=cv.getContext('2d');
+
 // ============ INPUT ============
-// Browsers refuse to start an AudioContext before a real gesture, so the first touch or
-// keypress is what actually turns sound on. Registered once and then removed.
-function armAudio(){if(AUDIO_ON)audioInit();
- removeEventListener('pointerdown',armAudio);removeEventListener('keydown',armAudio)}
-addEventListener('pointerdown',armAudio);addEventListener('keydown',armAudio);
-const IN={x:0};const HELD={mel:false,rng:false,jmp:false};const KEYS={};
-addEventListener('keydown',e=>{if(e.repeat)return;KEYS[e.code]=true;
- if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp'){P.jbuf=0.12;HELD.jmp=true}
- if(e.code==='KeyJ'||e.code==='KeyZ')HELD.mel=true;
- if(e.code==='KeyK'||e.code==='KeyX')HELD.rng=true;
- if(!paused){
-  if(e.code==='ShiftLeft'||e.code==='KeyL')dodge();
-  if(e.code==='KeyF'||e.code==='KeyQ')useAbility()}
- if(e.code==='KeyE')($('overlay').style.display==='flex')?closePanel():openBag();
- if(e.code==='KeyC'&&!paused&&nearCamp())openCamp();
- if(e.code==='Escape')closePanel()});
+// One abstract input state that the sim reads; every device writes into it. Adding a device
+// means adding a poller, not touching gameplay. The game was born one-thumb mobile, so touch
+// keeps auto-aim; a mouse or a right stick is precise enough to aim manually.
+//
+//   INMODE tracks the LAST device you actually used, and the whole UI follows it — button
+//   prompts, the touch overlay, and whether a crosshair is drawn.
+let INMODE='kb', PADTYPE='xbox', padIndex=-1;
+const IN={x:0,tx:0,aimX:1,aimY:0,manual:false};
+const HELD={mel:false,rng:false,jmp:false};
+const KEYS={};
+// Edge-triggered actions. Held state lives in HELD; one-shot presses go through EDGE so a
+// gamepad button and a key can fire the same action without either double-firing.
+const EDGE={dodge:0,abil:0,bag:0,camp:0,map:0,pause:0,confirm:0,cancel:0,navU:0,navD:0,navL:0,navR:0};
+function fire(a){EDGE[a]=1}
+function consumed(a){const v=EDGE[a];EDGE[a]=0;return v}
+
+// ---- settings, persisted in META.set ----
+const SET_DEF={vol:22,shake:100,dmgnum:1,aimassist:55,autoaim:1,deadzone:22,rumble:1,hints:1};
+let SET=Object.assign({},SET_DEF);
+function loadSet(){SET=Object.assign({},SET_DEF,META.set||{});applyVol()}
+function saveSet(){META.set=SET;saveMeta()}
+function applyVol(){if(MASTER)MASTER.gain.value=(SET.vol/100)*0.9}
+
+function setMode(m){if(INMODE===m)return;INMODE=m;
+ document.body.classList.toggle('touchmode',m==='touch');
+ refreshPrompts()}
+
+// ---- keyboard ----
+// Codes, not characters, so the layout survives non-QWERTY.
+const KEYMAP={
+ // Directions are resolved into an axis, never shown as prompts — `move` is the label that
+ // stands for all four, and it is the one GLYPH carries.
+ left:['KeyA','ArrowLeft'], right:['KeyD','ArrowRight'], up:['KeyW','ArrowUp'], down:['KeyS','ArrowDown'],
+ jump:['Space','KeyW','ArrowUp'], mel:['KeyJ','KeyZ'], rng:['KeyK','KeyX'],
+ dodge:['ShiftLeft','ShiftRight','KeyL'], abil:['KeyF','KeyQ'],
+ bag:['KeyE','KeyI','Tab'], camp:['KeyC'], map:['KeyM'], pause:['Escape','KeyP'],
+};
+const heldKey=a=>KEYMAP[a].some(c=>KEYS[c]);
+addEventListener('keydown',e=>{
+ if(e.code==='Tab')e.preventDefault();
+ setMode('kb');
+ if(e.repeat)return;
+ KEYS[e.code]=true;
+ if(KEYMAP.jump.includes(e.code)){P.jbuf=0.12;HELD.jmp=true}
+ if(KEYMAP.mel.includes(e.code))HELD.mel=true;
+ if(KEYMAP.rng.includes(e.code))HELD.rng=true;
+ if(KEYMAP.dodge.includes(e.code))fire('dodge');
+ if(KEYMAP.abil.includes(e.code))fire('abil');
+ if(KEYMAP.bag.includes(e.code))fire('bag');
+ if(KEYMAP.camp.includes(e.code))fire('camp');
+ if(KEYMAP.map.includes(e.code))fire('map');
+ if(KEYMAP.pause.includes(e.code))fire('pause');
+ if(e.code==='Enter')fire('confirm');
+ if(e.code==='ArrowUp'||e.code==='KeyW')fire('navU');
+ if(e.code==='ArrowDown'||e.code==='KeyS')fire('navD');
+ if(e.code==='ArrowLeft')fire('navL');
+ if(e.code==='ArrowRight')fire('navR')});
 addEventListener('keyup',e=>{KEYS[e.code]=false;
- if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp')HELD.jmp=false;
- if(e.code==='KeyJ'||e.code==='KeyZ')HELD.mel=false;
- if(e.code==='KeyK'||e.code==='KeyX')HELD.rng=false});
-function kbAxis(){let x=0;if(KEYS.KeyA||KEYS.ArrowLeft)x-=1;if(KEYS.KeyD||KEYS.ArrowRight)x+=1;return x}
-// touch stick
-let stickId=null,stickOx=0;
+ if(KEYMAP.jump.includes(e.code))HELD.jmp=false;
+ if(KEYMAP.mel.includes(e.code))HELD.mel=false;
+ if(KEYMAP.rng.includes(e.code))HELD.rng=false});
+addEventListener('blur',()=>{for(const k in KEYS)KEYS[k]=false;HELD.mel=HELD.rng=HELD.jmp=false});
+function kbAxis(){let x=0;if(heldKey('left'))x-=1;if(heldKey('right'))x+=1;return x}
+
+// ---- mouse: aim at the cursor, left click swings, right click shoots ----
+let mouseX=0,mouseY=0,mouseIn=false;
+function screenToWorld(sx,sy){
+ const r=cv.getBoundingClientRect();
+ return {x:camOX+(sx-r.left)/r.width*VW, y:camOY+(sy-r.top)/r.height*VH}}
+cv.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY;mouseIn=true;setMode('kb')});
+cv.addEventListener('mouseleave',()=>{mouseIn=false});
+cv.addEventListener('mousedown',e=>{setMode('kb');
+ if(e.button===0)HELD.mel=true;else if(e.button===2)HELD.rng=true;else if(e.button===1)fire('dodge')});
+addEventListener('mouseup',e=>{if(e.button===0)HELD.mel=false;else if(e.button===2)HELD.rng=false});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault()},{passive:false});
+
+// ---- gamepad ----
+// Standard mapping. Face-button labels differ between Xbox and PlayStation pads, so the id is
+// sniffed once and every on-screen prompt reads from GLYPH.
+const PAD={A:0,B:1,X:2,Y:3,LB:4,RB:5,LT:6,RT:7,BACK:8,START:9,L3:10,R3:11,UP:12,DOWN:13,LEFT:14,RIGHT:15};
+let padPrev=[];
+addEventListener('gamepadconnected',e=>{
+ padIndex=e.gamepad.index;
+ const id=(e.gamepad.id||'').toLowerCase();
+ PADTYPE=/dualshock|dualsense|playstation|sony|054c/.test(id)?'ps':'xbox';
+ setMode('pad');toast('Controller connected');refreshPrompts()});
+addEventListener('gamepaddisconnected',e=>{if(e.gamepad.index===padIndex){padIndex=-1;setMode('kb');toast('Controller disconnected')}});
+function dz(v){const d=SET.deadzone/100;return Math.abs(v)<d?0:(v-Math.sign(v)*d)/(1-d)}
+function pollPad(){
+ if(!navigator.getGamepads)return;
+ const pads=navigator.getGamepads();
+ let gp=padIndex>=0?pads[padIndex]:null;
+ if(!gp)for(const p of pads)if(p&&p.connected){gp=p;padIndex=p.index;break}
+ if(!gp)return;
+ const b=gp.buttons,ax=gp.axes;
+ const down=i=>!!(b[i]&&(b[i].pressed||b[i].value>0.5));
+ // any activity at all switches the UI over to controller prompts
+ let active=false;
+ for(let i=0;i<b.length;i++)if(down(i))active=true;
+ const lx=dz(ax[0]||0),ly=dz(ax[1]||0),rx=dz(ax[2]||0),ry=dz(ax[3]||0);
+ if(Math.abs(lx)>0.02||Math.abs(ly)>0.02||Math.abs(rx)>0.02||Math.abs(ry)>0.02)active=true;
+ if(active)setMode('pad');
+ if(INMODE!=='pad')return;
+ // movement: analog left stick, with the dpad as a digital fallback
+ IN.padX=lx||(down(PAD.LEFT)?-1:down(PAD.RIGHT)?1:0);
+ // aim: right stick, absolute direction
+ if(Math.hypot(rx,ry)>0.35){IN.aimX=rx;IN.aimY=ry;IN.manual=true;IN.manualT=perf}
+ HELD.jmp=down(PAD.A)||down(PAD.LB);
+ HELD.mel=down(PAD.X)||down(PAD.RB);
+ HELD.rng=down(PAD.RT)||down(PAD.Y);
+ const edge=i=>{const now=down(i),was=padPrev[i];padPrev[i]=now;return now&&!was};
+ if(edge(PAD.B))fire('dodge');
+ if(edge(PAD.LT))fire('abil');
+ if(edge(PAD.BACK))fire('bag');
+ if(edge(PAD.START))fire('pause');
+ if(edge(PAD.L3))fire('map');
+ if(edge(PAD.R3))fire('camp');
+ // menu navigation — dpad, plus the left stick with a repeat delay so it doesn't fly past
+ if(edge(PAD.A))fire('confirm');
+ if(edge(PAD.B))fire('cancel');
+ if(edge(PAD.UP))fire('navU');
+ if(edge(PAD.DOWN))fire('navD');
+ if(edge(PAD.LEFT))fire('navL');
+ if(edge(PAD.RIGHT))fire('navR');
+ if(paused){
+  navRepeat-=DT;
+  if(Math.abs(ly)>0.6&&navRepeat<=0){fire(ly<0?'navU':'navD');navRepeat=0.18}
+  else if(Math.abs(ly)<=0.6&&Math.abs(lx)<=0.6)navRepeat=0}
+ // jump must still buffer on the press edge, not just while held
+ if(edge(PAD.A)||edge(PAD.LB))P.jbuf=0.12}
+let navRepeat=0;
+function rumble(strong,weak,ms){
+ if(!SET.rumble||INMODE!=='pad'||!navigator.getGamepads)return;
+ const gp=navigator.getGamepads()[padIndex];
+ if(gp&&gp.vibrationActuator&&gp.vibrationActuator.playEffect)
+  gp.vibrationActuator.playEffect('dual-rumble',{duration:ms,strongMagnitude:strong,weakMagnitude:weak}).catch(()=>{})}
+
+// ---- touch ----
+let stickId=null,stickOx=0,stickOy=0;
 const sz=$('stickzone'),stEl=$('stick'),nub=$('nub');
-sz.addEventListener('pointerdown',e=>{stickId=e.pointerId;stickOx=e.clientX;
+sz.addEventListener('pointerdown',e=>{setMode('touch');stickId=e.pointerId;stickOx=e.clientX;stickOy=e.clientY;
  stEl.style.display='block';stEl.style.left=(e.clientX-45)+'px';stEl.style.top=(e.clientY-45)+'px';
  sz.setPointerCapture(e.pointerId)});
 sz.addEventListener('pointermove',e=>{if(e.pointerId!==stickId)return;
@@ -1981,19 +2590,136 @@ sz.addEventListener('pointermove',e=>{if(e.pointerId!==stickId)return;
 sz.addEventListener('pointerup',e=>{if(e.pointerId===stickId){stickId=null;IN.tx=0;stEl.style.display='none';nub.style.left='25px'}});
 sz.addEventListener('pointercancel',()=>{stickId=null;IN.tx=0;stEl.style.display='none'});
 function bindBtn(id,down,up){const el=$(id);
- el.addEventListener('pointerdown',e=>{e.preventDefault();down()});
+ el.addEventListener('pointerdown',e=>{e.preventDefault();setMode('touch');down()});
  if(up){el.addEventListener('pointerup',up);el.addEventListener('pointerleave',up);el.addEventListener('pointercancel',up)}}
 bindBtn('bJump',()=>{P.jbuf=0.12;HELD.jmp=true},()=>HELD.jmp=false);
 bindBtn('bMel',()=>HELD.mel=true,()=>HELD.mel=false);
 bindBtn('bRng',()=>HELD.rng=true,()=>HELD.rng=false);
-bindBtn('bDodge',()=>{if(!paused)dodge()});
-bindBtn('bAbil',()=>{if(!paused)useAbility()});
-$('bagBtn').addEventListener('click',openBag);
-$('mapBtn').addEventListener('click',()=>{MMON=!MMON;toast('Minimap '+(MMON?'on':'off'))});
-$('campBtn').addEventListener('click',openCamp);
+bindBtn('bDodge',()=>fire('dodge'));
+bindBtn('bAbil',()=>fire('abil'));
+$('bagBtn').addEventListener('click',()=>fire('bag'));
+$('mapBtn').addEventListener('click',()=>fire('map'));
+$('campBtn').addEventListener('click',()=>fire('camp'));
+$('pauseBtn').addEventListener('click',()=>fire('pause'));
 
+// ---- per-frame input resolution ----
+// Runs before the sim. Everything above only records intent; this is where intent becomes
+// game actions, so pause rules and menu focus are enforced in exactly one place.
+function readInput(){
+ pollPad();
+ // movement, by device
+ if(INMODE==='pad')IN.x=IN.padX||0;
+ else if(INMODE==='touch')IN.x=IN.tx||0;
+ else IN.x=kbAxis();
+ // aim
+ if(INMODE==='kb'&&mouseIn){
+  const w=screenToWorld(mouseX,mouseY);
+  const dx=w.x-P.x,dy=w.y-P.y,d=Math.hypot(dx,dy);
+  if(d>4){IN.aimX=dx/d;IN.aimY=dy/d;IN.manual=true;IN.manualT=perf}}
+ // a stick released or a mouse that left the canvas falls back to auto-aim after a beat
+ if(IN.manual&&perf-(IN.manualT||0)>1.5)IN.manual=false;
+ if(paused){menuInput();return}
+ if(consumed('dodge'))dodge();
+ if(consumed('abil'))useAbility();
+ if(consumed('bag'))openBag();
+ if(consumed('camp')){if(nearCamp())openCamp();else toast('Not at camp')}
+ if(consumed('map')){MMON=!MMON;toast('Minimap '+(MMON?'on':'off'))}
+ if(consumed('pause'))openPause();
+ consumed('confirm');consumed('cancel');consumed('navU');consumed('navD');consumed('navL');consumed('navR')}
+
+// ---- menu navigation ----
+// Every panel is a stack of <button>s, so one focus cursor over the enabled ones makes the
+// entire UI controller-navigable without any per-screen work.
+let menuIdx=0;
+function menuButtons(){return Array.from($('panel').querySelectorAll('button:not([disabled])'))}
+function menuFocus(i){const b=menuButtons();if(!b.length)return;
+ menuIdx=(i+b.length)%b.length;
+ b.forEach((el,k)=>el.classList.toggle('foc',k===menuIdx));
+ const el=b[menuIdx];if(el.scrollIntoView)el.scrollIntoView({block:'nearest'})}
+function menuInput(){
+ if(consumed('navU'))menuFocus(menuIdx-1);
+ if(consumed('navD'))menuFocus(menuIdx+1);
+ consumed('navL');consumed('navR');
+ if(consumed('confirm')){const b=menuButtons()[menuIdx];if(b)b.click();return}
+ const back=consumed('cancel'),esc=consumed('pause');
+ if(back||esc){
+  // A modal panel demands a real choice; everything else backs out.
+  if(!MODAL)closePanel();
+  return}
+ consumed('dodge');consumed('abil');consumed('bag');consumed('camp');consumed('map')}
+
+// ---- device-aware prompts ----
+// The same action is SPACE, A or ✕ depending on what you last touched. Every label in the UI
+// goes through pr() so nothing ever tells a controller player to press E.
+const GLYPH={
+ kb:   {jump:'SPACE',mel:'LMB',rng:'RMB',dodge:'SHIFT',abil:'F',bag:'E',camp:'C',map:'M',pause:'ESC',confirm:'ENTER',cancel:'ESC',move:'WASD',aim:'MOUSE'},
+ xbox: {jump:'A',mel:'X',rng:'RT',dodge:'B',abil:'LT',bag:'BACK',camp:'R3',map:'L3',pause:'START',confirm:'A',cancel:'B',move:'L-STICK',aim:'R-STICK'},
+ ps:   {jump:'✕',mel:'□',rng:'R2',dodge:'○',abil:'L2',bag:'SHARE',camp:'R3',map:'L3',pause:'OPTIONS',confirm:'✕',cancel:'○',move:'L-STICK',aim:'R-STICK'},
+ touch:{jump:'JUMP',mel:'MEL',rng:'RNG',dodge:'DODGE',abil:'ABIL',bag:'BAG',camp:'CAMP',map:'MAP',pause:'❚❚',confirm:'TAP',cancel:'BACK',move:'STICK',aim:'AUTO'},
+};
+function pr(a){const set=INMODE==='pad'?GLYPH[PADTYPE]:GLYPH[INMODE]||GLYPH.kb;return set[a]||a.toUpperCase()}
+function refreshPrompts(){
+ // touch buttons keep their words; on other devices they show the real binding
+ const map={bJump:'jump',bMel:'mel',bRng:'rng',bDodge:'dodge'};
+ for(const id in map){const el=$(id);if(el&&INMODE!=='touch')el.textContent=pr(map[id]);
+  else if(el)el.textContent=map[id].toUpperCase().replace('BJUMP','JUMP')}
+ if(INMODE==='touch'){$('bJump').textContent='JUMP';$('bMel').textContent='MEL';
+  $('bRng').textContent='RNG';$('bDodge').textContent='DODGE'}
+ $('bagBtn').textContent='BAG'+(INMODE==='touch'?'':' '+pr('bag'));
+ $('mapBtn').textContent='MAP'+(INMODE==='touch'?'':' '+pr('map'));
+ $('pauseBtn').textContent=INMODE==='touch'?'❚❚':pr('pause')}
+
+// ---- pause + settings ----
+function openPause(){
+ openPanel(`<h2>PAUSED</h2>
+ <div class="sub">${biomeName(Math.floor(P.y/TILE)).toUpperCase()} · ${Math.max(0,Math.floor(P.y/TILE)-SURFACE)}m · ${P.kills} kills · ${RUNSHARDS}◆ this run</div>
+ <button onclick="closePanel()">RESUME <span class="sub">${pr('confirm')} / ${pr('pause')}</span></button>
+ <button onclick="openBag()">BAG <span class="sub">${pr('bag')}</span></button>
+ <button onclick="openCodex()">CODEX <span class="sub">lore, bestiary, items</span></button>
+ <button onclick="openSettings()">SETTINGS</button>
+ <button onclick="openControls()">CONTROLS</button>
+ ${nearCamp()?'<button onclick="openCamp()">CAMP</button>':''}
+ <button onclick="confirmAbandon()">ABANDON RUN <span class="sub">keep your shards, lose your gear</span></button>`)}
+function confirmAbandon(){
+ openPanel(`<h2>ABANDON RUN?</h2>
+  <p class="sub">Your ${RUNSHARDS}◆ this run are already banked. Gear and boons are lost.</p>
+  <div class="row"><button onclick="P.dead=false;die()">YES, DIE HERE</button>
+  <button onclick="openPause()">NO</button></div>`)}
+const SETTINGS=[
+ {k:'vol',      n:'Volume',        min:0,max:100,step:10,fmt:v=>v+'%'},
+ {k:'shake',    n:'Screen shake',  min:0,max:150,step:25,fmt:v=>v+'%'},
+ {k:'aimassist',n:'Aim assist',    min:0,max:100,step:15,fmt:v=>v===0?'off':v+'%'},
+ {k:'deadzone', n:'Stick deadzone',min:5,max:40, step:5, fmt:v=>v+'%'},
+ {k:'dmgnum',   n:'Damage numbers',min:0,max:1,  step:1, fmt:v=>v?'on':'off'},
+ {k:'autoaim',  n:'Auto-aim (no mouse/stick)',min:0,max:1,step:1,fmt:v=>v?'on':'off'},
+ {k:'rumble',   n:'Controller rumble',min:0,max:1,step:1,fmt:v=>v?'on':'off'},
+ {k:'hints',    n:'Tutorial hints',min:0,max:1,  step:1, fmt:v=>v?'on':'off'},
+];
+function openSettings(){
+ let h='<h2>SETTINGS</h2><div class="sub">Select a row to cycle it.</div>';
+ SETTINGS.forEach((o,i)=>{h+=`<button onclick="cycleSet(${i})">${o.n}
+  <span class="sub" style="float:right;color:var(--acc)">${o.fmt(SET[o.k])}</span></button>`});
+ h+='<button onclick="resetSet()">RESET TO DEFAULTS</button>';
+ h+=`<button onclick="openPause()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h)}
+function cycleSet(i){const o=SETTINGS[i];
+ let v=SET[o.k]+o.step;if(v>o.max)v=o.min;
+ SET[o.k]=v;saveSet();applyVol();
+ if(o.k==='vol'&&AUDIO_ON){audioInit();sfx('pick')}
+ const keep=menuIdx;openSettings();menuFocus(keep)}
+function resetSet(){SET=Object.assign({},SET_DEF);saveSet();applyVol();openSettings()}
+function openControls(){
+ const rows=[['move','Move'],['jump','Jump / hold to hover'],['mel','Melee'],['rng','Ranged'],
+  ['dodge','Dodge'],['abil','Ability'],['bag','Bag'],['camp','Camp'],['map','Minimap'],['pause','Pause']];
+ let h=`<h2>CONTROLS</h2><div class="sub">Showing: ${INMODE==='pad'?(PADTYPE==='ps'?'PlayStation pad':'Xbox pad'):INMODE==='touch'?'touch':'keyboard + mouse'}
+  — plug in a controller or touch the screen and this updates itself.</div><table class="sum">`;
+ for(const [k,label] of rows)h+=`<tr><td>${label}</td><td class="r3">${pr(k)}</td></tr>`;
+ if(INMODE==='kb')h+='<tr><td>Aim</td><td class="r3">MOUSE</td></tr>';
+ if(INMODE==='pad')h+='<tr><td>Aim</td><td class="r3">R-STICK</td></tr>';
+ h+='</table>';
+ h+=`<button onclick="openPause()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h)}
 // ============ RENDER ============
-const cv=$('cv'),ctx=cv.getContext('2d');
 let VW=0,VH=0,SCALE=2;
 // Adaptive scale. The first browser look showed only ~12 tiles across — too tight to read an
 // incoming enemy, and auto-aim reached further than the screen did. Fewer world px per screen
@@ -2089,7 +2815,7 @@ function drawLight(){
  const ty=P.y/TILE;
  // Ramps in over the first cave band and tops out well short of unplayable. The player's
  // light is always the brightest thing on screen, which is what pulls the eye down.
- const dark=Math.min(0.62,Math.max(0,(ty-SURFACE-40)/900)*0.62);
+ const dark=Math.min(0.78,Math.max(0,(ty-SURFACE-40)/900)*0.62*(threat().dark||1));
  if(dark<=0.01)return;
  const px=P.x-camOX,py=P.y-camOY;
  // Radius scales with the viewport. A fixed radius looked fine on the old square-ish canvas
@@ -2103,7 +2829,8 @@ function drawLight(){
  ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH)}
 let camOX=0,camOY=0;
 function render(){
- const sx=(RRNG()-0.5)*shake,sy=(RRNG()-0.5)*shake;
+ const sk=shake*(SET.shake/100);
+ const sx=(RRNG()-0.5)*sk,sy=(RRNG()-0.5)*sk;
  const ox=Math.round(cam.x-VW/2+sx),oy=Math.round(cam.y-VH/2+sy);
  camOX=ox;camOY=oy;
  drawSky(ox,oy);
@@ -2205,6 +2932,17 @@ function render(){
    ctx.fillStyle=STATUS[k].c;ctx.fillRect(x-6+i*5,y-P.h/2-6,3,3);i++}}}
  if(GRAPPLE){ctx.strokeStyle='#d8a53f';ctx.lineWidth=1;ctx.beginPath();
   ctx.moveTo(P.x-ox,P.y-oy);ctx.lineTo(GRAPPLE.x-ox,GRAPPLE.y-oy);ctx.stroke()}
+ // Aim reticle. Drawn from the RESOLVED aim vector, assist included, so what you see is
+ // exactly where the shot goes — an assisted shot that silently curves is worse than none.
+ if(!P.dead&&(IN.manual||INMODE!=='touch')&&ATK.ranged){
+  const v=aimVec(),R=aimRange();
+  const tx=P.x+v.x*R-ox, ty=P.y+v.y*R-oy;
+  const locked=IN.manual&&nearestEnemy(R*1.3);
+  ctx.strokeStyle=locked?'#e0555599':'#e8e2d066';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(tx,ty,5,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=locked?'#e05555':'#e8e2d0';ctx.fillRect(tx-1,ty-1,2,2);
+  // a faint lead line from the player, so the aim direction reads at a glance
+  ctx.globalAlpha=.18;ctx.beginPath();ctx.moveTo(P.x-ox,P.y-oy);ctx.lineTo(tx,ty);ctx.stroke();ctx.globalAlpha=1}
  // particles
  for(const p of PART){ctx.fillStyle=p.col;ctx.fillRect(p.x-ox-1,p.y-oy-1,2,2)}
  drawLight();
@@ -2237,13 +2975,12 @@ function sim(dt){
  else{if(PREVr&&isShield('ranged')&&HOLDr<=0.18)doRanged();HOLDr=0}
  P.block=(HELD.mel&&isShield('melee')&&HOLDm>0.18)||(HELD.rng&&isShield('ranged')&&HOLDr>0.18);
  PREVm=HELD.mel;PREVr=HELD.rng;
- IN.x=IN.tx!==undefined&&IN.tx!==0?IN.tx:kbAxis();
  upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);
  if(!P.dead){if(auraHas('regrowth'))P.hp=Math.min(P.maxhp,P.hp+2*dt);
   if(auraHas('staticfield')&&(staticT-=dt)<=0){staticT=1.6;   // Static Field: periodic shock pulse
    burst(P.x,P.y,'#e6d34a',8);
    for(const e of EN)if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<90)applyStatus(e,{shock:1.25},false)}
-  if(nearCamp())P.hp=Math.min(P.maxhp,P.hp+12*dt)}
+  if(nearCamp()){P.hp=Math.min(P.maxhp,P.hp+12*dt);hint('camp',`At camp — ${pr('camp')} to spend shards`)}}
  if(!P.dead)for(const sh of SHRINES){if(sh.used)continue;
   if(Math.hypot(sh.x-P.x,sh.y-P.y)<20){openShrine(sh);break}}
  tickBuffs();
@@ -2270,7 +3007,9 @@ function hud(){
  $('focfill').style.width=Math.max(0,P.focus/FOCUS_MAX*100)+'%';
  const ab=ATK.abil;
  $('focfill').style.background=(ab&&P.focus>=ab.fc&&P.acd<=0)?'#8fa8ff':'#4a5a90';
- let line='◆'+META.shards+'  '+biomeName(Math.floor(P.y/TILE))+' '+Math.max(0,Math.floor(P.y/TILE)-SURFACE)+'m';
+ $('xpfill').style.width=Math.max(0,Math.min(100,P.xp/Math.max(1,P.xpNeed)*100))+'%';
+ let line='◆'+META.shards+'  L'+P.level+'  '+biomeName(Math.floor(P.y/TILE))+' '+Math.max(0,Math.floor(P.y/TILE)-SURFACE)+'m';
+ if((META.threat||0)>0)line+='  T'+META.threat;
  if(P.shield>0)line+='  ⛨'+Math.round(P.shield);
  if(P.st){const k=Object.keys(P.st).filter(x=>P.st[x].length);if(k.length)line+='  ['+k.join(' ')+']'}
  $('stats').textContent=line;
@@ -2286,14 +3025,21 @@ let last=0,acc=0;
 function frame(t){
  requestAnimationFrame(frame);
  const now=t/1000;let ft=Math.min(0.1,now-last);last=now;
+ readInput();                       // devices -> intent -> actions, before anything simulates
  if(hitstop>0){hitstop-=ft;ft=0}
  if(!paused){acc+=ft;while(acc>=DT){sim(DT);acc-=DT}}
  render();hud()}
 
 // ============ INIT ============
-loadMeta();newRun();
+loadMeta();loadSet();
+// A phone should show its thumb controls before anyone has touched anything, and a desktop
+// should never show them. Coarse pointer + no hover is the only reliable "this is a touch
+// device" signal that doesn't misfire on touchscreen laptops with a mouse attached.
+try{if(matchMedia('(hover: none) and (pointer: coarse)').matches)setMode('touch');else setMode('kb')}catch(e){setMode('kb')}
+refreshPrompts();
+newRun();
 cam.x=P.x;cam.y=P.y;
-toast('Descend. Die. Bank shards. (E=bag, C=camp)');
+openTitle();
 requestAnimationFrame(frame);
 // Offline install. Wrapped because file:// and the test harness have no SW support, and a
 // throw here would take the whole game down after it had already started fine.

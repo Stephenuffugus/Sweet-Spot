@@ -5,9 +5,14 @@ Read this before touching anything. Then read `HANDOFF.md` for the system-by-sys
 
 ## What this is
 
-A side-view action roguelite RPG. One file, `index.html`, ~2100 lines. Vanilla HTML/CSS/JS,
-canvas 2D, no build step, no dependencies, mobile-first PWA. Lives in `shardfall/` inside the
-Sweet-Spot repo; deploys by copying the folder.
+A side-view action roguelite RPG. One file, `index.html`, ~3000 lines. Vanilla HTML/CSS/JS,
+canvas 2D, no build step, no dependencies. Lives in `shardfall/` inside the Sweet-Spot repo;
+deploys by copying the folder.
+
+**It plays on four devices**: touch, keyboard, mouse, and gamepad. That is a change from the
+original mobile-first framing — the touch layout still exists and still matters, but no longer
+gets to be the only assumption. Anything you add has to answer "how does this work with a
+thumb, and with a stick, and with a cursor?".
 
 ## Hard rules
 
@@ -34,14 +39,23 @@ Sweet-Spot repo; deploys by copying the folder.
 7. **`o.st[k]` is always an array** of `{p, t}` instances, even for the non-stacking effects.
    One shape, one code path.
 8. **Run the tests before you claim anything works.** See below.
-9. **Don't add scope that wasn't asked for.** The owner is explicit about this. Build the
+9. **Input goes through the abstraction, never straight to a device.** Devices write into
+   `HELD` (continuous) and `fire()`/`consumed()` (one-shot); `readInput()` turns intent into
+   actions once per frame, before `sim()`. A `keydown` handler that calls a gameplay function
+   directly will fire while paused and behind menus.
+10. **Every prompt goes through `pr(action)`.** Hard-coding "press E" is a bug on a controller.
+    `GLYPH` carries the keyboard, Xbox, PlayStation and touch labels for every named action.
+11. **A panel that can be dismissed must not leave the game paused.** `openPanel(html, true)`
+    marks a panel modal (title, death, shrine, level-up); modal panels demand a choice.
+    `closePanel(force)` is the only way out of one.
+12. **Don't add scope that wasn't asked for.** The owner is explicit about this. Build the
    thing requested, note adjacent opportunities in a comment or a message, don't just do them.
 
 ## Testing
 
 ```bash
-./test/run.sh          # all node suites (2-7)
-./test/run.sh 7        # one suite
+./test/run.sh          # all node suites (2-8)
+./test/run.sh 8        # one suite
 node test/browser.js   # real Chromium: boot, input, render, no console errors
 node test/pwa.js       # manifest, service worker, offline reload, save migration
 node test/shots.js     # writes screenshots to test/shots/ — the only way to judge FEEL
@@ -53,7 +67,7 @@ PWA suites need Playwright, which lives **outside** the repo (set `PW_DIR` if yo
 the game stays dependency-free.
 
 **When you add a system, add assertions to a new `test/suite-N.js`.** Copy the shape of
-suite-7. The harness cannot judge *feel* — it catches logic errors, NaN leaks, cap violations
+suite-7 or suite-8. The harness cannot judge *feel* — it catches logic errors, NaN leaks, cap violations
 and regressions. It has caught a real bug every session, including `FLY_THRUST` exactly
 equalling gravity, a projectile burning its whole lifetime in three frames, and a hand-built
 test enemy with no `invT` producing NaN.
@@ -77,6 +91,11 @@ Traps that have bitten these tests before, in order of frequency:
 - **Pickups expire.** Sample `PICK.length` immediately before the thing you're testing.
 - **`Date.now` is pinned** by the harness so world seeds are deterministic. That also means
   any timing number printed by a suite is meaningless.
+- **The harness has no pointer, no gamepad and no real DOM.** `querySelectorAll` returns `[]`,
+  `matchMedia` reports false, `getGamepads` returns nothing. Anything that depends on real DOM
+  behaviour — menu focus, computed styles, mouse coordinates — belongs in `test/browser.js`.
+- **The game boots to a title screen**, which holds the sim paused on purpose. A test that
+  asserts "the loop is running" must call `startRun()` first.
 
 ## Conventions
 
@@ -91,6 +110,9 @@ Traps that have bitten these tests before, in order of frequency:
   Forgetting this is the most likely bug you will introduce.
 - All visuals go through `drawEntity()`, which falls back to flat rects when no sprite atlas
   is loaded. Keep it that way — it's what lets art land without breaking the single-file rule.
-- Mobile-first: assume a phone, one thumb, no hover states. The thumb owns the bottom-right
-  corner; nothing else may live there.
+- Multi-device. The thumb owns the bottom-right corner on touch and nothing else may live
+  there; on keyboard and gamepad the touch overlay is hidden entirely (`body.touchmode`).
+  `INMODE` tracks the last device actually used and the whole UI follows it.
+- Every menu is a stack of `<button>`s so one focus cursor makes the entire UI navigable by
+  dpad or arrow keys. Don't build a screen out of anything else.
 - Terse code style, dense lines, minimal whitespace. Match what's there.

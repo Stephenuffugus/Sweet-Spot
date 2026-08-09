@@ -19,9 +19,15 @@ Open `index.html`, or serve the folder and install it as an app.
 python3 -m http.server 8080     # then visit /shardfall/
 ```
 
-**Keyboard:** `A`/`D` move · `Space`/`W` jump, **hold to hover** · `J` melee · `K` ranged ·
-`Shift` dodge · `F`/`Q` ability · `E` bag · `C` camp.
-**Touch:** left half of the screen is a virtual stick; the thumb cluster is bottom-right.
+Plays on **touch, keyboard + mouse, or a controller** — it detects whichever you last used and
+every on-screen prompt follows it. Plug in a pad mid-run and the UI switches over.
+
+**Keyboard + mouse:** `WASD` move · `Space` jump, **hold to hover** · mouse aims · `LMB` melee ·
+`RMB` ranged · `Shift` dodge · `F` ability · `E` bag · `C` camp · `Esc` pause.
+**Controller:** left stick moves, right stick aims, `A` jump, `X` melee, `RT` ranged, `B` dodge,
+`LT` ability, `Back` bag, `Start` pause. Every menu is navigable with the dpad.
+**Touch:** left half of the screen is a virtual stick; the thumb cluster is bottom-right, and
+aiming is automatic.
 
 ## The loop
 
@@ -31,6 +37,24 @@ descend again, deeper, from an anchor you already reached.
 Death loses your run gear. Shards, unlocks, tree nodes, classes, anchors and the Vault are
 permanent. Reaching a biome for the first time plants an anchor you can start from next run —
 without that, the loop dies from re-clearing the surface.
+
+## Depth, and where it comes from
+
+Three separate ladders, deliberately different in shape:
+
+**Inside a run** — kills grant XP, and every level offers three **attunements** to choose from.
+They stack, they're chosen under pressure, and they're gone when you die. This is what gives run
+one an arc, before you own a single gem.
+
+**Across runs** — shards buy permanent unlocks into the drop pool, meta tree nodes, classes, and
+Vault slots. Gems tier up by fusing three of a kind.
+
+**Difficulty** — felling each biome's miniboss raises the **Threat** ceiling by a tier. Each tier
+is a named world rule (*Watched* speeds up The Weight, *Armed* gives everything armor, *Buried*
+shrinks your light) and pays more shards and better loot for it.
+
+Everything is discoverable through the **codex**, which fills in as you play: a bestiary page on
+first kill, a lore page on first descent, and thirteen fragments buried at increasing depth.
 
 ## What makes a build
 
@@ -46,8 +70,8 @@ multiplier. That split is what keeps gems feeling build-defining instead of incr
 ## Develop
 
 ```bash
-./test/run.sh          # node suites 2-7 — 249 assertions, no dependencies
-node test/browser.js   # real Chromium: boot, input, render, console errors
+./test/run.sh          # node suites 2-8 — 368 assertions, no dependencies
+node test/browser.js   # real Chromium: boot, input, menus, mouse aim, render, console errors
 node test/pwa.js       # manifest, service worker, offline reload, save migration
 node test/shots.js     # screenshots to test/shots/ — the only way to judge feel
 ```

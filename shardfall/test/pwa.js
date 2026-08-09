@@ -68,6 +68,10 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   errs.length = 0;
   await page.reload({ waitUntil: 'load' }).catch(e => errs.push('reload: ' + e.message));
   await page.waitForTimeout(800);
+  // The game boots to a title screen, which deliberately holds the sim paused — so start the
+  // run before asserting the loop is alive, or "paused on purpose" reads as "broken".
+  await page.evaluate(() => { if (typeof startRun === 'function') startRun() }).catch(() => {});
+  await page.waitForTimeout(500);
   const offline = await page.evaluate(() => ({
     booted: typeof P === 'object' && P !== null && P.maxhp > 0,
     running: typeof perf === 'number' && perf > 0,
@@ -86,6 +90,13 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   await page.waitForTimeout(400);
   const kept = await page.evaluate(() => ({ shards: META.shards, axe: !!META.unlocks.axe, ver: META.ver }));
   ok(kept.shards === 1234 && kept.axe, 'meta save survives a reload');
+  // settings and codex progress live in the same blob and must survive too
+  await page.evaluate(() => { SET.vol = 70; saveSet(); discover('en', 'brute', true) });
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(400);
+  const kept2 = await page.evaluate(() => ({ vol: SET.vol, seen: !!META.seen.en.brute }));
+  ok(kept2.vol === 70, 'settings survive a reload');
+  ok(kept2.seen, 'codex discoveries survive a reload');
   ok(kept.ver === 2, `save is at version 2 (${kept.ver})`);
 
   // ---- a v1 save must migrate rather than being discarded ----
