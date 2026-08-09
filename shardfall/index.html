@@ -1,0 +1,1978 @@
+<!doctype html>
+<!--
+===== SHARDFALL (working title) — side-view roguelite RPG =====
+Owner: Stephen / Lucid Winds. Single-file vanilla PWA. See roguelite-handoff.md for full design.
+
+===== OPUS HANDOFF NOTES (update this block as you work) =====
+STATUS as of Fable session:
+  [x] Shell/CSS/HUD/touch buttons
+  [x] Data tables: tiles, gems, supports, gear bases, enemies, tree, unlocks
+  [x] Seeded RNG + value noise
+  [x] Chunked world gen (biome bands by depth, caves, ore, spawns) + chunk canvas render
+  [x] Player platformer physics (coyote, jump buffer, dodge roll w/ i-frames)
+  [x] Melee arc attack + tile digging, ranged projectiles w/ auto-aim
+  [x] Gem/socket resolution (implicit links per item), supports multiply skills
+  [x] Enemies: crawler/bat/brute, depth scaling, drops (shards/gems/gear)
+  [x] Loot rarity + affixes, inventory/equip/socket UI (DOM overlay)
+  [x] Camp: unlock pool purchases + 9-node meta tree; localStorage meta save
+  [x] Death loop: bank shards, new seed, restart
+  [x] HUD, damage numbers, screenshake, hitstop, particles
+  [x] SESSION 2 (headless-tested, 16/16 assertions pass):
+      - Shield: HOLD attack btn = block stance (70% DR, half move speed, blue edge visual);
+        TAP-release = bash. Works in either hand slot.
+      - Armor sockets upgraded: SUPPORT gems in armor now link GLOBALLY to both weapons
+        (real buildcraft rule); new AURA gems armor-only: Thorns (reflect on contact),
+        Regrowth (2hp/s), Swiftness (+15% ms). 3 new unlocks added.
+      - Treasure chests: ~12% of chunks, melee to open, big shard+gem(+gear) payout.
+      - True angular arc check for melee (sword 100° vs cleave 150° verified).
+      - Perf/memory: cached ATK params (refreshAttacks on any build change — call it if
+        you add new equip paths!), entity caps (EN 120/PROJ 200/PART 350), far-chunk
+        canvas eviction every 2s (canvases are ~2.3MB each; tiles kept).
+      - AABB contact damage, camp heals 12hp/s, best-depth in META, key-repeat guard,
+        PWA manifest via data-URI (offline SW needs a separate file — his call).
+  [x] SESSION 3 (21/21 headless assertions pass):
+      - MINIBOSSES: one per biome (warden/sporemother/sentinel/forgelord/voidmaw), spawn in
+        carved arenas ~1 per 26 chunks. Healthbars, guaranteed 2 gems + 1 magic/rare gear.
+      - ENEMIES CAN SHOOT: generic `shoot:{cd,dmg,speed,count,spread,range,explode}` on any
+        enemy def; new `spitter` grunt uses it. Hostile projectiles now damage the player —
+        and a raised shield DEFLECTS them outright from the faced side (blocking has teeth).
+      - SHRINES: ~1 per 30 chunks, walk into one, pick 1 of 3 run boons (7 in BOONS table,
+        incl. Ruin: +35% dmg / -15 HP). Boons live in RUNB, reset on newRun.
+      - SEALED VAULTS: hard-brick rooms w/ 1-2 chests, need an Axe (dig 1) or Fireball to
+        crack open. This is the Noita "map is a lock" beat.
+      - LOADOUT PICKER at camp: choose starting melee/ranged/armor from unlocked pool,
+        persisted in META.loadout. Empty slots are legal (shield-only runs work).
+  [x] SESSION 4 (25/25 headless assertions pass):
+      - DEPTH ANCHORS (the loop fix): first time you reach a biome, an anchor sets itself.
+        Camp > DESCEND FROM lets you start the next run at any reached biome. Anchor spawn
+        carves a safe pocket + acts as a second camp (heals, opens camp menu). No shard cost —
+        deeper start = harder enemies immediately, that's the price.
+      - ELITES: grunts roll modifiers at depth (2% shallow -> 22% deep): Swift / Armored /
+        Volatile (corpse detonates, hurts YOU too) / Vampiric (heals off you). White outline,
+        3x shards, 35% bonus gem.
+      - SECRET WALLS: tile 10 mimics stone, breaks to ANY weapon, hides a cache. Faint seam
+        tell when you're looking. ~72 seams per 360 chunks.
+      - 7 NEW GEMS: Nova (360 arc), Lightning (fast/pierce), Life Leech, Heavy Impact,
+        Aftershock (melee explodes), Ironskin aura (20% DR).
+      - 5 NEW GEAR: Greataxe (dig 2 — opens vaults), Crossbow, Runed Robe (3 sockets/low HP),
+        Plate, all with unlock costs.
+      - MINIMAP: toggleable, 2px/4 tiles, fog-of-war by chunk discovery, marks unopened
+        chests / unused shrines / bosses. Rebuilt every 8 frames, not per-frame.
+  [x] SESSION 5 — engine + classes + abilities + gear (42/42 headless assertions pass):
+      - STATUS EFFECT ENGINE (generic, applies to enemies AND player): burn (dps),
+        chill (movement mult), shock (incoming dmg mult), bleed (dps, DOUBLES while the
+        target is moving). applyStatus/tickStatus, threaded through every damage path:
+        melee, projectiles, explosions, enemy shots. Forgelord ignites you, Voidmaw chills.
+      - 4 ELEMENTAL SUPPORT GEMS: Ignite, Frostbite, Conduit, Serration.
+      - ABILITIES: armor SKILL-slot gems now drive a dedicated ABIL button (key F/Q) with
+        its own cooldown — closes the session-2 TODO. Blink (dash + i-frames), War Cry
+        (timed +25% dmg buff via BUFFS, shocks + knocks back), Meteor, Mend (heal + cleanse),
+        Quake (AoE + digs a crater). Armor supports empower the ability too.
+      - UNIQUES (rarity 3, D2 rule-breakers): 11 of them, mod() runs AFTER all gems so they
+        can rewrite rules. Worldbreaker digs anything, Judgment is 2.4x dmg at 1.9x cd,
+        Second Skin grants +2 sockets, Ashfall ignites every bolt. Bosses drop at 22%.
+      - 4 CLASSES: Vanguard (tanky, blockDR), Marksman (pierce, fragile), Pyromancer
+        (burn bonus + abilCdr), Delver (digBonus + greed). Each = starting kit + free
+        pre-socketed signature gem + permanent passive. classFx() folds into every stat
+        path. Custom loadout can override the class kit (toggle in camp).
+  [x] SESSION 6 — NOITA TRAVERSAL + DIGGING (35/35 pass; sessions 2-5 suites still green):
+      - carve(x,y,radius,maxHard) is now THE ONLY function that removes terrain. Melee digs,
+        explosions, Quake, Shaft, Burrow and tunneling projectiles all route through it.
+        Add any new dig source by calling carve() — never touch setTile directly.
+      - FLIGHT: everyone hovers. Hold JUMP in the air to thrust, drains fuel (base 60,
+        FLY_DRAIN 42/s), regens fast on ground. Rise speed capped (jetpack, not rocket).
+        On empty there's a weak "sputter" thrust so running dry isn't an instant death.
+        Fuel sources: Delver Harness gear, Updraft aura, Skyrigger unique, class/tree fx.
+      - FALL DAMAGE: over 520px/s costs HP, CAPPED at 55% max HP so a fall never one-shots
+        from full. Featherfall aura negates it; Skyrigger is immune.
+      - DIG CONTENT: Bore skill gem (tunneling projectile that carves instead of stopping,
+        lifetime is consumed by tiles cut), Excavate support (grants dig to ANY attack).
+      - TRAVERSAL ABILITIES: Levitate (6s free flight), Grapple (anchors to terrain and yanks
+        you, or yanks a light enemy to you; bosses immune), Burrow (phase THROUGH rock for
+        1.1s leaving a tunnel), Shaft (drills a 26-tile vertical shaft straight down).
+      - HUD: fuel bar under the HP bar, turns gold during Levitate. Grapple line renders.
+      TWO REAL BUGS THIS SESSION, both found only by testing:
+        1. FLY_THRUST was set exactly equal to GRAV, so hovering cancelled gravity and never
+           lifted. Now 2100. If flight ever feels floaty/heavy this is the number to tune.
+        2. Bore charged dig-cost per tile against a 2-tile radius, burning its whole lifetime
+           in ~3 frames. Radius and cost both reduced; projectiles now carry their own life.
+  [ ] TODO: BROWSER PLAYTEST — the one thing the harness can't do. Judge FEEL: jump height,
+      attack pacing, spawn density, whether bosses are fair, whether camp regen is too generous.
+      Measured densities: 1 chest/5.5 chunks, 1 shrine/30, 1 boss/26. Tune in genChunk hash gates.
+  [ ] TODO: sim+render measured at ~97ms per 1800 frames headless (render is stubbed) —
+      real bottleneck will be chunk canvas blits; re-measure on phone before adding effects.
+  [ ] TODO: liquid cellular automata (v2), sound (v2), sw.js for offline, gamepad
+  [ ] TODO: balance pass; more gems/gear (tables are data-driven, just append)
+TESTING: logic verified via headless node harness (DOM/canvas stubbed) — combat, block,
+auras, chests, death loop, chunk eviction all exercised. Rendering + touch NOT yet seen
+in a real browser. Next session: open it on the phone, check console, then playtest:
+spawn at camp flag on surface, dig down, kill crawlers, collect shards, press C at camp.
+Keyboard: A/D move, Space/W jump, J melee, K ranged, Shift dodge, E bag, C camp.
+KNOWN SOFT SPOTS: melee arc check is approximate (sign-based, cleave doesn't truly hit behind);
+enemy contact-damage hitbox is circle-ish; stick input dead simple; no cap on live entities yet.
+CONVENTIONS: no build step, mobile-first, all content in DATA TABLES section,
+sim/render separated, fixed 60Hz timestep, no per-frame allocation in hot loops (mostly).
+-->
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SHARDFALL</title>
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href='data:application/manifest+json,{"name":"SHARDFALL","short_name":"SHARDFALL","display":"fullscreen","background_color":"%230a0a0f","theme_color":"%230a0a0f","start_url":"."}'>
+<style>
+:root{--ui:#e8e2d0;--dim:#8a8578;--acc:#3fc9c1;--bad:#e05555;--gold:#d8a53f;--rare:#e6d34a;--magic:#6f8fe0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#0a0a0f;font-family:ui-monospace,Menlo,monospace;color:var(--ui);touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
+#hud{position:fixed;top:env(safe-area-inset-top,0);left:0;right:0;padding:8px 10px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;font-size:12px}
+#hpbar{width:140px;height:10px;background:#222;border:1px solid #444}
+#hpfill{height:100%;background:var(--bad);width:100%}
+#fuelbar{width:140px;height:5px;background:#222;border:1px solid #444;border-top:0}
+#fuelfill{height:100%;background:var(--acc);width:100%}
+#focbar{width:140px;height:5px;background:#222;border:1px solid #444;border-top:0}
+#focfill{height:100%;background:var(--magic);width:100%}
+#weight{color:var(--bad);font-size:11px;letter-spacing:1px}
+#stats{margin-top:4px;color:var(--dim)}
+#right{text-align:right;pointer-events:auto}
+#right button{pointer-events:auto}
+.hbtn{background:#1a1a22;border:1px solid #444;color:var(--ui);font:inherit;font-size:11px;padding:4px 8px;margin-left:4px}
+/* Thumb layout (DESIGN-PLAN §7). Right-thumb pivot is the bottom-right corner, so the most
+   used button (MEL) sits closest and ABIL — now gated by Focus, so it's a deliberate press —
+   sits furthest. ABIL used to be a full-width bar across the play area. */
+#btns{position:fixed;right:8px;bottom:calc(env(safe-area-inset-bottom,0) + 12px);display:grid;grid-template-columns:62px 62px;grid-template-rows:52px 62px 62px;gap:9px;align-items:end}
+.tb{width:62px;height:62px;border-radius:50%;background:#1a1a22cc;border:2px solid #555;color:var(--ui);font:inherit;font-size:11px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb:active{background:#2a2a38}
+#bAbil{grid-column:2;width:52px;height:52px;font-size:10px;justify-self:end;border-color:#6f8fe0}
+#bAbil.rdy{border-color:var(--acc);box-shadow:0 0 10px #3fc9c155}
+#bAbil.cold{opacity:.45}
+#bJump{grid-column:1;grid-row:2}#bRng{grid-column:2;grid-row:2}
+#bDodge{grid-column:1;grid-row:3}#bMel{grid-column:2;grid-row:3}
+#stickzone{position:fixed;left:0;bottom:0;width:45vw;height:55vh}
+#stick{position:fixed;width:90px;height:90px;border:2px solid #555;border-radius:50%;background:#1a1a2255;display:none;pointer-events:none}
+#nub{position:absolute;width:36px;height:36px;border-radius:50%;background:#555;left:25px;top:25px}
+#overlay{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:10}
+#panel{background:#12121a;border:1px solid #444;max-width:420px;width:92vw;max-height:80vh;overflow-y:auto;padding:14px;font-size:13px;line-height:1.5}
+#panel h2{margin:0 0 8px;font-size:15px;color:var(--acc)}
+#panel button{display:block;width:100%;text-align:left;background:#1a1a24;border:1px solid #3a3a48;color:var(--ui);font:inherit;font-size:12px;padding:8px;margin:5px 0}
+#panel button:disabled{opacity:.4}
+#panel .row{display:flex;gap:6px}
+#panel .row button{flex:1}
+.r0{color:var(--ui)}.r1{color:var(--magic)}.r2{color:var(--rare)}.r3{color:var(--gold)}
+.sub{color:var(--dim);font-size:11px}
+/* socket screen (DESIGN-PLAN §7): sockets as colored circles, live DPS readout */
+#panel .dps{background:#0d0d14;border:1px solid #2a2a36;padding:6px 8px;margin:0 0 8px;font-size:11px;color:var(--dim)}
+#panel .dps b{color:var(--acc);font-size:12px}
+#panel .socks{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+#panel .sk{display:flex;align-items:center;gap:4px;background:#0f0f16;border:1px solid #2a2a36;padding:3px 6px;font-size:10px}
+#panel .sk i{width:11px;height:11px;border-radius:50%;border:2px solid;display:inline-block;font-style:normal;line-height:8px;text-align:center;font-size:8px;color:#0a0a0f}
+#panel .sk .gn{color:var(--ui)}
+#panel .sk .gn b{color:var(--gold)}
+#panel button.slotb{padding:8px}
+#panel table.sum{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0 8px}
+#panel table.sum td{padding:3px 0;border-bottom:1px solid #22222c}
+#panel table.sum td:first-child{color:var(--dim);width:45%}
+#toast{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);background:#12121add;border:1px solid #444;padding:6px 12px;font-size:12px;display:none;pointer-events:none;white-space:nowrap}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <div><div id="hpbar"><div id="hpfill"></div></div><div id="fuelbar"><div id="fuelfill"></div></div><div id="focbar"><div id="focfill"></div></div><div id="stats"></div><div id="weight"></div></div>
+  <div id="right">
+    <button class="hbtn" id="mapBtn">MAP</button><button class="hbtn" id="bagBtn">BAG</button><button class="hbtn" id="campBtn" style="display:none">CAMP</button>
+  </div>
+</div>
+<div id="stickzone"></div><div id="stick"><div id="nub"></div></div>
+<div id="btns">
+  <div class="tb" id="bAbil">ABIL</div>
+  <div class="tb" id="bJump">JUMP</div><div class="tb" id="bRng">RNG</div>
+  <div class="tb" id="bDodge">DODGE</div><div class="tb" id="bMel">MEL</div>
+</div>
+<div id="overlay"><div id="panel"></div></div>
+<div id="toast"></div>
+<script>
+'use strict';
+// ============ CONSTANTS ============
+const TILE=16, CHUNK=48, WORLD_W=1600, WORLD_H=3200, SURFACE=60;
+const GRAV=1500, MOVE=170, JUMPV=430, DT=1/60;
+// --- traversal tuning (Noita-flavored: everyone can fly a little, fuel is the limit) ---
+const FLY_THRUST=2100;   // upward accel while hovering (must EXCEED gravity or you only slow the fall)
+const FLY_DRAIN=42;      // fuel/sec while thrusting
+const FLY_REGEN=58;      // fuel/sec while grounded
+const FLY_REGEN_AIR=8;   // trickle while airborne and not thrusting
+const FLY_VMAX=-190;     // hover rise cap — a jetpack, not a rocket
+const FALL_SAFE=520;     // px/s landing speed below which falling is free
+const FALL_DMG=0.11;     // hp per px/s over the safe threshold
+const CAMP_X=Math.floor(WORLD_W/2); // camp centered on surface
+// --- stat model (DESIGN-PLAN §1) ---
+const CRIT_BASE=0.05;    // 5% base crit chance
+const CRIT_MULT=1.8;     // base crit multiplier
+const CRIT_ST=1.5;       // crits apply status at 1.5x potency — crit and ailment builds overlap
+const ARMOR_FLOOR=1;     // armor can never reduce a hit below this
+const STACK_MAX=3;       // burn/bleed stack up to 3 instances; chill/shock stay max-only
+// --- Focus: the ability resource (DESIGN-PLAN §3.2) ---
+const FOCUS_MAX=100, FOCUS_HIT=8, FOCUS_KILL=25, FOCUS_REGEN=2;
+// --- The Weight: anti-camping pressure (DESIGN-PLAN §3.4.2) ---
+const WEIGHT_EVERY=18, WEIGHT_GRACE=90, WEIGHT_MAX=10;
+
+// ============ DATA TABLES (append content here — everything is data-driven) ============
+const TILES={
+ 0:{air:1},
+ 1:{c:'#6b4a2e',hard:0},           // dirt
+ 9:{c:'#4a7d3a',hard:0},           // grass
+ 2:{c:'#5a5f66',hard:1},           // stone
+ 3:{c:'#1c1c20',hard:9},           // bedrock
+ 4:{c:'#5d4a7a',hard:0},           // fungus
+ 5:{c:'#7a6f5a',hard:1},           // ruin brick
+ 6:{c:'#6e3f34',hard:1},           // forge stone
+ 7:{c:'#2e2a3a',hard:2},           // abyss stone
+ 8:{c:'#3fc9c1',hard:0,ore:1},     // shard ore
+ 10:{c:'#5a5f66',hard:0,secret:1}, // secret wall — mimics stone, breaks to any weapon
+};
+// biome by tile depth: [maxY, name, groundTile, caveScale, enemyTypes]
+const BIOMES=[
+ [SURFACE+10,'surface',1,0.00,['crawler']],
+ [400,'caves',2,0.055,['crawler','bat']],
+ [900,'fungal',4,0.06,['crawler','bat','spitter']],
+ [1600,'ruins',5,0.05,['brute','bat','spitter']],
+ [2400,'forge',6,0.055,['brute','bat','spitter']],
+ [WORLD_H,'abyss',7,0.045,['brute','bat','spitter']],
+];
+// ===== GEMS =====
+// THE ONE RULE (DESIGN-PLAN §1.1): support gems and uniques write to `a.more` (multiplicative,
+// Π(1+x)). Gear affixes, meta tree, class passives and shrine boons write to `a.inc` (additive,
+// 1+Σx). A SKILL gem is allowed to rewrite the base attack directly — it *is* the attack.
+// A support gem that touches `a.dmg` instead of `a.more` is a bug; see resolveDmg().
+//   col: socket color — r(might) / g(finesse) / b(focus). A gem only fits a matching socket.
+//   fc:  Focus cost for ability gems. Abilities gate on BOTH cost and cooldown.
+const GEMS={
+ // ---- SKILL: melee (replaces the weapon's swing) ----
+ cleave:   {t:'skill',for:'melee', n:'Cleave', col:'r', d:'wide arc, slower',
+   mod:a=>{a.arc=150;a.dmg*=1.25;a.cd*=1.3}},
+ nova:     {t:'skill',for:'melee', n:'Nova', col:'r', d:'360°, hits everything, slow',
+   mod:a=>{a.arc=360;a.dmg*=0.8;a.range*=1.15;a.cd*=1.25}},
+ shieldbash:{t:'skill',for:'melee',n:'Shield Bash', col:'r', d:'huge knockback',
+   mod:a=>{a.kb*=2.2;a.cd*=0.9}},
+ // ---- SKILL: ranged ----
+ fireball: {t:'skill',for:'ranged',n:'Fireball', col:'b', d:'slow, explodes',
+   mod:a=>{a.dmg*=1.4;a.speed*=0.75;a.explode=44;a.col='#e07a3f'}},
+ lightning:{t:'skill',for:'ranged',n:'Lightning', col:'b', d:'fast, pierces, spammy',
+   mod:a=>{a.dmg*=0.65;a.speed*=1.9;a.cd*=0.55;a.pierce+=3;a.col='#9fd0ff'}},
+ bore:     {t:'skill',for:'ranged',n:'Bore', col:'r', d:'tunnels through rock',
+   mod:a=>{a.dmg*=0.45;a.speed*=0.8;a.cd*=0.5;a.dig=Math.max(a.dig||0,1);a.digR=TILE*1.25;a.digCost=0.018;a.life=4.5;a.pierce+=99;a.col='#d8a53f'}},
+ // ---- SUPPORT: every damage change here is `more` ----
+ multishot:{t:'sup',for:'ranged', n:'Multishot', col:'g', d:'3 projectiles, 30% less damage',
+   mod:a=>{a.count=3;a.more*=0.7}},
+ addedfire:{t:'sup',for:'any',    n:'Added Fire', col:'b', d:'+30% more damage',
+   mod:a=>{a.more*=1.3;a.col='#e07a3f'}},
+ fasteratk:{t:'sup',for:'any',    n:'Faster Attacks', col:'g', d:'25% faster',
+   mod:a=>{a.cd*=0.75}},
+ pierce:   {t:'sup',for:'ranged', n:'Pierce', col:'g', d:'+2 pierce',
+   mod:a=>{a.pierce+=2}},
+ lifeleech:{t:'sup',for:'any',    n:'Life Leech', col:'r', d:'heal 12% of damage dealt',
+   mod:a=>{a.leech=(a.leech||0)+0.12;a.more*=0.9}},
+ heavyimpact:{t:'sup',for:'melee',n:'Heavy Impact', col:'r', d:'+45% more damage, slower',
+   mod:a=>{a.more*=1.45;a.kb*=1.6;a.cd*=1.35}},
+ aftershock:{t:'sup',for:'any',   n:'Aftershock', col:'r', d:'hits explode',
+   mod:a=>{a.explode=Math.max(a.explode||0,28);a.more*=0.85}},
+ // elemental supports — apply status on hit. Potency is read off base damage at resolve time.
+ ignite:   {t:'sup',for:'any', n:'Ignite', col:'b', d:'hits burn',
+   mod:a=>{a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,0.35);a.col='#e07a3f'}},
+ frostbite:{t:'sup',for:'any', n:'Frostbite', col:'b', d:'hits chill',
+   mod:a=>{a.st=a.st||{};a.st.chill=0.55;a.more*=0.9;a.col='#9fd0ff'}},
+ conduit:  {t:'sup',for:'any', n:'Conduit', col:'b', d:'hits shock (+35% damage taken)',
+   mod:a=>{a.st=a.st||{};a.st.shock=1.35;a.more*=0.85;a.col='#e6d34a'}},
+ serration:{t:'sup',for:'melee',n:'Serration', col:'g', d:'hits bleed',
+   mod:a=>{a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.30)}},
+ excavate: {t:'sup',for:'any', n:'Excavate', col:'r', d:'any attack digs',
+   mod:a=>{a.dig=(a.dig||0)+1;a.digR=(a.digR||TILE)*1.6;a.more*=0.8;a.digCost=(a.digCost||0.02);a.life=(a.life||2)*1.4}},
+ // ---- AURA: armor only, passive while equipped ----
+ thorns:   {t:'aura',for:'armor', n:'Thorns', col:'r', d:'reflect damage on contact'},
+ regrowth: {t:'aura',for:'armor', n:'Regrowth', col:'b', d:'+2 HP/s'},
+ swiftness:{t:'aura',for:'armor', n:'Swiftness', col:'g', d:'+15% move speed'},
+ ironskin: {t:'aura',for:'armor', n:'Ironskin', col:'r', d:'20% damage reduction'},
+ featherfall:{t:'aura',for:'armor',n:'Featherfall', col:'g', d:'no fall damage'},
+ updraft:  {t:'aura',for:'armor', n:'Updraft', col:'b', d:'+70 fuel'},
+ // ---- ABILITY: armor only, drives the ABIL button ----
+ blink:    {t:'abil',for:'armor',n:'Blink',    col:'g', cd:4,  fc:25, fx:'blink',    d:'dash through, brief i-frames'},
+ warcry:   {t:'abil',for:'armor',n:'War Cry',  col:'r', cd:12, fc:45, fx:'warcry',   d:'+25% damage 8s, shocks nearby'},
+ meteor:   {t:'abil',for:'armor',n:'Meteor',   col:'b', cd:9,  fc:50, fx:'meteor',   d:'lobbed fireball, big burn'},
+ mend:     {t:'abil',for:'armor',n:'Mend',     col:'b', cd:16, fc:55, fx:'mend',     d:'heal 35% and cleanse'},
+ quake:    {t:'abil',for:'armor',n:'Quake',    col:'r', cd:11, fc:50, fx:'quake',    d:'AoE slam, digs a crater'},
+ levitate: {t:'abil',for:'armor',n:'Levitate', col:'b', cd:14, fc:40, fx:'levitate', d:'6s of free flight'},
+ grapple:  {t:'abil',for:'armor',n:'Grapple',  col:'g', cd:5,  fc:20, fx:'grapple',  d:'yank yourself, or an enemy'},
+ burrow:   {t:'abil',for:'armor',n:'Burrow',   col:'r', cd:10, fc:35, fx:'burrow',   d:'phase through solid rock'},
+ shaft:    {t:'abil',for:'armor',n:'Shaft',    col:'r', cd:8,  fc:30, fx:'shaft',    d:'drill 26 tiles straight down'},
+};
+const SOCK={r:{n:'Might',c:'#e05555'},g:{n:'Finesse',c:'#6ad07a'},b:{n:'Focus',c:'#6f8fe0'}};
+const SOCKC=['r','g','b'];
+// GEAR BASES. slot: melee|ranged|armor|any(shield). dig = max tile hardness it can break on hit.
+//   arm  = flat armor (subtracted from every incoming hit — strong vs swarms, weak vs one big hit)
+//   sc   = socket colors, one char per socket. Extra sockets from rarity roll from `tend`.
+//   tend = this base's color tendency, used when rarity grants bonus sockets.
+const GEAR={
+ sword:{slot:'melee', n:'Sword', dmg:10, range:26, arc:100, cd:.38, kb:120, dig:0, sockets:1, sc:'r', tend:'rrg'},
+ axe:  {slot:'melee', n:'Axe',   dmg:16, range:24, arc:80,  cd:.55, kb:180, dig:1, sockets:1, sc:'r', tend:'rrr'},
+ bow:  {slot:'ranged',n:'Bow',   dmg:8,  speed:420,cd:.5,  kb:60,  pierce:0, sockets:1, col:'#d8d0b0', sc:'g', tend:'ggr'},
+ wand: {slot:'ranged',n:'Wand',  dmg:7,  speed:340,cd:.34, kb:40,  pierce:0, sockets:2, col:'#9fd0ff', sc:'bb', tend:'bbb'},
+ vest: {slot:'armor', n:'Leather Vest', hp:20, arm:2, sockets:1, sc:'g', tend:'rgb'},
+ chain:{slot:'armor', n:'Chainmail',    hp:45, arm:6, sockets:1, sc:'r', tend:'rrg'},
+ robe: {slot:'armor', n:'Runed Robe',   hp:12, arm:0, sockets:3, fuel:25, sc:'bbb', tend:'bbb'},
+ harness:{slot:'armor',n:'Delver Harness',hp:22,arm:3,sockets:2, fuel:70, sc:'gb', tend:'gbr'},
+ plate:{slot:'armor', n:'Plate',        hp:80, arm:12, sockets:1, sc:'r', tend:'rrr'},
+ greataxe:{slot:'melee',n:'Greataxe', dmg:30, range:32, arc:120, cd:.85, kb:300, dig:2, sockets:2, sc:'rr', tend:'rrr'},
+ crossbow:{slot:'ranged',n:'Crossbow',dmg:20, speed:560, cd:.9, kb:120, pierce:1, sockets:2, col:'#c9b48f', sc:'gg', tend:'ggb'},
+ shield:{slot:'any',  n:'Shield', dmg:6, range:20, arc:70, cd:.5, kb:260, dig:0, sockets:1, shield:1, arm:8, sc:'r', tend:'rrb'},
+};
+// UNIQUES — rarity 3. One per base. mod() runs AFTER all gems, so uniques break rules.
+// Damage changes go through `a.more`, same as supports (DESIGN-PLAN §1.1 — one Π pool).
+const UNIQUES={
+ sword:   {n:"Widow's Kiss",   d:'all hits bleed, very fast', mod:a=>{a.cd*=0.6;a.more*=0.85;a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.5)}},
+ axe:     {n:'Gravedigger',    d:'digs stone, heals on hit',  mod:a=>{a.dig=Math.max(a.dig,1);a.leech=(a.leech||0)+0.10}},
+ greataxe:{n:'Worldbreaker',   d:'digs anything, huge impact',mod:a=>{a.dig=3;a.kb*=1.8;a.more*=1.2;a.explode=Math.max(a.explode||0,34)}},
+ bow:     {n:"Hornet's Call",  d:'+2 arrows, weaker each',    mod:a=>{a.count=(a.count||1)+2;a.more*=0.65;a.cd*=0.85}},
+ crossbow:{n:'Judgment',       d:'devastating, slow, pierces',mod:a=>{a.more*=2.4;a.cd*=1.9;a.pierce+=5;a.speed*=1.2}},
+ wand:    {n:'Ashfall',        d:'every bolt ignites',        mod:a=>{a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,0.6);a.explode=Math.max(a.explode||0,26);a.col='#ff8a3f'}},
+ shield:  {n:'Bulwark',        d:'bash shocks and shatters',  mod:a=>{a.kb*=1.7;a.more*=1.6;a.st=a.st||{};a.st.shock=1.4;a.dig=Math.max(a.dig,1)}},
+ vest:    {n:'Second Skin',    d:'+2 sockets',   sockets:2},
+ robe:    {n:'Threadbare Crown',d:'+2 sockets, fragile', sockets:2, hp:-8},
+ chain:   {n:'Scalemail of the Deep', d:'+35 HP, +8 armor', hp:35, arm:8},
+ plate:   {n:'Anchor',         d:'+90 HP, +15 armor, heavy', hp:90, arm:15, ms:-0.12},
+ harness: {n:'Skyrigger',      d:'huge fuel, immune to fall damage', fuel:160, noFall:1},
+};
+// AFFIXES rolled on magic/rare gear: [key,label,min,max,scale]
+// scale 'pct' => stored as a percent that folds into the ADDITIVE pool; 'flat' => added raw.
+const AFFIXES=[
+ ['dmg','% increased damage',8,25,'pct'], ['hp','+ max HP',8,30,'flat'],
+ ['cdr','% attack speed',6,18,'pct'],     ['ms','% move speed',5,15,'pct'],
+ ['crit','% crit chance',3,9,'pct'],      ['critMult','% crit damage',12,35,'pct'],
+ ['arm','+ armor',2,9,'flat'],            ['sres','% status resist',8,22,'pct'],
+ ['greed','% shard drops',10,28,'pct'],   ['fuel','+ fuel',12,40,'flat'],
+ ['focus','% focus gain',10,30,'pct'],    ['leech','% life leech',2,5,'pct'],
+];
+const AFF=Object.fromEntries(AFFIXES.map(a=>[a[0],a]));
+// ENEMIES.
+//   atk:{cd,range,wind,act,mul,kb} = TELEGRAPHED melee. The enemy stops, flashes and swells for
+//     `wind` seconds, then damage is live for `act` seconds. Nothing an enemy does damages you
+//     without a tell first (DESIGN-PLAN §4.1) — this is what makes the game readable.
+//   shoot:{cd,dmg,speed,count,spread,col,range,wind,...} = telegraphed ranged.
+//   arm = flat armor: subtracted from each of your hits, so swarms of small hits fall off.
+const ENEMIES={
+ crawler:{hp:24,dmg:8, spd:42, w:14,h:12,ai:'walk',c:'#7d5340',shards:2,
+   atk:{cd:1.5,range:24,wind:.34,act:.16,kb:140,lunge:190}},
+ bat:    {hp:14,dmg:6, spd:78, w:12,h:10,ai:'fly', c:'#6a5a8f',shards:2,
+   atk:{cd:1.7,range:26,wind:.28,act:.14,kb:90,lunge:300}},
+ brute:  {hp:85,dmg:16,spd:34, w:20,h:22,ai:'walk',c:'#8f4040',shards:6,arm:3,
+   atk:{cd:2.1,range:34,wind:.48,act:.20,kb:280,lunge:150}},
+ spitter:{hp:30,dmg:6, spd:30, w:14,h:14,ai:'walk',c:'#5f8f5a',shards:4,
+   atk:{cd:2.0,range:22,wind:.34,act:.14,kb:110,lunge:120},
+   shoot:{cd:1.9,dmg:7,speed:210,count:1,spread:0,col:'#8fdc6a',range:300,wind:.40}},
+ // MINIBOSSES (boss:1 => healthbar, guaranteed loot, no cap eviction)
+ // ph:[{at,...}] = phase transitions (DESIGN-PLAN §4.3). Crossing an `at` HP fraction triggers
+ // a roar + brief invuln, drops shoot cooldown, and unlocks the named extra pattern.
+ warden:  {hp:420, dmg:22,spd:46,w:28,h:30,ai:'walk',c:'#a05a3a',shards:40,boss:1,arm:4,
+   atk:{cd:2.2,range:44,wind:.50,act:.22,kb:320,lunge:260},
+   shoot:{cd:2.4,dmg:12,speed:230,count:3,spread:.30,col:'#e0a03f',range:380,wind:.45},
+   ph:[{at:.66,pat:'slam'},{at:.33,pat:'summon'}]},
+ sporemother:{hp:520,dmg:18,spd:58,w:30,h:26,ai:'fly',c:'#8f5ac0',shards:55,boss:1,
+   atk:{cd:2.4,range:38,wind:.42,act:.18,kb:200,lunge:280},
+   shoot:{cd:1.7,dmg:10,speed:180,count:5,spread:.55,col:'#c98fe0',range:420,wind:.40},
+   ph:[{at:.66,pat:'spores'},{at:.33,pat:'summon'}]},
+ sentinel:{hp:700, dmg:26,spd:40,w:26,h:32,ai:'walk',c:'#b0a070',shards:75,boss:1,arm:10,
+   atk:{cd:2.0,range:42,wind:.44,act:.20,kb:300,lunge:240},
+   shoot:{cd:1.4,dmg:14,speed:330,count:2,spread:.12,col:'#ffe9a0',range:460,wind:.38},
+   ph:[{at:.66,pat:'volley'},{at:.33,pat:'slam'}]},
+ forgelord:{hp:900,dmg:32,spd:44,w:32,h:34,ai:'walk',c:'#d05a30',shards:100,boss:1,arm:8,
+   atk:{cd:2.0,range:46,wind:.46,act:.22,kb:340,lunge:250},
+   shoot:{cd:2.0,dmg:18,speed:250,count:3,spread:.35,col:'#ff8a3f',range:420,explode:40,stR:{burn:.5},wind:.42},
+   ph:[{at:.66,pat:'firewall'},{at:.33,pat:'slam'}]},
+ voidmaw: {hp:1200,dmg:38,spd:76,w:34,h:30,ai:'fly',c:'#6a4fd0',shards:140,boss:1,arm:6,
+   atk:{cd:1.8,range:40,wind:.36,act:.18,kb:260,lunge:380},
+   shoot:{cd:1.2,dmg:20,speed:300,count:4,spread:.7,col:'#a08fff',range:480,st:{chill:0.6},wind:.34},
+   ph:[{at:.66,pat:'volley'},{at:.33,pat:'spores'}]},
+};
+// STATUS EFFECTS — generic, applies to enemies AND the player.
+//   stack:1 => independent instances up to STACK_MAX, each with its own timer (rewards attack
+//   speed). stack:0 => single instance, potency takes the max (stacking a debuff would break it).
+const STATUS={
+ burn: {n:'Burn', c:'#e07a3f', dur:3.0, stack:1}, // dps = potency
+ bleed:{n:'Bleed',c:'#e05555', dur:4.0, stack:1}, // dps, doubles while the target is moving
+ chill:{n:'Chill',c:'#9fd0ff', dur:2.5, stack:0}, // potency = speed multiplier (lower = slower)
+ shock:{n:'Shock',c:'#e6d34a', dur:4.0, stack:0}, // potency = incoming damage multiplier
+};
+// ELITE MODIFIERS — rolled onto grunts at depth. Stack with depthMul.
+const ELITES=[
+ {id:'swift',   n:'Swift',    c:'#6ad0e0', hp:1.2, dmg:1.1, spd:1.7},
+ {id:'armored', n:'Armored',  c:'#9aa0b0', hp:3.0, dmg:1.2, spd:0.8, arm:9},
+ {id:'volatile',n:'Volatile', c:'#e07a3f', hp:1.5, dmg:1.3, spd:1.1, boom:56},
+ {id:'vampiric',n:'Vampiric', c:'#c04a70', hp:2.0, dmg:1.4, spd:1.0, drain:1},
+];
+const BIOME_BOSS={caves:'warden',fungal:'sporemother',ruins:'sentinel',forge:'forgelord',abyss:'voidmaw'};
+// META TREE: 3 branches (Might/Cunning/Sorcery), 5 nodes each. All fx are ADDITIVE (`increased`).
+const TREE=[
+ {id:'m1',br:'Might',  n:'+10% melee dmg',   cost:20, fx:{meleeDmg:.10}},
+ {id:'m2',br:'Might',  n:'+15 max HP',       cost:35, fx:{hp:15}, req:'m1'},
+ {id:'m3',br:'Might',  n:'+20% knockback',   cost:50, fx:{kb:.20}, req:'m2'},
+ {id:'m4',br:'Might',  n:'+6 armor',         cost:70, fx:{arm:6}, req:'m3'},
+ {id:'m5',br:'Might',  n:'+25% crit damage', cost:95, fx:{critMult:.25}, req:'m4'},
+ {id:'c1',br:'Cunning',n:'+10% move speed',  cost:20, fx:{ms:.10}},
+ {id:'c2',br:'Cunning',n:'+15% attack speed',cost:35, fx:{cdr:.15}, req:'c1'},
+ {id:'c3',br:'Cunning',n:'Longer dodge i-frames',cost:50,fx:{iframes:.15}, req:'c2'},
+ {id:'c4',br:'Cunning',n:'+5% crit chance',  cost:70, fx:{crit:.05}, req:'c3'},
+ {id:'c5',br:'Cunning',n:'+30% focus gain',  cost:95, fx:{focus:.30}, req:'c4'},
+ {id:'s1',br:'Sorcery',n:'+10% ranged dmg',  cost:20, fx:{rangedDmg:.10}},
+ {id:'s2',br:'Sorcery',n:'+1 projectile pierce',cost:35,fx:{pierce:1}, req:'s1'},
+ {id:'s3',br:'Sorcery',n:'+15% shard drops', cost:50, fx:{greed:.15}, req:'s2'},
+ {id:'s4',br:'Sorcery',n:'+25% status resist',cost:70,fx:{sres:.25}, req:'s3'},
+ {id:'s5',br:'Sorcery',n:'+30% ailment damage',cost:95,fx:{ailment:.30}, req:'s4'},
+];
+// UNLOCK POOL (Dead Cells style: buy → enters world drop pool). Some content available by default.
+// RUN BOONS: shrine rewards, reset every run. Folded into computeAttack/moveSpd/maxHP.
+const BOONS=[
+ {id:'wrath',   n:'Wrath',    d:'+25% damage',            fx:{dmg:.25}},
+ {id:'haste',   n:'Haste',    d:'+20% attack speed',      fx:{cdr:.20}},
+ {id:'fleet',   n:'Fleetfoot',d:'+18% move speed',        fx:{ms:.18}},
+ {id:'vigor',   n:'Vigor',    d:'+40 max HP, heal',       fx:{hp:40}},
+ {id:'ruin',    n:'Ruin',     d:'+35% dmg, -15 HP',       fx:{dmg:.35,hp:-15}},
+ {id:'greedy',  n:'Avarice',  d:'+40% shard drops',       fx:{greed:.40}},
+ {id:'piercing',n:'Puncture', d:'+1 pierce, +10% dmg',    fx:{pierce:1,dmg:.10}},
+ {id:'keen',    n:'Keen Edge',d:'+8% crit, +40% crit dmg',fx:{crit:.08,critMult:.40}},
+ {id:'bulwark', n:'Bulwark',  d:'+10 armor, -8% move',    fx:{arm:10,ms:-.08}},
+ {id:'zeal',    n:'Zeal',     d:'+50% focus gain',        fx:{focus:.50}},
+ {id:'venom',   n:'Venom',    d:'+45% ailment damage',    fx:{ailment:.45}},
+ {id:'ward',    n:'Ward',     d:'+35% status resist',     fx:{sres:.35}},
+];
+// CLASSES — pick at camp. Each is a starting kit + a permanent passive + a free signature gem.
+// fx keys read by classFx(): hp, meleeDmg, rangedDmg, abilCdr, ms, greed, pierce, blockDR, digBonus
+// `foc` names where this class earns Focus beyond the baseline — this is where class identity
+// lives now that abilities cost a resource (DESIGN-PLAN §3.2).
+const CLASSES={
+ vanguard:{n:'Vanguard', cost:0,  d:'Sword and shield. Tanky, blocks hard. Earns focus by blocking.',
+   kit:{melee:'sword',ranged:'shield',armor:'vest'}, gem:{slot:'melee',id:'cleave'},
+   foc:'block', fx:{hpMul:.25,meleeDmg:.10,blockDR:.5,ms:-.05,arm:5}},
+ marksman:{n:'Marksman', cost:60, d:'Bow specialist. Fragile, hits from range. Crits often.',
+   kit:{melee:'sword',ranged:'bow',armor:'vest'}, gem:{slot:'ranged',id:'multishot'},
+   foc:'crit', fx:{rangedDmg:.25,pierce:1,ms:.10,hpMul:-.10,crit:.06}},
+ pyromancer:{n:'Pyromancer',cost:90,d:'Wand and flame. Everything burns. Earns focus from ailments.',
+   kit:{melee:'sword',ranged:'wand',armor:'robe'}, gem:{slot:'ranged',id:'ignite'},
+   foc:'ailment', fx:{rangedDmg:.15,abilCdr:.30,burnBonus:.5,hpMul:-.15,ailment:.25}},
+ delver:{n:'Delver',    cost:75, d:'Axe and greed. Digs through the world. Earns focus by carving.',
+   kit:{melee:'axe',ranged:'bow',armor:'vest'}, gem:{slot:'armor',id:'swiftness'},
+   foc:'dig', fx:{ms:.15,greed:.35,digBonus:1,meleeDmg:.10,fuel:40}},
+};
+const DEFAULT_GEAR_POOL=['sword','bow','vest'];
+const DEFAULT_GEM_POOL=['cleave','multishot','addedfire'];
+const UNLOCKS=[
+ {id:'axe',   n:'Axe (gear)',        cost:30},
+ {id:'wand',  n:'Wand (gear)',       cost:30},
+ {id:'shield',n:'Shield (gear)',     cost:40},
+ {id:'chain', n:'Chainmail (gear)',  cost:45},
+ {id:'fireball',n:'Fireball gem',    cost:50},
+ {id:'shieldbash',n:'Shield Bash gem',cost:35},
+ {id:'fasteratk',n:'Faster Attacks gem',cost:40},
+ {id:'pierce',n:'Pierce gem',        cost:40},
+ {id:'thorns',n:'Thorns gem (armor)', cost:35},
+ {id:'regrowth',n:'Regrowth gem (armor)',cost:45},
+ {id:'swiftness',n:'Swiftness gem (armor)',cost:30},
+ {id:'ironskin',n:'Ironskin gem (armor)',cost:55},
+ {id:'nova',   n:'Nova gem',          cost:60},
+ {id:'lightning',n:'Lightning gem',   cost:65},
+ {id:'lifeleech',n:'Life Leech gem',  cost:70},
+ {id:'heavyimpact',n:'Heavy Impact gem',cost:50},
+ {id:'aftershock',n:'Aftershock gem', cost:60},
+ {id:'ignite', n:'Ignite gem',        cost:45},
+ {id:'frostbite',n:'Frostbite gem',   cost:45},
+ {id:'conduit',n:'Conduit gem',       cost:55},
+ {id:'serration',n:'Serration gem',   cost:50},
+ {id:'blink',  n:'Blink gem (ability)',  cost:60},
+ {id:'warcry', n:'War Cry gem (ability)',cost:70},
+ {id:'meteor', n:'Meteor gem (ability)', cost:85},
+ {id:'mend',   n:'Mend gem (ability)',   cost:75},
+ {id:'quake',  n:'Quake gem (ability)',  cost:80},
+ {id:'bore',   n:'Bore gem (digging)',    cost:55},
+ {id:'excavate',n:'Excavate gem (digging)',cost:50},
+ {id:'levitate',n:'Levitate gem (travel)',cost:65},
+ {id:'grapple',n:'Grapple gem (travel)',  cost:60},
+ {id:'burrow', n:'Burrow gem (travel)',   cost:75},
+ {id:'shaft',  n:'Shaft gem (digging)',   cost:70},
+ {id:'featherfall',n:'Featherfall gem',   cost:40},
+ {id:'updraft',n:'Updraft gem (+fuel)',   cost:50},
+ {id:'greataxe',n:'Greataxe (gear)',  cost:70},
+ {id:'crossbow',n:'Crossbow (gear)',  cost:70},
+ {id:'robe',   n:'Runed Robe (gear)', cost:65},
+ {id:'plate',  n:'Plate (gear)',      cost:80},
+ {id:'harness',n:'Delver Harness (gear)',cost:75},
+];
+// ============ RNG + NOISE ============
+let SEED=Date.now()>>>0;
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let RNG=mulberry(SEED);
+const rr=(a,b)=>a+RNG()*(b-a), ri=(a,b)=>Math.floor(rr(a,b+1)), chance=p=>RNG()<p;
+function hash2(x,y){let h=(x*374761393+y*668265263+SEED*2654435761)>>>0;h=(h^(h>>>13))>>>0;h=Math.imul(h,1274126177)>>>0;return((h^(h>>>16))>>>0)/4294967296}
+function smooth(t){return t*t*(3-2*t)}
+function vnoise(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+ const a=hash2(xi,yi),b=hash2(xi+1,yi),c=hash2(xi,yi+1),d=hash2(xi+1,yi+1);
+ const u=smooth(xf),v=smooth(yf);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+function noise2(x,y){return vnoise(x,y)*0.65+vnoise(x*2.1,y*2.1)*0.35}
+
+// ============ WORLD / CHUNKS ============
+const CHUNKS=new Map(); // "cx,cy" -> {tiles:Uint8Array, cv:canvas, dirty, spawned, spawns:[]}
+function biomeAt(ty){for(const b of BIOMES){if(ty<b[0])return b}return BIOMES[BIOMES.length-1]}
+function surfH(tx){return Math.floor(SURFACE+noise2(tx*0.02,7.7)*14-7)}
+function genChunk(cx,cy){
+ const t=new Uint8Array(CHUNK*CHUNK), spawns=[];
+ for(let ly=0;ly<CHUNK;ly++){const ty=cy*CHUNK+ly;
+  for(let lx=0;lx<CHUNK;lx++){const tx=cx*CHUNK+lx;
+   let v=0;
+   if(tx<2||tx>=WORLD_W-2||ty>=WORLD_H-2){v=3}
+   else if(ty>=0){
+    const h=surfH(tx);
+    if(ty<h)v=0;
+    else if(ty===h)v=9;
+    else{
+     const B=biomeAt(ty);
+     v=B[2];
+     // cave carve — density grows a touch with depth
+     const cs=B[3];
+     if(cs>0){const n=noise2(tx*cs,ty*cs);const th=0.52-Math.min(0.10,ty/WORLD_H*0.12);if(n<th)v=0}
+     if(ty<h+3&&v!==0)v=1; // topsoil
+     if(v!==0){
+      if(hash2(tx*3+1,ty*3+2)<0.012)v=8;               // shard ore
+      else if(hash2(tx*5+3,ty*5+1)<0.05&&v!==7)v=2;    // hard stone flecks
+     }
+    }
+   }
+   t[ly*CHUNK+lx]=v;
+  }
+ }
+ // enemy spawns: on air tiles above solid, away from camp
+ const B0=biomeAt(cy*CHUNK+CHUNK/2), types=B0[4];
+ if(cy*CHUNK> SURFACE-4){
+  const n=ri(1,3);
+  for(let i=0;i<n;i++){const lx=ri(2,CHUNK-3),ly=ri(2,CHUNK-3);
+   if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
+    const tx=cx*CHUNK+lx,ty=cy*CHUNK+ly;
+    if(Math.abs(tx-CAMP_X)>20||ty>SURFACE+20)spawns.push({x:tx*TILE,y:ty*TILE,type:types[ri(0,types.length-1)]})
+   }}
+  // treasure chest POI: rare, needs a floor cavity
+  if(hash2(cx*7+5,cy*7+3)<0.12){
+   for(let tr=0;tr<14;tr++){const lx=ri(2,CHUNK-3),ly=ri(2,CHUNK-3);
+    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0&&t[(ly-1)*CHUNK+lx]===0){
+     spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'chest'});break}}}
+  // SHRINE POI: open cavity, grants a run boon
+  if(hash2(cx*11+2,cy*11+9)<0.16){
+   for(let tr=0;tr<14;tr++){const lx=ri(3,CHUNK-4),ly=ri(3,CHUNK-4);
+    if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
+     for(let c=-1;c<=1;c++)t[ly*CHUNK+lx+c]=0,t[(ly-1)*CHUNK+lx+c]=0;
+     spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'shrine'});break}}}
+  // SEALED VAULT: hard-walled room w/ chest inside. Needs a digger (axe) or Fireball to crack.
+  if(hash2(cx*13+7,cy*13+4)<0.10){
+   const rw=ri(9,13),rh=ri(6,8),lx=ri(3,CHUNK-rw-3),ly=ri(3,CHUNK-rh-3);
+   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
+    const edge=(x===0||y===0||x===rw-1||y===rh-1);
+    t[(ly+y)*CHUNK+lx+x]=edge?5:0}
+   spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});
+   if(chance(.5))spawns.push({x:(cx*CHUNK+lx+2)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});}
+  // SECRET CACHE: sealed pocket whose wall is a secret tile (breaks to ANY weapon)
+  if(hash2(cx*19+3,cy*19+8)<0.14){
+   const rw=5,rh=4,lx=ri(4,CHUNK-rw-4),ly=ri(4,CHUNK-rh-4);
+   let buried=true;
+   for(let y=-1;y<=rh;y++)for(let x=-1;x<=rw;x++){if(t[(ly+y)*CHUNK+lx+x]===0)buried=false}
+   if(buried){
+    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++)t[(ly+y)*CHUNK+lx+x]=0;
+    const side=chance(.5)?-1:rw;
+    for(let y=0;y<rh;y++)t[(ly+y)*CHUNK+lx+side]=10;
+    spawns.push({x:(cx*CHUNK+lx+2)*TILE,y:(cy*CHUNK+ly+rh-1)*TILE,type:'chest'})}}
+  // BOSS ARENA: one miniboss per biome band, deterministic per chunk
+  const bname=BIOME_BOSS[B0[1]];
+  if(bname&&hash2(cx*17+11,cy*17+6)<0.045){
+   const rw=26,rh=16,lx=ri(3,CHUNK-rw-3),ly=ri(3,CHUNK-rh-3);
+   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
+    const edge=(y===0||y===rh-1||x===0||x===rw-1);
+    if(edge&&(y===rh-1||y===0))t[(ly+y)*CHUNK+lx+x]=B0[2];
+    else if(!edge)t[(ly+y)*CHUNK+lx+x]=0}
+   spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE,y:(cy*CHUNK+ly+rh-3)*TILE,type:bname});}
+ }
+ return {tiles:t,cv:null,dirty:true,spawned:false,spawns}
+}
+function chunkKey(cx,cy){return cx+','+cy}
+function getChunk(cx,cy){const k=chunkKey(cx,cy);let c=CHUNKS.get(k);if(!c){c=genChunk(cx,cy);CHUNKS.set(k,c)}return c}
+function getTile(tx,ty){if(tx<0||ty<0||tx>=WORLD_W||ty>=WORLD_H)return 3;
+ const c=getChunk(Math.floor(tx/CHUNK),Math.floor(ty/CHUNK));
+ return c.tiles[(ty%CHUNK)*CHUNK+(tx%CHUNK)]}
+function setTile(tx,ty,v){if(tx<0||ty<0||tx>=WORLD_W||ty>=WORLD_H)return;
+ const c=getChunk(Math.floor(tx/CHUNK),Math.floor(ty/CHUNK));
+ c.tiles[(ty%CHUNK)*CHUNK+(tx%CHUNK)]=v;c.dirty=true}
+// ===== CARVE — the one function that removes terrain. Every dig path calls this. =====
+// returns tiles removed. maxHard gates what you can chew through (see TILES[].hard).
+function carve(px,py,radius,maxHard,dropOre){
+ if(maxHard<0)return 0;
+ const ctx0=Math.floor(px/TILE),cty=Math.floor(py/TILE);
+ const r=Math.max(0,Math.ceil(radius/TILE));let n=0;
+ for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++){
+  if(ox*ox+oy*oy>r*r+0.5)continue;
+  const tx=ctx0+ox,ty=cty+oy,v=getTile(tx,ty);
+  if(v===0)continue;const T=TILES[v];
+  if(T.hard>maxHard||T.hard>=9)continue;       // bedrock (hard 9) is never carvable
+  if(T.ore&&dropOre!==false)dropShards(tx*TILE+8,ty*TILE+8,ri(2,4));
+  setTile(tx,ty,0);n++;
+  if(n<14&&chance(.5))burst(tx*TILE+8,ty*TILE+8,T.c,1)}
+ return n}
+function solidAt(px,py){const t=getTile(Math.floor(px/TILE),Math.floor(py/TILE));return t!==0}
+function drawChunk(c,cx,cy){
+ if(!c.cv){c.cv=document.createElement('canvas');c.cv.width=CHUNK*TILE;c.cv.height=CHUNK*TILE}
+ const g=c.cv.getContext('2d');g.clearRect(0,0,c.cv.width,c.cv.height);
+ for(let ly=0;ly<CHUNK;ly++)for(let lx=0;lx<CHUNK;lx++){
+  const v=c.tiles[ly*CHUNK+lx];if(v===0)continue;const T=TILES[v];
+  g.fillStyle=T.c;g.fillRect(lx*TILE,ly*TILE,TILE,TILE);
+  // cheap texture: darker bottom edge, subtle variance
+  if(hash2(cx*CHUNK+lx,cy*CHUNK+ly)<0.3){g.fillStyle='#00000018';g.fillRect(lx*TILE,ly*TILE,TILE,TILE)}
+  g.fillStyle='#00000030';g.fillRect(lx*TILE,ly*TILE+TILE-2,TILE,2);
+  if(T.ore){g.fillStyle='#ffffff70';g.fillRect(lx*TILE+5,ly*TILE+5,3,3);g.fillRect(lx*TILE+10,ly*TILE+9,2,2)}
+  if(T.secret){g.fillStyle='#00000028';g.fillRect(lx*TILE+2,ly*TILE+3,1,TILE-6);g.fillRect(lx*TILE+TILE-3,ly*TILE+3,1,TILE-6)}
+ }
+ c.dirty=false}
+function sweepChunks(){ // evict offscreen chunk canvases (~2.3MB each) — tiles stay
+ const pcx=P.x/TILE/CHUNK,pcy=P.y/TILE/CHUNK;
+ for(const [k,c] of CHUNKS){if(!c.cv)continue;const i=k.indexOf(',');
+  const cx=+k.slice(0,i),cy=+k.slice(i+1);
+  if(Math.abs(cx+0.5-pcx)>3||Math.abs(cy+0.5-pcy)>3){c.cv=null;c.dirty=true}}}
+// ============ META / SAVE ============
+// SAVE ver 2: sockets became {id,tier} and the Vault arrived. v1 blobs migrate in place
+// rather than being thrown away — a save is someone's twenty runs.
+const SAVE_VER=2;
+let META={ver:SAVE_VER,shards:0,unlocks:{},tree:{},cls:'vanguard',classes:{vanguard:1},
+ loadout:{melee:'sword',ranged:'bow',armor:'vest'},anchors:{surface:1},startBiome:'surface',
+ vault:[],bosses:{},runs:0,bestDepth:0,audio:1};
+function saveMeta(){try{localStorage.setItem('shardfall',JSON.stringify(META))}catch(e){}}
+function migrate(m){
+ if(!m.ver||m.ver<2){ // v1 -> v2: bare-string sockets become {id,tier:1}; vault starts empty
+  m.vault=[];m.bosses=m.bosses||{};m.ver=2}
+ return m}
+function loadMeta(){
+ try{const raw=localStorage.getItem('shardfall');
+  if(raw){const m=JSON.parse(raw);if(m&&typeof m==='object')META=Object.assign(META,migrate(m))}}catch(e){}
+ if(!META.loadout)META.loadout={melee:'sword',ranged:'bow',armor:'vest'};
+ if(!META.anchors)META.anchors={surface:1};META.anchors.surface=1;
+ if(!META.classes)META.classes={vanguard:1};META.classes.vanguard=1;
+ if(!META.cls||!META.classes[META.cls])META.cls='vanguard';
+ if(!Array.isArray(META.vault))META.vault=[];
+ if(!META.bosses)META.bosses={};
+ META.ver=SAVE_VER;
+ AUDIO_ON=META.audio!==0;
+ if(!META.startBiome||!META.anchors[META.startBiome])META.startBiome='surface'}
+// Biome top depth (tile y) — anchor spawn depth per biome
+function biomeTop(name){let prev=0;for(const b of BIOMES){if(b[1]===name)return Math.max(SURFACE,prev);prev=b[0]}return SURFACE}
+function biomeName(ty){return biomeAt(ty)[1]}
+function classFx(key){const c=CLASSES[META.cls];return (c&&c.fx[key])||0}
+// A socket holds either a bare id (v1 saves) or {id,tier} (v2+). Every read goes through these
+// two accessors, which is what keeps gem tiers from touching all three compute functions.
+function gemId(g){return !g?null:(typeof g==='string'?g:g.id)}
+function gemTier(g){return (!g||typeof g==='string')?1:(g.tier||1)}
+function gemOf(g){const i=gemId(g);return i?GEMS[i]:null}
+function treeFx(key){let v=0;for(const n of TREE)if(META.tree[n.id]&&n.fx[key])v+=n.fx[key];return v}
+function gearPool(){return DEFAULT_GEAR_POOL.concat(Object.keys(GEAR).filter(g=>META.unlocks[g]&&!DEFAULT_GEAR_POOL.includes(g)))}
+function gemPool(){return DEFAULT_GEM_POOL.concat(Object.keys(GEMS).filter(g=>META.unlocks[g]&&!DEFAULT_GEM_POOL.includes(g)))}
+
+// ============ ITEMS ============
+let itemUid=1;
+function mkItem(baseId,rarity){ // 0 normal, 1 magic, 2 rare, 3 unique
+ const b=GEAR[baseId];
+ if(rarity===3&&!UNIQUES[baseId])rarity=2;
+ const it={uid:itemUid++,base:baseId,rarity:rarity||0,affixes:{},sockets:[],sc:[],chroma:-1,unique:rarity===3?baseId:null};
+ const s=b.sockets+(rarity>=2?1:0)+(rarity===3&&UNIQUES[baseId].sockets?UNIQUES[baseId].sockets:0);
+ // Socket colors: the base's fixed colors first, then extras rolled from its tendency.
+ // "The perfect gem with nowhere to put it" is the whole point (DESIGN-PLAN §3.1).
+ const tend=b.tend||'rgb';
+ for(let i=0;i<s;i++){it.sockets.push(null);
+  it.sc.push(b.sc&&b.sc[i]?b.sc[i]:tend[ri(0,tend.length-1)])}
+ // Chromatic: magic+ gear can roll one socket that accepts any color.
+ if(rarity>=1&&s>0&&chance(rarity===3?0.5:rarity===2?0.28:0.15))it.chroma=ri(0,s-1);
+ const nAff=rarity===1?1:rarity===2?3:rarity===3?1:0;
+ const pool=AFFIXES.slice();
+ for(let i=0;i<nAff&&pool.length;i++){const a=pool.splice(ri(0,pool.length-1),1)[0];it.affixes[a[0]]=ri(a[2],a[3])}
+ return it}
+function itemName(it){const b=GEAR[it.base];
+ if(it.unique&&UNIQUES[it.unique])return UNIQUES[it.unique].n;
+ return ['','Magic ','Rare ',''][it.rarity]+b.n}
+function itemDesc(it){return it.unique&&UNIQUES[it.unique]?UNIQUES[it.unique].d:''}
+function affixStr(it){return Object.entries(it.affixes).map(([k,v])=>{const a=AFF[k];return a?'+'+v+a[1]:''}).filter(Boolean).join(', ')}
+function sockColOf(it,i){return it.chroma===i?'*':(it.sc&&it.sc[i])||'r'}
+function gemFits(it,i,gid){const G=GEMS[gid];if(!G)return false;
+ const c=sockColOf(it,i);return c==='*'||c===(G.col||'r')}
+function sockStr(it){return it.sockets.map((g,i)=>{const c=sockColOf(it,i);
+ const mark=c==='*'?'◇':'◆';const col=c==='*'?'#e8e2d0':SOCK[c].c;
+ return `<span style="color:${col}">${mark}</span>${g?GEMS[gemId(g)].n+(gemTier(g)>1?' T'+gemTier(g):''):''}`}).join(' ')}
+
+// ============ RUN STATE ============
+let EQ={melee:null,ranged:null,armor:null};
+let BAG=[]; // {kind:'gear',item} | {kind:'gem',id}
+let EN=[],PROJ=[],PICK=[],PART=[],DMGN=[],CHESTS=[],SHRINES=[],ANCHOR=null,GRAPPLE=null;
+let SENTRY=[],DECOY=null;
+let RUNB={dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0};
+const RUNB0=()=>({dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0});
+let shake=0,hitstop=0,runDepth=0,paused=false;
+const P={x:0,y:0,vx:0,vy:0,w:12,h:20,hp:100,maxhp:100,face:1,onG:false,coyote:0,jbuf:0,dodgeT:0,dodgeCd:0,inv:0,mcd:0,rcd:0,acd:0,dead:false,block:false,st:null,fuel:60,maxfuel:60,focus:FOCUS_MAX,flying:false,noFall:0,levT:0,burrowT:0,kills:0,bestHit:0,weight:0,weightT:0,band:''};
+
+// ---- ADDITIVE POOL ("increased") -------------------------------------------------------
+// Every source that is NOT a support gem or a unique lands here and sums flat.
+// One function so a new stat is a table entry, not a new code path (CLAUDE.md rule 4).
+function statPct(it,key){if(!it||!it.affixes[key])return 0;const a=AFF[key];
+ return a&&a[4]==='flat'?it.affixes[key]:it.affixes[key]/100}
+function gearSum(key){let v=0;
+ for(const s of ['melee','ranged','armor']){const it=EQ[s];if(!it)continue;
+  v+=statPct(it,key);
+  const b=GEAR[it.base];if(b[key]!==undefined&&(key==='arm'||key==='fuel'||key==='hp'))v+=b[key];
+  const u=it.unique&&UNIQUES[it.unique];if(u&&u[key]!==undefined)v+=u[key]}
+ return v}
+// inc(key) is THE additive pool. Never let a support gem reach it.
+function inc(key){return treeFx(key)+classFx(key)+gearSum(key)+(RUNB[key]||0)}
+// class HP is the one MULTIPLIER on a defensive stat, so it lives under its own key and is
+// deliberately kept out of inc() — otherwise it would be counted as both a flat and a scalar.
+function maxHP(){return Math.round((100+inc('hp'))*(1+classFx('hpMul')))}
+function armorVal(){let a=inc('arm');if(auraHas('ironskin'))a+=4;return Math.max(0,a)}
+function sresVal(){let s=inc('sres');if(auraHas('warding'))s+=0.5;return Math.min(0.85,s)}
+function greedVal(){return 1+inc('greed')}
+function critChance(){return Math.max(0,Math.min(0.95,CRIT_BASE+inc('crit')))}
+function critMultVal(){return CRIT_MULT+inc('critMult')}
+function ailmentMul(){return 1+inc('ailment')}
+function focusGainMul(){return 1+inc('focus')}
+function auraHas(id){return !!(EQ.armor&&EQ.armor.sockets.some(g=>gemId(g)===id))}
+function isShield(slot){const it=EQ[slot];return !!(it&&GEAR[it.base].shield)}
+function maxFuel(){let f=60+inc('fuel');if(auraHas('updraft'))f+=70;return f}
+function digPower(){ // best dig stat across equipped weapons — used by abilities/traversal
+ let d=0;for(const k of ['melee','ranged']){const a=ATK[k];if(a&&a.dig!==undefined)d=Math.max(d,a.dig)}
+ return d+classFx('digBonus')}
+function moveSpd(){let m=MOVE*(1+inc('ms'))*chillMul(P);
+ if(auraHas('swiftness'))m*=1.15;
+ if(auraHas('undertow')&&P.hp<P.maxhp*0.4)m*=1.25;
+ if(P.block)m*=0.5;
+ m*=1-Math.min(.30,P.weight*0.0);   // The Weight slows enemies, not you — see applyWeight()
+ return m}
+
+// ============ GEM RESOLUTION (heart of the buildcraft) ============
+// Resolution order (DESIGN-PLAN §1.1):
+//   gear base -> skill gem -> support gems (same item) -> UNIQUE -> armor supports (global)
+//   -> additive pool (tree/class/affix/boon) -> crit
+// `a.more` is the ONLY multiplicative accumulator. `a.inc` is the additive one. resolveDmg()
+// is the single place they combine, so no caller can get the order wrong.
+function resolveDmg(a,dkey){
+ a.inc=(a.inc||0)+inc(dkey)+inc('dmg');
+ a.dmg=a.dmg*(1+a.inc)*a.more;
+ // ailment potencies are ratios of FINAL damage, so a support gem's `more` feeds the DoT too
+ if(a.stR){a.st=a.st||{};for(const k in a.stR)a.st[k]=Math.max(a.st[k]||0,a.dmg*a.stR[k]*ailmentMul())}
+ if(a.st&&a.st.burn)a.st.burn*=1+classFx('burnBonus');
+ return a}
+// GEM TIERS (DESIGN-PLAN §3.3). One uniform rule instead of per-gem tier tables: a tier lifts
+// the gem's characteristic number, and abilities pay for it in cooldown so tiering isn't free.
+function applyGem(G,a,tier){
+ G.mod&&G.mod(a);
+ if(!tier||tier<2)return a;
+ const t=tier-1;
+ if(G.t==='sup')a.more*=1+0.12*t;
+ else if(G.t==='skill')a.dmg*=1+0.20*t;
+ else if(G.t==='abil'){a.dmg*=1+0.30*t;a.cd*=1+0.10*t}
+ return a}
+function baseAttack(b,kind){
+ return kind==='melee'
+  ?{kind:'melee',dmg:b.dmg,range:b.range,arc:b.arc,cd:b.cd,kb:b.kb,dig:b.dig||0,col:'#fff',more:1,inc:0}
+  :{kind:'ranged',dmg:b.dmg,speed:b.speed,cd:b.cd,kb:b.kb,pierce:b.pierce||0,count:1,explode:0,col:b.col||'#fff',more:1,inc:0}}
+function computeAttack(slot){
+ const it=EQ[slot];if(!it)return null;
+ const b=GEAR[it.base];
+ const kind=b.shield?'melee':b.slot; // shield attacks like melee (bash) in either slot
+ const a=baseAttack(b,kind);
+ const gems=it.sockets.filter(g=>gemOf(g));
+ for(const g of gems){const G=gemOf(g);if(G.t==='skill'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+ for(const g of gems){const G=gemOf(g);if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+ if(it.unique&&UNIQUES[it.unique].mod)UNIQUES[it.unique].mod(a);
+ // armor sockets: support gems link GLOBALLY to both weapon skills. This is the one
+ // global-vs-local decision in the whole system (HANDOFF §3.3).
+ if(slot!=='armor'&&EQ.armor)for(const g of EQ.armor.sockets){const G=gemOf(g);if(!G)continue;
+  if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+ resolveDmg(a,kind==='melee'?'meleeDmg':'rangedDmg');
+ if(a.dig!==undefined)a.dig+=classFx('digBonus');
+ a.cd*=1/(1+inc('cdr'));
+ a.kb*=1+inc('kb');
+ if(a.pierce!==undefined)a.pierce+=inc('pierce');
+ a.crit=critChance()+(a.critAdd||0);a.critMult=critMultVal()+(a.critMultAdd||0);
+ a.leech=(a.leech||0)+inc('leech');
+ return a}
+// Cached attack params — recompute only when build changes (equip/socket/tree)
+let ATK={melee:null,ranged:null,abil:null};
+let BUFFS=[];
+function computeAbility(){
+ const it=EQ.armor;if(!it)return null;
+ const slot=it.sockets.find(g=>{const G=gemOf(g);return G&&G.t==='abil'});if(!slot)return null;
+ const gid=gemId(slot),G=GEMS[gid],tier=gemTier(slot);
+ const a={kind:'abil',id:gid,fx:G.fx,n:G.n,cd:G.cd,fc:G.fc||0,tier,dmg:40,col:'#ffe9a0',st:null,more:1,inc:0};
+ if(tier>1){a.dmg*=1+0.30*(tier-1);a.cd*=1+0.10*(tier-1)}
+ for(const g2 of it.sockets){if(g2===slot)continue;const S=gemOf(g2);if(!S)continue;
+  if(S.t==='sup')applyGem(S,a,gemTier(g2))} // armor supports empower the ability too
+ a.inc=(treeFx('meleeDmg')+treeFx('rangedDmg'))*0.5;
+ resolveDmg(a,'dmg');
+ a.cd*=1/(1+inc('cdr')+classFx('abilCdr'));
+ a.crit=critChance();a.critMult=critMultVal();
+ return a}
+function refreshAttacks(){ATK.melee=computeAttack('melee');ATK.ranged=computeAttack('ranged');ATK.abil=computeAbility();
+ P.maxfuel=maxFuel();P.armor=armorVal();P.sres=sresVal();
+ P.fallImmune=!!(EQ.armor&&EQ.armor.unique&&UNIQUES[EQ.armor.unique].noFall)}
+// DPS estimate for the socket screen. Players cannot evaluate `more` multipliers in their
+// head; without this line the whole gem system is guesswork (DESIGN-PLAN §7).
+function dpsOf(a){if(!a||!a.cd)return 0;
+ const hits=(a.count||1)*(1+Math.min(3,a.pierce||0)*0.35);
+ const critAvg=1+a.crit*(a.critMult-1);
+ let dot=0;if(a.st){if(a.st.burn)dot+=a.st.burn*STATUS.burn.dur/a.cd*0.5;if(a.st.bleed)dot+=a.st.bleed*STATUS.bleed.dur/a.cd*0.5}
+ return Math.round(a.dmg*hits*critAvg/a.cd+dot)}
+function useAbility(){
+ const a=ATK.abil;if(!a||P.dead)return;
+ if(P.acd>0){sfx('deny');return}
+ // Two gates, both real: the cooldown says "not yet", Focus says "not for free" (§3.2).
+ if(!spendFocus(a.fc||0)){sfx('deny');return}
+ P.acd=a.cd;sfx('abil');
+ const dm=depthMul(P.y);
+ if(a.fx==='blink'){
+  const step=TILE,maxd=110;let nx=P.x;
+  for(let d=0;d<maxd;d+=step){const tx=P.x+P.face*d;
+   if(!solidAt(tx,P.y-P.h/3)&&!solidAt(tx,P.y+P.h/3))nx=tx;else break}
+  burst(P.x,P.y,'#9fd0ff',10);P.x=nx;P.inv=Math.max(P.inv,0.35);burst(P.x,P.y,'#9fd0ff',10);
+  toast('Blink')}
+ else if(a.fx==='warcry'){
+  RUNB.dmg+=0.25;BUFFS.push({k:'dmg',v:0.25,until:perf+8});refreshAttacks();
+  shake=Math.max(shake,6);burst(P.x,P.y,'#e6d34a',20);
+  for(const e of EN){if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<160){e.vx+=Math.sign(e.x-P.x)*220;applyStatus(e,{shock:1.25})}}
+  toast('War Cry — +25% dmg 8s')}
+ else if(a.fx==='meteor'){
+  const v=aimVec();
+  PROJ.push({x:P.x+v.x*20,y:P.y-40,vx:v.x*260,vy:v.y*260+140,dmg:a.dmg*dm,pierce:0,
+   explode:70,leech:0,st:Object.assign({burn:a.dmg*0.3},a.st||{}),col:'#ff8a3f',t:3,friendly:1});
+  toast('Meteor')}
+ else if(a.fx==='mend'){
+  P.hp=Math.min(P.maxhp,P.hp+P.maxhp*0.35);P.st=null;
+  burst(P.x,P.y,'#8fdc6a',18);toast('Mend — cleansed')}
+ else if(a.fx==='bulwark'){ // overshield that absorbs flat damage, scaled by your armor
+  P.shield=Math.round(30+(P.armor||0)*3.2+a.dmg*0.4);P.shieldT=perf+12;
+  burst(P.x,P.y,'#9fd0ff',22);toast('Bulwark — '+P.shield+' shield')}
+ else if(a.fx==='sentry'){ // a turret that fires YOUR ranged attack — the ability IS the build
+  SENTRY.push({x:P.x,y:P.y,t:perf+8,cd:0});
+  burst(P.x,P.y,'#d8a53f',16);toast('Shard Sentry — 8s')}
+ else if(a.fx==='decoy'){ // taunt dummy: the panic button for fragile builds
+  DECOY={x:P.x+P.face*30,y:P.y,t:perf+6,hp:40+a.dmg};
+  burst(DECOY.x,DECOY.y,'#e8e2d0',14);toast('Decoy')}
+ else if(a.fx==='rupture'){ // consume every ailment nearby for burst — the DoT finisher
+  let total=0,n=0;
+  for(const e of EN){if(e.hp<=0||Math.hypot(e.x-P.x,e.y-P.y)>170)continue;
+   let pot=0;for(const k of ['burn','bleed'])pot+=stSum(e,k);
+   if(pot<=0)continue;
+   delete e.st.burn;delete e.st.bleed;
+   const d=pot*3.2*ailmentMul();total+=d;n++;
+   hurtEnemy(e,d,0,'#e05555',null,true,true);burst(e.x,e.y,'#e05555',14)}
+  shake=Math.max(shake,10);flash(0.2);
+  toast(n?'Rupture — '+Math.round(total)+' across '+n:'Rupture — nothing to consume')}
+ else if(a.fx==='levitate'){ // free flight burst — refill + no drain for 6s
+  P.fuel=P.maxfuel;P.levT=perf+6;P.noFall=Math.max(P.noFall,7);
+  burst(P.x,P.y,'#9fd0ff',18);toast('Levitate — 6s free flight')}
+ else if(a.fx==='grapple'){ // fire a line; anchor to terrain and yank, or yank an enemy to you
+  const v=aimVec();let hx=P.x,hy=P.y,hitTile=false,hitE=null;
+  for(let d=10;d<300;d+=6){const tx=P.x+v.x*d,ty=P.y+v.y*d;
+   for(const e of EN){if(e.hp>0&&Math.abs(e.x-tx)<e.w/2+4&&Math.abs(e.y-ty)<e.h/2+4){hitE=e;hx=tx;hy=ty;break}}
+   if(hitE)break;
+   if(solidAt(tx,ty)){hitTile=true;hx=tx;hy=ty;break}
+   hx=tx;hy=ty}
+  GRAPPLE={x:hx,y:hy,t:0.25};
+  if(hitE&&!hitE.boss){hitE.vx+=(P.x-hitE.x)*3.2;hitE.vy+=(P.y-hitE.y)*3.2-80;applyStatus(hitE,{shock:1.2});toast('Grapple — pulled')}
+  else if(hitTile){const dx=hx-P.x,dy=hy-P.y,dd=Math.max(1,Math.hypot(dx,dy));
+   P.vx=dx/dd*620;P.vy=dy/dd*620-90;P.noFall=Math.max(P.noFall,1.2);P.inv=Math.max(P.inv,0.2);toast('Grapple')}
+  else{P.acd=a.cd*0.3;toast('Grapple — no anchor')}}
+ else if(a.fx==='burrow'){ // phase THROUGH terrain briefly, carving a tunnel behind you
+  P.burrowT=perf+1.1;P.inv=Math.max(P.inv,1.2);P.noFall=Math.max(P.noFall,2);
+  burst(P.x,P.y,'#6b4a2e',16);toast('Burrow')}
+ else if(a.fx==='shaft'){ // drill a vertical shaft straight down — pure traversal
+  const md=Math.max(1,digPower());let cut=0;
+  for(let d=0;d<26;d++){cut+=carve(P.x,P.y+d*TILE,TILE*1.4,md);
+   if(getTile(Math.floor(P.x/TILE),Math.floor((P.y+d*TILE)/TILE))===3)break}
+  shake=Math.max(shake,10);burst(P.x,P.y+30,'#d8a53f',20);
+  toast('Shaft — '+cut+' tiles');P.noFall=Math.max(P.noFall,3)}
+ else if(a.fx==='quake'){
+  shake=Math.max(shake,14);hitstop=0.08;
+  explode(P.x,P.y,120,a.dmg*1.4*dm,'#b0a070',{bleed:a.dmg*0.25});
+  carve(P.x,P.y+TILE*1.5,TILE*4.5,Math.max(1,digPower()));
+  toast('Quake')}}
+function tickBuffs(){for(let i=BUFFS.length-1;i>=0;i--){const b=BUFFS[i];
+ if(perf>=b.until){RUNB[b.k]-=b.v;BUFFS.splice(i,1);refreshAttacks()}}}
+// ============ PHYSICS ============
+function collideMove(o,dx,dy){
+ // horizontal
+ o.x+=dx;
+ if(dx>0){const r=o.x+o.w/2;if(scanV(r,o.y,o.h)){o.x=Math.floor(r/TILE)*TILE-o.w/2-0.01;o.vx=0}}
+ else if(dx<0){const l=o.x-o.w/2;if(scanV(l,o.y,o.h)){o.x=(Math.floor(l/TILE)+1)*TILE+o.w/2+0.01;o.vx=0}}
+ // vertical
+ o.y+=dy;o.onG=false;
+ if(dy>0){const b=o.y+o.h/2;if(scanH(b,o.x,o.w)){o.y=Math.floor(b/TILE)*TILE-o.h/2-0.01;o.vy=0;o.onG=true}}
+ else if(dy<0){const t=o.y-o.h/2;if(scanH(t,o.x,o.w)){o.y=(Math.floor(t/TILE)+1)*TILE+o.h/2+0.01;o.vy=0}}
+}
+function scanV(px,cy,h){for(let y=cy-h/2+1;y<=cy+h/2-1;y+=TILE/2){if(solidAt(px,y))return true}return solidAt(px,cy+h/2-1)}
+function scanH(py,cx,w){for(let x=cx-w/2+1;x<=cx+w/2-1;x+=TILE/2){if(solidAt(x,py))return true}return solidAt(cx+w/2-1,py)}
+
+// ============ AUDIO + FX ============
+// Every sound is synthesized from oscillators at call time. No asset files, no fetch, no
+// decode — the "single file, works offline" property survives having audio.
+let AC=null,MASTER=null,AUDIO_ON=true;
+function audioInit(){if(AC||!AUDIO_ON)return;
+ try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  AC=new C();MASTER=AC.createGain();MASTER.gain.value=0.22;MASTER.connect(AC.destination)}catch(e){AC=null}}
+const SFX={
+ swing:{w:'triangle',f:420,f2:180,d:.08,g:.5},
+ nova: {w:'sawtooth',f:220,f2:90, d:.20,g:.6},
+ shoot:{w:'square',  f:640,f2:420,d:.06,g:.35},
+ hit:  {w:'square',  f:180,f2:120,d:.05,g:.45},
+ crit: {w:'sawtooth',f:880,f2:300,d:.14,g:.7},
+ kill: {w:'triangle',f:300,f2:80, d:.16,g:.5},
+ bosskill:{w:'sawtooth',f:160,f2:40,d:.7,g:.85},
+ hurt: {w:'sawtooth',f:200,f2:70, d:.18,g:.7},
+ block:{w:'square',  f:520,f2:520,d:.05,g:.4},
+ pick: {w:'sine',    f:900,f2:1400,d:.07,g:.35},
+ gem:  {w:'sine',    f:700,f2:1600,d:.16,g:.45},
+ dig:  {w:'square',  f:120,f2:70, d:.05,g:.25},
+ abil: {w:'sawtooth',f:300,f2:900,d:.22,g:.6},
+ shatter:{w:'sawtooth',f:1200,f2:200,d:.3,g:.75},
+ level:{w:'sine',    f:520,f2:1040,d:.35,g:.6},
+ deny: {w:'square',  f:150,f2:110,d:.10,g:.4},
+ die:  {w:'sawtooth',f:280,f2:40, d:1.1,g:.9},
+};
+let sfxBudget=0; // hard cap on simultaneous voices: a Nova into a crowd must not blow the mix
+function sfx(name){
+ if(!AUDIO_ON||!AC||sfxBudget>6)return;const S=SFX[name];if(!S)return;
+ try{const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
+  o.type=S.w;o.frequency.setValueAtTime(S.f,t);o.frequency.exponentialRampToValueAtTime(Math.max(20,S.f2),t+S.d);
+  g.gain.setValueAtTime(S.g,t);g.gain.exponentialRampToValueAtTime(0.0008,t+S.d);
+  o.connect(g);g.connect(MASTER);o.start(t);o.stop(t+S.d+0.02);sfxBudget++}catch(e){}}
+// Lightning arcs, screen flashes and floating callouts all render from these.
+let ARCS=[],FLASH=0,CALLOUT=null;
+function arc(x1,y1,x2,y2,col){if(ARCS.length<24)ARCS.push({x1,y1,x2,y2,col,t:0.16})}
+function toastQ(msg){CALLOUT={m:msg,t:0.9};if(msg==='SHATTER')sfx('shatter')}
+function flash(a){FLASH=Math.max(FLASH,a)}
+
+// ============ COMBAT ============
+// STATUS. Every entry in o.st is an ARRAY of instances, even the non-stacking ones — one shape
+// means one code path. burn/bleed keep up to STACK_MAX independent timers (so attack speed
+// scales DoT); chill/shock collapse to a single best instance (stacking a debuff would break it).
+function applyStatus(o,st,isPlayer){if(!st)return;o.st=o.st||{};
+ const resist=isPlayer?(P.sres||0):0;
+ for(const k in st){if(!STATUS[k])continue;
+  const pot=st[k],dur=STATUS[k].dur*(1-resist);
+  if(dur<=0.05)continue;
+  const arr=o.st[k]||(o.st[k]=[]);
+  if(STATUS[k].stack){
+   if(arr.length>=STACK_MAX){ // replace the weakest rather than refusing the hit
+    let wi=0;for(let i=1;i<arr.length;i++)if(arr[i].p<arr[wi].p)wi=i;
+    if(arr[wi].p<=pot)arr[wi]={p:pot,t:dur}}
+   else arr.push({p:pot,t:dur})}
+  else{ // chill takes the LOWEST multiplier (strongest slow); shock takes the highest
+   const better=k==='chill'?(a,b)=>a<b:(a,b)=>a>b;
+   if(!arr.length)arr.push({p:pot,t:dur});
+   else{if(better(pot,arr[0].p))arr[0].p=pot;arr[0].t=Math.max(arr[0].t,dur)}}
+  statusCombo(o,k,isPlayer)}}
+// ELEMENTAL INTERACTIONS (DESIGN-PLAN §1.5) — the Noita-flavored layer. Cheap, huge for feel.
+function statusCombo(o,k,isPlayer){
+ const S=o.st;if(!S)return;
+ // SHATTER: burn + chill consume each other for a burst scaled by total burn potency.
+ if((k==='chill'&&S.burn&&S.burn.length)||(k==='burn'&&S.chill&&S.chill.length)){
+  const pot=(S.burn||[]).reduce((s,x)=>s+x.p,0);
+  delete S.burn;delete S.chill;
+  const d=pot*1.6*ailmentMul();
+  burst(o.x,o.y,'#bfe8ff',14);
+  if(isPlayer){o.hpDrain=(o.hpDrain||0)+d}
+  else{o.hp-=d;dmgNum(o.x,o.y-o.h,d,'#bfe8ff');if(o.hp<=0)killEnemy(o)}
+  toastQ('SHATTER')}
+ // CONGEAL: bleed + chill — bleed halves but lasts three times as long. A trade, not a loss.
+ else if((k==='chill'&&S.bleed&&S.bleed.length)||(k==='bleed'&&S.chill&&S.chill.length)){
+  if(S.bleed)for(const b of S.bleed){if(!b.cong){b.cong=1;b.p*=0.5;b.t*=3}}}
+}
+// SHOCK CHAIN: a shocked target passes a bolt to one nearby enemy on every hit it takes.
+function shockChain(from,dmg,col){
+ let best=null,bd=110;
+ for(const e of EN){if(e===from||e.hp<=0)continue;const d=Math.hypot(e.x-from.x,e.y-from.y);
+  if(d<bd){bd=d;best=e}}
+ if(!best)return;
+ arc(from.x,from.y,best.x,best.y,'#e6d34a');
+ hurtEnemy(best,dmg*0.45,0,'#e6d34a',null,true)}
+function tickStatus(o,dt,isPlayer){
+ if(!o.st)return;
+ for(const k in o.st){const arr=o.st[k];
+  for(let i=arr.length-1;i>=0;i--){const s=arr[i];s.t-=dt;if(s.t<=0){arr.splice(i,1);continue}
+   if(k==='burn'||k==='bleed'){
+    const moving=k==='bleed'&&Math.abs(o.vx||0)>20;
+    const d=s.p*dt*(moving?2:1);
+    if(isPlayer){o.hpDrain=(o.hpDrain||0)+d}
+    else{o.hp-=d;if(o.hp<=0){killEnemy(o);return}}
+    if(chance(dt*(k==='burn'?8:6)))burst(o.x,o.y,STATUS[k].c,1);
+    // Pyromancer earns Focus from ailment ticks, not just hits — this is the class identity.
+    if(!isPlayer&&classFx&&CLASSES[META.cls]&&CLASSES[META.cls].foc==='ailment')gainFocus(dt*6)}}
+  if(!arr.length)delete o.st[k]}}
+function stSum(o,k){const a=o.st&&o.st[k];if(!a||!a.length)return 0;return a.reduce((s,x)=>s+x.p,0)}
+function hasSt(o,k){return !!(o.st&&o.st[k]&&o.st[k].length)}
+function chillMul(o){const a=o.st&&o.st.chill;return a&&a.length?a[0].p:1}
+function shockMul(o){const a=o.st&&o.st.shock;return a&&a.length?a[0].p:1}
+function dmgNum(x,y,v,col,crit){DMGN.push({x,y,vy:crit?-58:-40,t:crit?1.0:0.8,v:Math.round(v),col:col||'#fff',crit:!!crit})}
+// ---- the two damage gates. Everything that hurts anything goes through one of these. ----
+function rollCrit(a){return a&&a.crit>0&&chance(a.crit)}
+function applyArmor(raw,armor){return Math.max(ARMOR_FLOOR,raw-(armor||0))}
+function burst(x,y,col,n){if(PART.length>350)return;for(let i=0;i<(n||6);i++)PART.push({x,y,vx:rr(-90,90),vy:rr(-140,20),t:rr(.2,.5),col})}
+function doMelee(){
+ const a=ATK.melee;if(!a||a.kind!=='melee'||P.mcd>0)return;
+ if(a.chan&&!spendFocus(a.chan*DT,true))return;   // channelled skills pay per tick
+ P.mcd=a.cd;
+ const fang=P.face>0?0:Math.PI, half=a.arc*Math.PI/360;
+ let hit=false;
+ for(const e of EN){if(e.hp<=0)continue;
+  const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,dy);
+  if(d>=a.range+e.w/2)continue;
+  const ang=Math.atan2(dy,dx),diff=Math.abs(Math.atan2(Math.sin(ang-fang),Math.cos(ang-fang)));
+  if(diff<=half||d<12){
+   strike(e,a,Math.sign(dx||P.face)*a.kb);hit=true;
+   if(a.explode)explode(e.x,e.y,a.explode,0,a.col,a.st)}}
+ for(const ch of CHESTS){if(!ch.opened&&Math.hypot(ch.x-P.x,ch.y-P.y)<a.range+10)openChest(ch)}
+ // dig soft tiles in front
+ const cut=carve(P.x+P.face*a.range*0.8,P.y,a.digR||TILE*1.5,a.dig>=0?a.dig:-1);
+ if(cut&&CLASSES[META.cls].foc==='dig')gainFocus(cut*1.5);
+ if(hit){hitstop=0.05;shake=Math.max(shake,4)}
+ burst(P.x+P.face*a.range*0.55,P.y,'#ffffff40',3);
+ sfx(a.arc>=200?'nova':'swing')}
+// Auto-aim range is tied to what you can actually SEE. It used to be a flat 260px, which on a
+// phone reached well past the edge of the screen — you fired at things you had no way to know
+// were there. Half the viewport width keeps every auto-target on screen.
+function aimRange(){return Math.max(140,Math.min(320,VW*0.55))}
+function aimVec(){
+ let best=null,bd=aimRange();
+ for(const e of EN){if(e.hp<=0)continue;const d=Math.hypot(e.x-P.x,e.y-P.y);if(d<bd){bd=d;best=e}}
+ if(best){const d=Math.max(1,Math.hypot(best.x-P.x,best.y-P.y));return{x:(best.x-P.x)/d,y:(best.y-P.y)/d}}
+ return{x:P.face,y:0}}
+function doRanged(){
+ const a=ATK.ranged;if(!a||P.rcd>0)return;
+ if(a.kind==='melee'){doMeleeAs(a);return} // shield in ranged slot => bash
+ if(a.chan&&!spendFocus(a.chan*DT,true))return;
+ P.rcd=a.cd;const v=aimVec();
+ const n=a.count||1,spread=0.18;
+ for(let i=0;i<n;i++){if(PROJ.length>200)break;const off=(i-(n-1)/2)*spread;
+  const c=Math.cos(off),s=Math.sin(off);
+  PROJ.push({x:P.x,y:P.y-4,vx:(v.x*c-v.y*s)*a.speed,vy:(v.x*s+v.y*c)*a.speed,
+   dmg:a.dmg,crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:a.leech||0,st:a.st||null,
+   digR:a.digR||0,dig:a.dig,digCost:a.digCost||0,grav:a.grav||0,homing:a.homing||0,fork:a.fork||0,ret:a.ret||0,
+   ox:P.x,oy:P.y,col:a.col,t:a.life||2,friendly:1})}
+ shake=Math.max(shake,2);sfx('shoot')}
+function doMeleeAs(a){if(P.rcd>0)return;P.rcd=a.cd;
+ for(const e of EN){if(e.hp<=0)continue;
+  if(Math.hypot(e.x-P.x,e.y-P.y)<a.range+e.w/2&&Math.sign(e.x-P.x)===P.face)strike(e,a,P.face*a.kb)}
+ sfx('swing')}
+// ---- strike(): the single player->enemy damage path. Crit, armor, leech and focus all here. ----
+function strike(e,a,kb){
+ const crit=rollCrit(a);
+ let dmg=a.dmg*(crit?a.critMult:1);
+ let st=a.st;
+ if(crit&&st){st={};for(const k in a.st)st[k]=a.st[k]*(k==='chill'?1:CRIT_ST)} // crits deepen ailments
+ hurtEnemy(e,dmg,kb,crit?'#d8a53f':a.col,st,false,crit);
+ if(a.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*a.leech);
+ gainFocus(FOCUS_HIT);
+ if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT)}
+function depthMul(y){return 1+Math.max(0,(y/TILE-SURFACE))/900} // enemies scale with depth
+// chained=true suppresses further chaining so a shock loop can't recurse forever.
+function hurtEnemy(e,dmg,kb,col,st,chained,crit){
+ if(e.hp<=0||(e.invT||0)>0)return;
+ const shocked=hasSt(e,'shock');
+ dmg=applyArmor(dmg,e.arm)*shockMul(e)*(1-P.weight*0.03);
+ e.hp-=dmg;e.vx+=kb;e.vy-=60;e.flash=crit?0.20:0.12;
+ if(st)applyStatus(e,st,false);
+ dmgNum(e.x,e.y-e.h,dmg,col,crit);burst(e.x,e.y,e.c,crit?9:5);
+ if(dmg>P.bestHit)P.bestHit=dmg;
+ if(shocked&&!chained)shockChain(e,dmg,col);
+ if(e.boss)bossPhase(e);
+ if(e.hp<=0)killEnemy(e);
+ else sfx(crit?'crit':'hit')}
+function killEnemy(e){
+ if(e.dying)return;e.dying=1;
+ burst(e.x,e.y,e.c,e.boss?40:12);shake=Math.max(shake,e.boss?12:3);
+ P.kills++;gainFocus(FOCUS_KILL);sfx(e.boss?'bosskill':'kill');
+ if(e.boss){toast(e.type.toUpperCase()+' SLAIN');hitstop=0.18;
+  const gp=gemPool();for(let i=0;i<2;i++)PICK.push({x:e.x+rr(-10,10),y:e.y,vy:-170,kind:'gem',id:gp[ri(0,gp.length-1)],t:60});
+  const gr=gearPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gear',item:mkItem(gr[ri(0,gr.length-1)],chance(.22)?3:chance(.5)?2:1),t:60});
+  META.bosses=META.bosses||{};if(!META.bosses[e.type]){META.bosses[e.type]=1;saveMeta()}}
+ dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?3:1)*rr(0.7,1.3)));
+ if(e.elite){
+  toast(e.elite.n+' '+e.type+' slain');
+  if(e.elite.boom){ // Volatile: corpse detonates — hurts the player too
+   const bx=e.x,by=e.y,br=e.elite.boom,bd=e.dmg*1.2;
+   burst(bx,by,'#e07a3f',20);shake=Math.max(shake,8);
+   explode(bx,by,br,bd,'#e07a3f');
+   if(Math.hypot(P.x-bx,P.y-by)<br)hurtPlayer(bd)}
+  if(chance(0.35)){const gp=gemPool();PICK.push({x:e.x,y:e.y,vy:-150,kind:'gem',id:gp[ri(0,gp.length-1)],t:40})}}
+ if(chance(0.06)){const pool=gemPool();PICK.push({x:e.x,y:e.y,vy:-120,kind:'gem',id:pool[ri(0,pool.length-1)],t:30})}
+ else if(chance(0.05)){const pool=gearPool();const r=chance(0.15)?2:chance(0.45)?1:0;
+  PICK.push({x:e.x,y:e.y,vy:-120,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],r),t:30})}}
+// SHARD VALUE SCALES WITH DEPTH (DESIGN-PLAN §3.4.1). This one multiplier is what stops the
+// shallow-farm strategy from being optimal — a deep run should out-earn a surface loop ~4x.
+function dropShards(x,y,n){
+ const total=Math.max(1,Math.round(n*greedVal()*depthMul(y)));
+ for(let i=0;i<total;i++)PICK.push({x:x+rr(-6,6),y,vy:rr(-160,-80),vx:rr(-50,50),kind:'shard',t:20})}
+function openChest(ch){ch.opened=true;burst(ch.x,ch.y,'#d8a53f',12);shake=Math.max(shake,3);
+ dropShards(ch.x,ch.y-6,ri(8,14));
+ const gp=gemPool();PICK.push({x:ch.x,y:ch.y-8,vy:-160,kind:'gem',id:gp[ri(0,gp.length-1)],t:30});
+ if(chance(0.6)){const pool=gearPool();const r=chance(0.07)?3:chance(0.35)?2:1;
+  PICK.push({x:ch.x+6,y:ch.y-8,vy:-140,kind:'gear',item:mkItem(pool[ri(0,pool.length-1)],r),t:30})}}
+// damageTaken = max(1, incoming - armor) x (1-blockDR) x (1-ironskin)   [DESIGN-PLAN §1.4]
+// Flat subtraction is deliberate: armor is strong against many small hits and weak against one
+// big one, which is what actually separates Vanguard from Marksman.
+function hurtPlayer(dmg,noArmor){if(P.inv>0||P.dead)return;
+ if(P.shield>0){const absorbed=Math.min(P.shield,dmg);P.shield-=absorbed;dmg-=absorbed;
+  burst(P.x,P.y,'#9fd0ff',6);if(dmg<=0){P.inv=0.35;return}}
+ if(!noArmor)dmg=applyArmor(dmg,P.armor||0);
+ if(auraHas('ironskin'))dmg*=0.8;
+ if(P.block){dmg*=0.3*(1-classFx('blockDR'));burst(P.x+P.face*8,P.y,'#9fd0ff',6);shake=Math.max(shake,2);
+  if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2);sfx('block')}
+ else{shake=Math.max(shake,6);hitstop=0.06;burst(P.x,P.y,'#e05555',8);sfx('hurt')}
+ P.hp-=dmg;P.inv=0.7;
+ dmgNum(P.x,P.y-P.h,dmg,'#e05555');
+ if(P.hp<=0)die()}
+// ---- FOCUS: the ability resource (DESIGN-PLAN §3.2) ----
+// Cooldown-only abilities mean "press ABIL whenever it's up", which is not a decision.
+// Focus ties ability power to being IN the fight, which is what this genre wants.
+function gainFocus(n){if(P.dead)return;P.focus=Math.min(FOCUS_MAX,P.focus+n*focusGainMul())}
+function spendFocus(n,quiet){if(P.focus<n){if(!quiet)toast('Not enough focus');return false}
+ P.focus-=n;return true}
+// ============ ENEMIES / PROJECTILES / PICKUPS ============
+function spawnFromChunks(){
+ const pcx=Math.floor(P.x/TILE/CHUNK),pcy=Math.floor(P.y/TILE/CHUNK);
+ for(let cy=pcy-1;cy<=pcy+1;cy++)for(let cx=pcx-1;cx<=pcx+1;cx++){
+  if(cx<0||cy<0)continue;const c=getChunk(cx,cy);
+  if(!c.spawned){c.spawned=true;
+   for(const s of c.spawns){
+    if(s.type==='chest'){CHESTS.push({x:s.x,y:s.y,opened:false});continue}
+    if(s.type==='shrine'){SHRINES.push({x:s.x,y:s.y,used:false});continue}
+    const boss=!!(ENEMIES[s.type]&&ENEMIES[s.type].boss);
+    if(EN.length>120&&!boss)continue;
+    const E=ENEMIES[s.type],m=depthMul(s.y);
+    // elite chance ramps with depth: ~2% shallow -> 22% deep. Bosses never roll elite.
+    const eliteP=Math.min(0.22,0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55);
+    const el=(!boss&&chance(eliteP))?ELITES[ri(0,ELITES.length-1)]:null;
+    EN.push({x:s.x,y:s.y,vx:0,vy:0,w:E.w*(el?1.15:1),h:E.h*(el?1.15:1),type:s.type,ai:E.ai,
+     c:el?el.c:E.c,
+     hp:E.hp*m*(el?el.hp:1),maxhp:E.hp*m*(el?el.hp:1),dmg:E.dmg*m*(el?el.dmg:1),
+     arm:(E.arm||0)+(el&&el.arm||0),
+     spd:E.spd*(el?el.spd:1),onG:false,flash:0,dir:chance(.5)?1:-1,
+     boss:boss,elite:el,shoot:E.shoot||null,scd:E.shoot?rr(.5,1.5):0,
+     atk:E.atk||null,acd:E.atk?rr(.3,1.0):0,wind:0,act:0,invT:0,phase:0,ph:E.ph||null,
+     spawnedBy:s.by||null})}}}}
+// BOSS PHASES (DESIGN-PLAN §4.3). At 66% and 33% HP: brief invuln + roar, shoot cooldown drops
+// 25%, and one new pattern unlocks. Turns HP sponges into fights with a shape.
+function bossPhase(e){
+ if(!e.ph||e.phase>=e.ph.length)return;
+ const next=e.ph[e.phase];
+ if(e.hp/e.maxhp>next.at)return;
+ e.phase++;e.invT=0.9;e.pat=next.pat;
+ if(e.shoot)e.shoot=Object.assign({},e.shoot,{cd:e.shoot.cd*0.75});
+ e.scd=Math.min(e.scd,0.5);
+ shake=Math.max(shake,14);flash(0.35);hitstop=0.10;
+ burst(e.x,e.y,'#fff',34);sfx('bosskill');
+ toast(e.type.toUpperCase()+' — PHASE '+(e.phase+1));
+ bossPattern(e,next.pat)}
+// Each unlocked pattern is a one-shot burst on transition; `e.pat` then colors ongoing behaviour.
+function bossPattern(e,pat){
+ const dm=depthMul(e.y);
+ if(pat==='volley'){for(let k=0;k<14&&PROJ.length<220;k++){const a=k/14*Math.PI*2;
+  PROJ.push({x:e.x,y:e.y,vx:Math.cos(a)*220,vy:Math.sin(a)*220,dmg:e.dmg*0.5,pierce:0,explode:0,st:null,col:'#ffe9a0',t:3,friendly:0})}}
+ else if(pat==='slam'){shake=Math.max(shake,16);explode(e.x,e.y,150,e.dmg*0.8,'#b0a070');carve(e.x,e.y+TILE,TILE*4,1)}
+ else if(pat==='spores'){for(let k=0;k<10&&PROJ.length<220;k++)
+  PROJ.push({x:e.x+rr(-20,20),y:e.y,vx:rr(-60,60),vy:rr(-180,-60),grav:1,dmg:e.dmg*0.4,pierce:0,explode:26,st:null,col:'#c98fe0',t:4,friendly:0})}
+ else if(pat==='firewall'){for(let k=-3;k<=3;k++)if(PROJ.length<220)
+  PROJ.push({x:e.x+k*26,y:e.y-10,vx:0,vy:-40,dmg:e.dmg*0.45,pierce:0,explode:34,stR:null,st:{burn:e.dmg*0.3},col:'#ff8a3f',t:2.4,friendly:0})}
+ else if(pat==='summon'){const t=BIOMES.find(b=>b[1]===biomeName(Math.floor(e.y/TILE)));
+  const types=(t&&t[4])||['crawler'];
+  for(let k=0;k<3;k++){if(EN.length>=120)break;const ty=types[ri(0,types.length-1)],E2=ENEMIES[ty];
+   EN.push({x:e.x+rr(-60,60),y:e.y-20,vx:0,vy:0,w:E2.w,h:E2.h,type:ty,ai:E2.ai,c:E2.c,
+    hp:E2.hp*dm,maxhp:E2.hp*dm,dmg:E2.dmg*dm,arm:E2.arm||0,spd:E2.spd,onG:false,flash:0,dir:1,
+    boss:false,elite:null,shoot:E2.shoot||null,scd:rr(.5,1.5),atk:E2.atk||null,acd:rr(.3,1),
+    wind:0,act:0,invT:0,phase:0,ph:null})}}}
+function upEnemies(dt){
+ for(let i=EN.length-1;i>=0;i--){const e=EN[i];
+  if(e.hp<=0){EN.splice(i,1);continue}
+  // Decoy steals aggro from anything close enough to notice it.
+  const tgt=(DECOY&&Math.hypot(DECOY.x-e.x,DECOY.y-e.y)<260)?DECOY:P;
+  const dx=tgt.x-e.x,dy=tgt.y-e.y,d=Math.hypot(dx,dy);
+  e.flash=Math.max(0,e.flash-dt);
+  e.invT=Math.max(0,(e.invT||0)-dt);   // `||0`: enemies built by hand in tests have no invT
+  e.swind=Math.max(0,e.swind||0);
+  if(e.st){tickStatus(e,dt,false);if(e.hp<=0){EN.splice(i,1);continue}}
+  const cm=chillMul(e)*(1+P.weight*0.03); // The Weight speeds enemies up, it does not slow you
+  if(d>1400){continue} // sleep far enemies
+  // ---- TELEGRAPHED RANGED: wind up visibly, THEN fire (DESIGN-PLAN §4.1) ----
+  if(e.shoot){e.scd-=dt;
+   const S=e.shoot,wind=S.wind||0;
+   if(e.swind>0){e.swind-=dt;
+    if(e.swind<=0){const ux=dx/(d||1),uy=dy/(d||1),n=S.count||1;
+     for(let k=0;k<n&&PROJ.length<220;k++){const off=(k-(n-1)/2)*(S.spread||0);
+      const c=Math.cos(off),si=Math.sin(off);
+      const pst=S.st?Object.assign({},S.st):(S.stR?{burn:S.dmg*depthMul(e.y)*S.stR.burn}:null);
+      PROJ.push({x:e.x,y:e.y,vx:(ux*c-uy*si)*S.speed,vy:(ux*si+uy*c)*S.speed,
+       dmg:S.dmg*depthMul(e.y),pierce:0,explode:S.explode||0,st:pst,col:S.col,t:3,friendly:0})}
+     burst(e.x,e.y,S.col,3)}}
+   else if(e.scd<=0&&d<S.range&&e.invT<=0){e.scd=S.cd;e.swind=wind;
+    if(wind>0)burst(e.x,e.y-e.h/2,S.col,2)}}
+  // ---- TELEGRAPHED MELEE: stop, swell, then a live damage window ----
+  // e.wind > 0 => winding up (no damage). e.act > 0 => strike is live.
+  let lunging=false;
+  if(e.atk){e.acd=Math.max(0,e.acd-dt);
+   if(e.act>0){e.act-=dt;lunging=true;
+    if(Math.abs(dx)<(e.w+P.w)/2+6&&Math.abs(dy)<(e.h+P.h)/2+6){
+     const before=P.inv;hurtPlayer(e.dmg);
+     if(P.inv>before){
+      P.vx+=Math.sign(-dx||1)*-(e.atk.kb||150);
+      if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
+      if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a');
+      e.act=0}}}
+   else if(e.wind>0){e.wind-=dt;
+    e.vx*=0.82;                                  // brace: the enemy visibly commits
+    if(e.wind<=0){e.act=e.atk.act;e.vx=Math.sign(dx||e.dir)*(e.atk.lunge||160)}}
+   else if(e.acd<=0&&d<e.atk.range+e.w/2&&e.invT<=0){e.wind=e.atk.wind;e.acd=e.atk.cd;
+    e.dir=Math.sign(dx)||e.dir}}
+  const winding=e.wind>0;
+  if(e.ai==='walk'){
+   if(d<320&&Math.abs(dy)<80&&!winding)e.dir=Math.sign(dx)||e.dir;
+   if(!winding&&!lunging)e.vx+=(e.dir*e.spd*cm-e.vx)*Math.min(1,dt*6);
+   e.vy+=GRAV*dt;
+   // hop small ledges / turn at walls
+   const ahead=solidAt(e.x+e.dir*(e.w/2+3),e.y);
+   if(ahead&&e.onG&&!winding){if(!solidAt(e.x+e.dir*(e.w/2+3),e.y-TILE))e.vy=-260;else e.dir*=-1}
+   if(e.onG&&!solidAt(e.x+e.dir*(e.w/2+3),e.y+e.h/2+4)&&d>340)e.dir*=-1; // don't walk off cliffs when idle
+   collideMove(e,e.vx*dt,Math.min(e.vy*dt,14));
+  }else{ // fly
+   if(winding){e.vx*=0.8;e.vy*=0.8}
+   else if(d<380){e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}
+   else{e.vx+=Math.sin(perf*2+e.x)*10*dt;e.vy+=Math.cos(perf*1.7+e.y)*10*dt}
+   collideMove(e,e.vx*dt,e.vy*dt);e.vy*=0.98;e.vx*=0.98}
+  // Enemies with no attack block at all still body-check, so nothing is harmless by omission.
+  if(!e.atk&&Math.abs(dx)<(e.w+P.w)/2&&Math.abs(dy)<(e.h+P.h)/2){const before=P.inv;hurtPlayer(e.dmg);
+   if(P.inv>before){
+    if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
+    if(auraHas('thorns'))hurtEnemy(e,12*depthMul(P.y),Math.sign(-dx||1)*160,'#8fdc6a')}}}}
+function upProj(dt){
+ for(let i=PROJ.length-1;i>=0;i--){const p=PROJ[i];p.t-=dt;
+  if(p.grav)p.vy+=GRAV*0.55*dt;               // Grenade-class skills are the only ones that arc
+  if(p.homing&&p.friendly){                    // Homing Wisp: slow seeker, fire-and-forget
+   let best=null,bd=260;
+   for(const e of EN){if(e.hp<=0)continue;const dd=Math.hypot(e.x-p.x,e.y-p.y);if(dd<bd){bd=dd;best=e}}
+   if(best){const dd=Math.max(1,bd),sp=Math.hypot(p.vx,p.vy)||1;
+    p.vx+=((best.x-p.x)/dd*sp-p.vx)*Math.min(1,dt*p.homing);
+    p.vy+=((best.y-p.y)/dd*sp-p.vy)*Math.min(1,dt*p.homing)}}
+  if(p.ret&&!p.returning&&Math.hypot(p.x-p.ox,p.y-p.oy)>p.ret){ // Return: boomerang back
+   p.returning=1;p.hitList=null}
+  if(p.returning){const dx=P.x-p.x,dy=P.y-p.y,dd=Math.max(1,Math.hypot(dx,dy)),sp=Math.hypot(p.vx,p.vy)||280;
+   p.vx=dx/dd*sp;p.vy=dy/dd*sp;
+   if(dd<14){PROJ.splice(i,1);continue}}
+  p.x+=p.vx*dt;p.y+=p.vy*dt;
+  let dead=p.t<=0;
+  // tunneling projectiles carve as they travel and are NOT stopped by terrain
+  let tunneled=false;
+  if(p.digR&&p.friendly){
+   const cut=carve(p.x,p.y,p.digR,p.dig!==undefined?p.dig:0);
+   if(cut>0&&p.digCost)p.t-=p.digCost*cut;
+   tunneled=true}
+  if(tunneled&&p.t>0){}
+  else if(solidAt(p.x,p.y)){
+   if(p.bounce>0&&!p.returning){ // Grenade bounces off geometry instead of dying on it
+    p.bounce--;
+    if(solidAt(p.x,p.y-p.vy*dt))p.vx*=-0.6;else p.vy*=-0.55;
+    p.x-=p.vx*dt;p.y-=p.vy*dt;burst(p.x,p.y,p.col,2)}
+   else{dead=true;
+    if(p.explode)explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p);
+    else burst(p.x,p.y,p.col,3)}}
+  else if(!p.friendly){
+   if(Math.abs(p.x-P.x)<P.w/2+3&&Math.abs(p.y-P.y)<P.h/2+3&&!P.dead){
+    // shields block projectiles from the faced side outright
+    const facing=Math.sign(p.x-P.x)===P.face;
+    if(P.block&&facing){burst(p.x,p.y,'#9fd0ff',5);dead=true;sfx('block');
+     if(CLASSES[META.cls].foc==='block')gainFocus(FOCUS_HIT*2)}
+    else{hurtPlayer(p.dmg);if(p.st)applyStatus(P,p.st,true);if(p.explode)explode(p.x,p.y,p.explode,0,p.col);dead=true}}}
+  else{for(const e of EN){if(e.hp<=0||e.invT>0)continue;
+   if(p.hitList&&p.hitList.indexOf(e)>=0)continue;   // pierced targets are never hit twice
+   if(Math.abs(e.x-p.x)<e.w/2+3&&Math.abs(e.y-p.y)<e.h/2+3){
+    if(p.explode){explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p);dead=true;break}
+    projStrike(e,p);
+    if(p.fork>0){ // Fork: split into two on first hit. Pairs badly with Multishot on purpose.
+     const sp=Math.hypot(p.vx,p.vy)||280,base=Math.atan2(p.vy,p.vx);
+     for(const s of [-0.5,0.5])if(PROJ.length<200)
+      PROJ.push(Object.assign({},p,{vx:Math.cos(base+s)*sp,vy:Math.sin(base+s)*sp,fork:0,hitList:[e],t:Math.min(p.t,1.2)}));
+     dead=true;break}
+    if(p.pierce>0){p.pierce--;(p.hitList||(p.hitList=[])).push(e)}else{dead=true}break}}}
+  if(dead)PROJ.splice(i,1)}}
+// One place where a projectile turns into damage, so crit/leech/focus can't be forgotten.
+function projStrike(e,p){
+ const crit=p.crit>0&&chance(p.crit);
+ const dmg=p.dmg*(crit?(p.critMult||CRIT_MULT):1);
+ let st=p.st;
+ if(crit&&st){st={};for(const k in p.st)st[k]=p.st[k]*(k==='chill'?1:CRIT_ST)}
+ hurtEnemy(e,dmg,Math.sign(p.vx)*60,crit?'#d8a53f':p.col,st,false,crit);
+ if(p.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*p.leech);
+ gainFocus(FOCUS_HIT*0.6);
+ if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT)}
+function explode(x,y,r,dmg,col,st,src){
+ burst(x,y,col,14);shake=Math.max(shake,5);
+ if(dmg>0)for(const e of EN){if(e.hp<=0||e.invT>0)continue;
+  if(Math.hypot(e.x-x,e.y-y)<r+e.w/2){
+   const crit=src?(src.crit>0&&chance(src.crit)):false;
+   const d=dmg*(crit?(src.critMult||CRIT_MULT):1);
+   let s=st;if(crit&&st){s={};for(const k in st)s[k]=st[k]*(k==='chill'?1:CRIT_ST)}
+   hurtEnemy(e,d,Math.sign(e.x-x)*140,crit?'#d8a53f':col,s,false,crit)}}
+ // explosions chew soft terrain (Noita nod) — an explosive build IS a digging build
+ carve(x,y,r*0.55,src&&src.dig!==undefined?src.dig:0)}
+// Sentries fire the player's CURRENT ranged attack, so every ranged upgrade upgrades them too.
+function upSentry(dt){
+ for(let i=SENTRY.length-1;i>=0;i--){const s=SENTRY[i];
+  if(perf>s.t){burst(s.x,s.y,'#d8a53f',8);SENTRY.splice(i,1);continue}
+  s.cd-=dt;const a=ATK.ranged;
+  if(s.cd<=0&&a&&a.kind==='ranged'){
+   let best=null,bd=300;
+   for(const e of EN){if(e.hp<=0)continue;const d=Math.hypot(e.x-s.x,e.y-s.y);if(d<bd){bd=d;best=e}}
+   if(best){s.cd=a.cd*1.4;
+    const d=Math.max(1,bd),vx=(best.x-s.x)/d,vy=(best.y-s.y)/d;
+    if(PROJ.length<200)PROJ.push({x:s.x,y:s.y,vx:vx*a.speed,vy:vy*a.speed,dmg:a.dmg*0.6,
+     crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:0,st:a.st||null,
+     col:a.col,t:2,friendly:1,ox:s.x,oy:s.y})}}}}
+function upDecoy(dt){
+ if(!DECOY)return;
+ if(perf>DECOY.t||DECOY.hp<=0){burst(DECOY.x,DECOY.y,'#e8e2d0',12);DECOY=null;return}
+ DECOY.y+=0;
+ for(const e of EN){if(e.hp<=0)continue;
+  if(Math.abs(e.x-DECOY.x)<(e.w+12)/2&&Math.abs(e.y-DECOY.y)<(e.h+20)/2){DECOY.hp-=e.dmg*dt*2;burst(DECOY.x,DECOY.y,'#e8e2d0',1)}}}
+function upPickups(dt){
+ for(let i=PICK.length-1;i>=0;i--){const k=PICK[i];k.t-=dt;
+  k.vy=(k.vy||0)+GRAV*0.6*dt;k.x+=(k.vx||0)*dt;
+  if(!solidAt(k.x,k.y+k.vy*dt+4))k.y+=k.vy*dt;else{k.vy=0;k.vx=0}
+  const d=Math.hypot(k.x-P.x,k.y-P.y);
+  if(k.kind==='shard'&&d<70){k.x+=(P.x-k.x)*dt*8;k.y+=(P.y-k.y)*dt*8} // magnet
+  if(d<14){
+   if(k.kind==='shard'){META.shards++;RUNSHARDS++;if((RUNSHARDS&7)===0)saveMeta();sfx('pick')}
+   else if(k.kind==='gem'){BAG.push({kind:'gem',id:k.id,tier:k.tier||1});toast('Gem: '+GEMS[k.id].n);sfx('gem')}
+   else{BAG.push({kind:'gear',item:k.item});toast(itemName(k.item));sfx('gem')}
+   PICK.splice(i,1);continue}
+  if(k.t<=0)PICK.splice(i,1)}}
+// ============ PLAYER UPDATE ============
+let perf=0,RUNSHARDS=0;
+// THE WEIGHT (DESIGN-PLAN §3.4.2) — Risk-of-Rain pressure with no visible timer, framed as the
+// world noticing you. Linger in one biome band and it stacks; descend and it resets. This is
+// what makes "farm the safe layer forever" stop being the optimal strategy.
+function applyWeight(dt){
+ const band=biomeName(Math.floor(P.y/TILE));
+ if(band!==P.band){
+  if(P.band&&P.weight>0)toast('The weight lifts.');
+  P.band=band;P.weightT=0;P.weight=0;return}
+ if(nearCamp())  {P.weightT=0;P.weight=0;return}  // camp and anchors are safe by design
+ P.weightT+=dt;
+ const target=Math.max(0,Math.min(WEIGHT_MAX,Math.floor((P.weightT-WEIGHT_GRACE)/WEIGHT_EVERY)+1));
+ if(target>P.weight){P.weight=target;
+  toast('THE WEIGHT ×'+P.weight+' — descend');flash(0.12);sfx('deny')}}
+function upPlayer(dt){
+ if(P.dead)return;
+ P.mcd=Math.max(0,P.mcd-dt);P.rcd=Math.max(0,P.rcd-dt);
+ P.inv=Math.max(0,P.inv-dt);P.coyote=Math.max(0,P.coyote-dt);P.jbuf=Math.max(0,P.jbuf-dt);
+ P.acd=Math.max(0,(P.acd||0)-dt);P.dodgeCd=Math.max(0,P.dodgeCd-dt);
+ if(P.shield>0&&perf>P.shieldT)P.shield=0;
+ gainFocus(FOCUS_REGEN*dt);                            // slow trickle out of combat
+ applyWeight(dt);
+ if(P.st){P.hpDrain=0;tickStatus(P,dt,true);
+  if(P.hpDrain>0){P.hp-=P.hpDrain;if(P.hp<=0){die();return}}}
+ const ms=moveSpd();
+ if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*2.4;P.vy=Math.min(P.vy,0)}
+ else{
+  const ax=IN.x; if(ax)P.face=Math.sign(ax);
+  P.vx+=((ax*ms)-P.vx)*Math.min(1,dt*14);
+  P.vy+=GRAV*dt;
+ }
+ if(P.onG)P.coyote=0.1;
+ if(P.jbuf>0&&P.coyote>0){P.vy=-JUMPV;P.jbuf=0;P.coyote=0;P.fuel=Math.max(0,P.fuel-6)}
+ // --- HOVER: hold jump in the air to burn fuel and thrust. The Noita traversal beat. ---
+ const lev=(P.levT||0)>perf;
+ if(lev)P.fuel=P.maxfuel;
+ P.flying=false;
+ // sputter: on empty, weak thrust still bleeds off fall speed so running dry isn't a death sentence
+ if(HELD.jmp&&!P.onG&&P.fuel<=0&&P.vy>0&&P.dodgeT<=0)P.vy-=GRAV*0.45*dt;
+ if(HELD.jmp&&!P.onG&&P.coyote<=0&&P.fuel>0&&P.dodgeT<=0){
+  P.flying=true;if(!lev)P.fuel=Math.max(0,P.fuel-FLY_DRAIN*dt);
+  P.vy-=FLY_THRUST*dt;
+  if(P.vy<FLY_VMAX)P.vy=FLY_VMAX;
+  if(chance(dt*30))PART.push({x:P.x+rr(-4,4),y:P.y+P.h/2,vx:rr(-30,30),vy:rr(40,120),t:rr(.15,.3),col:'#9fd0ff'})}
+ P.fuel=Math.min(P.maxfuel,P.fuel+(P.onG?FLY_REGEN:FLY_REGEN_AIR)*dt);
+ // --- FALL DAMAGE: the price of a 3200-tile vertical world ---
+ const vyPrev=P.vy,wasAir=!P.onG;
+ // BURROW: ignore collision, move freely through rock, leave a tunnel
+ if((P.burrowT||0)>perf){
+  P.x+=P.vx*dt;P.y+=Math.min(P.vy*dt,14);
+  carve(P.x,P.y,TILE*1.3,Math.max(1,digPower()));
+  P.onG=false;P.vy=Math.min(P.vy,240);
+  if(chance(dt*40))burst(P.x,P.y,'#6b4a2e',1)}
+ else collideMove(P,P.vx*dt,Math.min(P.vy*dt,14));
+ if(wasAir&&P.onG&&vyPrev>FALL_SAFE&&P.noFall<=0&&!P.fallImmune&&!P.dead){
+  let dmg=(vyPrev-FALL_SAFE)*FALL_DMG*(auraHas('featherfall')?0:1);
+  dmg=Math.min(dmg,P.maxhp*0.55); // never a one-shot from full HP
+  if(dmg>=1){hurtPlayer(dmg);shake=Math.max(shake,6);burst(P.x,P.y+P.h/2,'#8a8578',10)}}
+ P.noFall=Math.max(0,P.noFall-dt);
+ runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
+ const bn=biomeName(Math.floor(P.y/TILE));
+ if(!META.anchors[bn]){META.anchors[bn]=1;saveMeta();toast('ANCHOR SET: '+bn.toUpperCase()+' — descend from here next run')}
+ // DESCENT BONUS (§3.4.3): reaching a new band this run is a free shrine roll. Pull, not push.
+ if(!RUNBANDS[bn]){RUNBANDS[bn]=1;
+  if(bn!=='surface'){openShrine({x:P.x,y:P.y,used:false,free:1});toast('DESCENT — a boon for going deeper')}}
+}
+// Dodge needs a cooldown longer than its own i-frame window, or spamming it is permanent
+// invulnerability. 0.30s of i-frames on a 0.55s cycle leaves a real gap to be punished in.
+function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
+ P.dodgeT=0.22;P.dodgeCd=0.55;P.inv=Math.max(P.inv,0.30*(1+inc('iframes')));
+ burst(P.x,P.y,'#ffffff50',5);sfx('swing')}}
+function die(){if(P.dead)return;
+ P.dead=true;paused=true;P.hp=0;sfx('die');flash(0.5);
+ META.bestDepth=Math.max(META.bestDepth||0,runDepth);
+ META.runs=(META.runs||0)+1;saveMeta();
+ const newly=UNLOCK_MSG.length?`<div class="sub" style="color:var(--acc)">Unlocked this run: ${UNLOCK_MSG.join(', ')}</div>`:'';
+ openPanel(`<h2>YOU DIED</h2>
+ <table class="sum">
+  <tr><td>Depth</td><td>${runDepth}m <span class="sub">(best ${META.bestDepth}m)</span></td></tr>
+  <tr><td>Kills</td><td>${P.kills}</td></tr>
+  <tr><td>Best hit</td><td>${Math.round(P.bestHit)}</td></tr>
+  <tr><td>Shards earned</td><td class="r3">${RUNSHARDS}◆</td></tr>
+  <tr><td>Banked total</td><td>${META.shards}◆</td></tr>
+  <tr><td>Run</td><td>#${META.runs}</td></tr>
+ </table>${newly}
+ <p class="sub">Run gear is lost. Shards, unlocks and the Vault are forever.</p>
+ <button onclick="newRun()">RISE AGAIN</button>`)}
+let RUNBANDS={},UNLOCK_MSG=[];
+function newRun(){
+ SEED=(Date.now()^ri(0,1e9))>>>0;RNG=mulberry(SEED);
+ CHUNKS.clear();EN.length=0;PROJ.length=0;PICK.length=0;PART.length=0;DMGN.length=0;
+ BAG.length=0;CHESTS.length=0;SHRINES.length=0;SENTRY.length=0;ARCS.length=0;
+ ANCHOR=null;DECOY=null;runDepth=0;RUNSHARDS=0;RUNBANDS={};UNLOCK_MSG=[];
+ RUNB=RUNB0();BUFFS.length=0;
+ const C=CLASSES[META.cls]||CLASSES.vanguard;
+ const kit=META.useClassKit!==false?C.kit:META.loadout;
+ for(const sl of ['melee','ranged','armor']){const id=kit[sl];
+  EQ[sl]=(id&&GEAR[id])?mkItem(id,0):null}
+ if(!EQ.melee&&!EQ.ranged)EQ.melee=mkItem('sword',0);
+ // signature gem: free, pre-socketed. Force the socket's color to match so the class kit
+ // is never dead on arrival because of a colour roll.
+ if(C.gem&&EQ[C.gem.slot]&&EQ[C.gem.slot].sockets.length){
+  const it=EQ[C.gem.slot];it.sockets[0]={id:C.gem.id,tier:1};it.sc[0]=GEMS[C.gem.id].col||'r'}
+ // THE VAULT (§3.5): whatever you banked before dying comes back with you.
+ for(const v of (META.vault||[])){if(v&&GEAR[v.base]){
+  const sl=GEAR[v.base].slot==='any'?(EQ.melee?'ranged':'melee'):GEAR[v.base].slot;
+  if(!EQ[sl]||EQ[sl].rarity<v.rarity){if(EQ[sl])BAG.push({kind:'gear',item:EQ[sl]});EQ[sl]=v}
+  else BAG.push({kind:'gear',item:v})}}
+ refreshAttacks();
+ const sb=META.startBiome||'surface';
+ if(sb==='surface'){P.x=CAMP_X*TILE;P.y=(surfH(CAMP_X)-3)*TILE}
+ else{ // carve an anchor pocket so you never spawn inside rock
+  const ty=biomeTop(sb)+6,tx=CAMP_X;
+  for(let y=-4;y<=2;y++)for(let x=-6;x<=6;x++)setTile(tx+x,ty+y,0);
+  for(let x=-6;x<=6;x++)setTile(tx+x,ty+3,2);
+  ANCHOR={x:tx*TILE,y:ty*TILE};P.x=tx*TILE;P.y=(ty-1)*TILE}
+ P.vx=0;P.vy=0;P.dead=false;P.dodgeT=0;P.dodgeCd=0;P.block=false;
+ P.maxhp=maxHP();P.hp=P.maxhp;P.inv=1;P.st=null;P.acd=0;P.mcd=0;P.rcd=0;
+ P.focus=FOCUS_MAX;P.shield=0;P.shieldT=0;P.kills=0;P.bestHit=0;
+ P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
+ P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
+ shake=0;hitstop=0;FLASH=0;CALLOUT=null;
+ closePanel();
+}
+
+// ============ UI: PANELS / TOAST ============
+const $=id=>document.getElementById(id);
+function openPanel(html){$('panel').innerHTML=html;$('overlay').style.display='flex';paused=true}
+function closePanel(){$('overlay').style.display='none';if(!P.dead)paused=false}
+let toastT=null;
+function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',1600)}
+$('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!P.dead)closePanel()});
+
+// -------- inventory / equip / socket --------
+// The socket screen is the most-used screen in the game (DESIGN-PLAN §7). Item at the top,
+// sockets as colored circles, a live DPS line, gem list below, two-tap to place.
+function dpsLine(){
+ const m=dpsOf(ATK.melee),r=dpsOf(ATK.ranged);
+ return `<div class="dps">DPS <b>${m}</b> melee &nbsp;·&nbsp; <b>${r}</b> ranged &nbsp;·&nbsp; ${P.maxhp}hp &nbsp;·&nbsp; ${P.armor||0} armor &nbsp;·&nbsp; ${Math.round(critChance()*100)}% crit</div>`}
+function sockDots(it,slot,clickable){
+ return '<div class="socks">'+it.sockets.map((g,i)=>{
+  const c=sockColOf(it,i),col=c==='*'?'#e8e2d0':SOCK[c].c;
+  const gid=gemId(g),G=gid?GEMS[gid]:null;
+  const t=gemTier(g);
+  const inner=G?`<span class="gn">${G.n}${t>1?' <b>T'+t+'</b>':''}</span>`:'<span class="gn sub">empty</span>';
+  return `<div class="sk"${clickable?` onclick="unsocket('${slot}',${i})"`:''}>
+    <i style="border-color:${col};background:${G?col:'transparent'}">${c==='*'?'◇':''}</i>${inner}</div>`}).join('')+'</div>'}
+function openBag(){
+ let h='<h2>BAG</h2>'+dpsLine();
+ for(const s of ['melee','ranged','armor']){const it=EQ[s];
+  if(!it){h+=`<button class="slotb" disabled>${s.toUpperCase()}: —</button>`;continue}
+  h+=`<button class="slotb" onclick="itemMenu('${s}')">${s.toUpperCase()}: <span class="r${it.rarity}">${itemName(it)}</span>
+   <span class="sub">${affixStr(it)}${itemDesc(it)?' — '+itemDesc(it):''}</span>${sockDots(it,s,false)}</button>`}
+ if(ATK.abil)h+=`<div class="sub">ABIL: ${ATK.abil.n} — ${ATK.abil.cd.toFixed(1)}s cd, ${ATK.abil.fc} focus</div>`;
+ h+='<div class="sub" style="margin-top:8px">Carried:</div>';
+ if(!BAG.length)h+='<div class="sub">empty</div>';
+ BAG.forEach((b,i)=>{
+  if(b.kind==='gear')h+=`<button onclick="equipFromBag(${i})"><span class="r${b.item.rarity}">${itemName(b.item)}</span> <span class="sub">${itemDesc(b.item)||affixStr(b.item)} — tap to equip</span></button>`;
+  else{const G=GEMS[b.id],col=SOCK[G.col||'r'].c;
+   h+=`<button onclick="socketGem(${i})"><span style="color:${col}">◆</span> ${G.n}${(b.tier||1)>1?' T'+b.tier:''}
+    <span class="sub">${G.t} · ${SOCK[G.col||'r'].n} · ${G.d||''}</span></button>`}});
+ h+='<button onclick="closePanel()" style="text-align:center">CLOSE</button>';
+ openPanel(h)}
+function itemMenu(slot){const it=EQ[slot];if(!it)return openBag();
+ let h=`<h2 class="r${it.rarity}">${itemName(it)}</h2>${dpsLine()}
+  <div class="sub">${affixStr(it)||'no affixes'}${itemDesc(it)?'<br>'+itemDesc(it):''}</div>
+  <div class="sub" style="margin-top:6px">Sockets — tap to remove:</div>${sockDots(it,slot,true)}`;
+ h+='<button onclick="openBag()">BACK</button>';openPanel(h)}
+function unsocket(slot,i){const it=EQ[slot];const g=it.sockets[i];
+ if(g){BAG.push({kind:'gem',id:gemId(g),tier:gemTier(g)});it.sockets[i]=null;refreshAttacks()}
+ itemMenu(slot)}
+function equipFromBag(i){const b=BAG[i];const base=GEAR[b.item.base];
+ if(base.slot==='any'){ // shield: player chooses hand
+  openPanel(`<h2>${itemName(b.item)}</h2><p class="sub">A shield can take either hand.</p>
+   <div class="row"><button onclick="placeShield(${i},'melee')">→ MELEE slot</button>
+   <button onclick="placeShield(${i},'ranged')">→ RANGED slot</button></div>
+   <button onclick="openBag()">BACK</button>`);return}
+ swapIn(i,base.slot)}
+function placeShield(i,slot){swapIn(i,slot)}
+function swapIn(i,slot){const b=BAG.splice(i,1)[0];
+ if(EQ[slot])BAG.push({kind:'gear',item:EQ[slot]});
+ EQ[slot]=b.item;P.maxhp=maxHP();P.hp=Math.min(P.hp,P.maxhp);P.maxfuel=maxFuel();refreshAttacks();openBag()}
+// Socket colors are the crafting tension: the gem you want may have nowhere to go (§3.1).
+function socketGem(i){const b=BAG[i],G=GEMS[b.id];
+ let h=`<h2><span style="color:${SOCK[G.col||'r'].c}">◆</span> ${G.n}</h2>
+  <div class="sub">${G.t} · needs a <b style="color:${SOCK[G.col||'r'].c}">${SOCK[G.col||'r'].n}</b> socket · ${G.d||''}</div>`;
+ let any=false,blocked=0;
+ const slots=(G.t==='aura'||G.t==='abil')?['armor']:['melee','ranged','armor'];
+ for(const s of slots){const it=EQ[s];if(!it)continue;
+  const open=it.sockets.map((g,ix)=>g?-1:ix).filter(ix=>ix>=0);
+  const fit=open.filter(ix=>gemFits(it,ix,b.id));
+  blocked+=open.length-fit.length;
+  if(fit.length){any=true;
+   h+=`<button onclick="placeGem(${i},'${s}',${fit[0]})">${s.toUpperCase()}: ${itemName(it)}
+     <span class="sub">${fit.length} matching socket${fit.length>1?'s':''}</span>${sockDots(it,s,false)}</button>`}}
+ if(!any)h+=`<div class="sub" style="color:var(--bad)">No matching socket.${blocked?` ${blocked} open socket${blocked>1?'s are':' is'} the wrong color.`:' Remove a gem first.'}</div>`;
+ // Fusion: three identical gems of the same tier become one of the next tier (§3.3).
+ const same=BAG.filter(x=>x.kind==='gem'&&x.id===b.id&&(x.tier||1)===(b.tier||1));
+ if(same.length>=3&&(b.tier||1)<3){const cost=(b.tier||1)===1?150:500;
+  h+=`<button ${META.shards<cost?'disabled':''} onclick="fuseGem('${b.id}',${b.tier||1})">
+    FUSE ×3 → ${G.n} T${(b.tier||1)+1} <span class="sub">— ${cost}◆ (you have ${META.shards}◆)</span></button>`}
+ h+='<button onclick="openBag()">BACK</button>';openPanel(h)}
+function placeGem(i,slot,idx){const b=BAG[i];const it=EQ[slot];
+ if(idx===undefined||!gemFits(it,idx,b.id)||it.sockets[idx])return openBag();
+ BAG.splice(i,1);
+ it.sockets[idx]={id:b.id,tier:b.tier||1};refreshAttacks();sfx('gem');openBag()}
+// GEM FUSION — the infinite shard sink. Duplicate gems stop being disappointing.
+function fuseGem(id,tier){
+ const cost=tier===1?150:500;
+ if(META.shards<cost)return;
+ let removed=0;
+ for(let i=BAG.length-1;i>=0&&removed<3;i--){const x=BAG[i];
+  if(x.kind==='gem'&&x.id===id&&(x.tier||1)===tier){BAG.splice(i,1);removed++}}
+ if(removed<3)return openBag();
+ META.shards-=cost;saveMeta();
+ BAG.push({kind:'gem',id,tier:tier+1});
+ sfx('level');toast(GEMS[id].n+' → tier '+(tier+1));openBag()}
+
+// -------- shrine --------
+let SHRINE_PICK=[];
+function openShrine(sh){
+ sh.used=true;const pool=BOONS.slice(),pick=[];
+ for(let i=0;i<3&&pool.length;i++)pick.push(pool.splice(ri(0,pool.length-1),1)[0]);
+ SHRINE_PICK=pick;
+ let h='<h2>SHRINE</h2><div class="sub">Choose a boon. Lasts this run only.</div>';
+ pick.forEach((b,i)=>{h+=`<button onclick="takeBoon(${i})">${b.n} <span class="sub">— ${b.d}</span></button>`});
+ openPanel(h)}
+function takeBoon(i){const b=SHRINE_PICK[i];if(!b)return;
+ for(const k in b.fx)RUNB[k]=(RUNB[k]||0)+b.fx[k];
+ P.maxhp=maxHP();P.hp=Math.min(Math.max(1,P.hp+(b.fx.hp>0?b.fx.hp:0)),P.maxhp);
+ refreshAttacks();toast('Boon: '+b.n);closePanel()}
+
+// -------- camp --------
+function nearCamp(){
+ if(Math.abs(P.x/TILE-CAMP_X)<7&&P.y/TILE<SURFACE+4)return true;
+ return !!(ANCHOR&&Math.hypot(P.x-ANCHOR.x,P.y-ANCHOR.y)<90)}
+function openCamp(){
+ let h=`<h2>CAMP</h2><div class="sub">Shards: ${META.shards}</div>
+ <button onclick="openClasses()">CLASS — ${(CLASSES[META.cls]||CLASSES.vanguard).n}</button>
+ <button onclick="openAnchors()">DESCEND FROM — ${(META.startBiome||'surface').toUpperCase()}</button>
+ <button onclick="openLoadout()">STARTING LOADOUT — ${['melee','ranged','armor'].map(s=>META.loadout[s]?GEAR[META.loadout[s]].n:'—').join(' / ')}</button>
+ <div class="sub" style="margin-top:6px">UNLOCK INTO DROP POOL</div>`;
+ for(const u of UNLOCKS){const owned=META.unlocks[u.id];
+  h+=`<button ${owned||META.shards<u.cost?'disabled':''} onclick="buyUnlock('${u.id}')">${u.n} — ${owned?'OWNED':u.cost+'◆'}</button>`}
+ h+='<div class="sub" style="margin-top:6px">META TREE</div>';
+ for(const n of TREE){const owned=META.tree[n.id];const locked=n.req&&!META.tree[n.req];
+  h+=`<button ${owned||locked||META.shards<n.cost?'disabled':''} onclick="buyNode('${n.id}')">[${n.br}] ${n.n} — ${owned?'OWNED':locked?'locked':n.cost+'◆'}</button>`}
+ h+='<button onclick="closePanel()" style="text-align:center">CLOSE</button>';
+ openPanel(h)}
+function openClasses(){
+ let h='<h2>CLASS</h2><div class="sub">Sets your starting kit, a free signature gem, and a permanent passive.</div>';
+ for(const id in CLASSES){const C=CLASSES[id],owned=META.classes[id];
+  const fxs=Object.entries(C.fx).map(([k,v])=>(v>0?'+':'')+(Math.abs(v)<1?Math.round(v*100)+'% ':v+' ')+k).join(', ');
+  h+=`<button ${owned||META.shards>=C.cost?'':'disabled'} onclick="${owned?`pickClass('${id}')`:`buyClass('${id}')`}">
+   ${META.cls===id?'▸ ':''}${C.n}${owned?'':' — '+C.cost+'◆'}
+   <span class="sub"><br>${C.d}<br>${fxs}</span></button>`}
+ h+=`<button onclick="toggleKit()">STARTING GEAR: ${META.useClassKit!==false?'class kit':'custom loadout'}</button>`;
+ h+='<button onclick="openCamp()">BACK</button>';openPanel(h)}
+function pickClass(id){if(META.classes[id]){META.cls=id;saveMeta();toast(CLASSES[id].n)}openClasses()}
+function buyClass(id){const C=CLASSES[id];
+ if(!META.classes[id]&&META.shards>=C.cost){META.shards-=C.cost;META.classes[id]=1;META.cls=id;saveMeta();toast('Unlocked '+C.n)}
+ openClasses()}
+function toggleKit(){META.useClassKit=(META.useClassKit===false);saveMeta();openClasses()}
+function openAnchors(){
+ let h='<h2>DESCEND FROM</h2><div class="sub">Anchors set themselves the first time you reach a biome.</div>';
+ for(const b of BIOMES){const n=b[1];
+  if(META.anchors[n])h+=`<button onclick="setAnchor('${n}')">${META.startBiome===n?'▸ ':''}${n.toUpperCase()} <span class="sub">~${Math.max(0,biomeTop(n)-SURFACE)}m</span></button>`;
+  else h+=`<button disabled>${n.toUpperCase()} <span class="sub">— not yet reached</span></button>`}
+ h+='<div class="sub">Deeper starts mean harder enemies immediately. No shard cost.</div>';
+ h+='<button onclick="openCamp()">BACK</button>';openPanel(h)}
+function setAnchor(n){if(META.anchors[n]){META.startBiome=n;saveMeta()}openAnchors()}
+function openLoadout(){
+ let h='<h2>STARTING LOADOUT</h2><div class="sub">Applies next run. Shields may take either hand.</div>';
+ for(const sl of ['melee','ranged','armor']){
+  h+=`<div class="sub" style="margin-top:6px">${sl.toUpperCase()} SLOT</div>`;
+  h+=`<button onclick="setLoad('${sl}',null)">${META.loadout[sl]?'':'▸ '}(empty)</button>`;
+  for(const id of gearPool()){const b=GEAR[id];
+   if(b.slot!==sl&&b.slot!=='any')continue;
+   if(b.slot==='any'&&sl==='armor')continue;
+   h+=`<button onclick="setLoad('${sl}','${id}')">${META.loadout[sl]===id?'▸ ':''}${b.n} <span class="sub">${b.sockets} socket(s)</span></button>`}}
+ h+='<button onclick="openCamp()">BACK</button>';openPanel(h)}
+function setLoad(slot,id){META.loadout[slot]=id;saveMeta();openLoadout()}
+function buyUnlock(id){const u=UNLOCKS.find(x=>x.id===id);if(META.shards>=u.cost&&!META.unlocks[id]){META.shards-=u.cost;META.unlocks[id]=1;saveMeta();toast('Unlocked: '+u.n)}openCamp()}
+function buyNode(id){const n=TREE.find(x=>x.id===id);if(META.shards>=n.cost&&!META.tree[id]){META.shards-=n.cost;META.tree[id]=1;saveMeta();P.maxhp=maxHP();refreshAttacks();toast(n.n)}openCamp()}
+// ============ INPUT ============
+const IN={x:0};const HELD={mel:false,rng:false,jmp:false};const KEYS={};
+addEventListener('keydown',e=>{if(e.repeat)return;KEYS[e.code]=true;
+ if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp'){P.jbuf=0.12;HELD.jmp=true}
+ if(e.code==='KeyJ'||e.code==='KeyZ')HELD.mel=true;
+ if(e.code==='KeyK'||e.code==='KeyX')HELD.rng=true;
+ if(e.code==='ShiftLeft'||e.code==='KeyL')dodge();
+ if(e.code==='KeyF'||e.code==='KeyQ')useAbility();
+ if(e.code==='KeyE')($('overlay').style.display==='flex')?closePanel():openBag();
+ if(e.code==='KeyC'&&nearCamp())openCamp();
+ if(e.code==='Escape')closePanel()});
+addEventListener('keyup',e=>{KEYS[e.code]=false;
+ if(e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp')HELD.jmp=false;
+ if(e.code==='KeyJ'||e.code==='KeyZ')HELD.mel=false;
+ if(e.code==='KeyK'||e.code==='KeyX')HELD.rng=false});
+function kbAxis(){let x=0;if(KEYS.KeyA||KEYS.ArrowLeft)x-=1;if(KEYS.KeyD||KEYS.ArrowRight)x+=1;return x}
+// touch stick
+let stickId=null,stickOx=0;
+const sz=$('stickzone'),stEl=$('stick'),nub=$('nub');
+sz.addEventListener('pointerdown',e=>{stickId=e.pointerId;stickOx=e.clientX;
+ stEl.style.display='block';stEl.style.left=(e.clientX-45)+'px';stEl.style.top=(e.clientY-45)+'px';
+ sz.setPointerCapture(e.pointerId)});
+sz.addEventListener('pointermove',e=>{if(e.pointerId!==stickId)return;
+ const dx=Math.max(-40,Math.min(40,e.clientX-stickOx));
+ nub.style.left=(25+dx)+'px';IN.tx=Math.abs(dx)<6?0:dx/40});
+sz.addEventListener('pointerup',e=>{if(e.pointerId===stickId){stickId=null;IN.tx=0;stEl.style.display='none';nub.style.left='25px'}});
+sz.addEventListener('pointercancel',()=>{stickId=null;IN.tx=0;stEl.style.display='none'});
+function bindBtn(id,down,up){const el=$(id);
+ el.addEventListener('pointerdown',e=>{e.preventDefault();down()});
+ if(up){el.addEventListener('pointerup',up);el.addEventListener('pointerleave',up);el.addEventListener('pointercancel',up)}}
+bindBtn('bJump',()=>{P.jbuf=0.12;HELD.jmp=true},()=>HELD.jmp=false);
+bindBtn('bMel',()=>HELD.mel=true,()=>HELD.mel=false);
+bindBtn('bRng',()=>HELD.rng=true,()=>HELD.rng=false);
+bindBtn('bDodge',dodge);
+bindBtn('bAbil',useAbility);
+$('bagBtn').addEventListener('click',openBag);
+$('mapBtn').addEventListener('click',()=>{MMON=!MMON;toast('Minimap '+(MMON?'on':'off'))});
+$('campBtn').addEventListener('click',openCamp);
+
+// ============ RENDER ============
+const cv=$('cv'),ctx=cv.getContext('2d');
+let VW=0,VH=0,SCALE=2;
+// Adaptive scale. The first browser look showed only ~12 tiles across — too tight to read an
+// incoming enemy, and auto-aim reached further than the screen did. Fewer world px per screen
+// px = more visible world, so the clamp floor is what widens the view, not the ceiling.
+// 17 tiles across is the compromise: enough warning to react, still chunky enough to read.
+function resize(){
+ const target=17*TILE;
+ SCALE=Math.max(1.1,Math.min(3,innerWidth/target));
+ VW=Math.ceil(innerWidth/SCALE);VH=Math.ceil(innerHeight/SCALE);
+ cv.width=VW;cv.height=VH;ctx.imageSmoothingEnabled=false}
+addEventListener('resize',resize);resize();
+const cam={x:0,y:0};
+// render() must never touch RNG — the world-gen stream feeds off it, so a screenshake roll
+// would make chunk contents depend on how many frames had been drawn. Separate stream.
+let RRNG=mulberry(0x5eed);
+// ---- ART FALLBACK LAYER (DESIGN-PLAN §8) ----
+// Everything visual goes through drawEntity(). With no atlas loaded it draws the flat rects
+// the game shipped with; drop in a sprite sheet later and nothing else has to change, so the
+// "single file, no build step, works offline" property survives an art pass.
+let ATLAS=null;
+function drawEntity(g,kind,x,y,w,h,col,face,frame){
+ if(ATLAS&&ATLAS.map&&ATLAS.map[kind]){
+  const s=ATLAS.map[kind],fr=s.frames?(frame|0)%s.frames:0;
+  g.save();if(face<0){g.translate(x,0);g.scale(-1,1);g.translate(-x,0)}
+  g.drawImage(ATLAS.img,s.x+fr*s.w,s.y,s.w,s.h,Math.round(x-w/2),Math.round(y-h/2),w,h);g.restore();return}
+ g.fillStyle=col;g.fillRect(Math.round(x-w/2),Math.round(y-h/2),w,h)}
+// ---- minimap: rebuilt every 8 frames (cheap sampling, not per-frame) ----
+let MM=null,mmT=0,MMON=true;
+const MMW=68,MMH=54,MMSTEP=4;
+function drawMinimap(){
+ if(!MM){MM=document.createElement('canvas');MM.width=MMW;MM.height=MMH}
+ const g=MM.getContext('2d');
+ g.fillStyle='#0a0a0fdd';g.fillRect(0,0,MMW,MMH);
+ const ptx=Math.floor(P.x/TILE),pty=Math.floor(P.y/TILE);
+ const pros=auraHas('prospector');   // Prospector reveals ore and secrets through rock
+ for(let my=0;my<MMH;my++)for(let mx=0;mx<MMW;mx++){
+  const tx=ptx+(mx-MMW/2)*MMSTEP,ty=pty+(my-MMH/2)*MMSTEP;
+  if(tx<0||ty<0||tx>=WORLD_W||ty>=WORLD_H)continue;
+  const cx=Math.floor(tx/CHUNK),cy=Math.floor(ty/CHUNK);
+  if(!CHUNKS.has(chunkKey(cx,cy))&&!pros)continue;   // undiscovered chunks stay dark
+  const v=getTile(tx,ty);if(v===0)continue;
+  const T=TILES[v];
+  g.fillStyle=(T.ore||T.secret)?'#3fc9c1':T.c;g.fillRect(mx,my,1,1)}
+ const mark=(wx,wy,col,sz)=>{const mx=(wx/TILE-ptx)/MMSTEP+MMW/2,my=(wy/TILE-pty)/MMSTEP+MMH/2;
+  if(mx>0&&mx<MMW&&my>0&&my<MMH){g.fillStyle=col;g.fillRect(mx-1,my-1,sz,sz)}};
+ for(const ch of CHESTS)if(!ch.opened)mark(ch.x,ch.y,'#d8a53f',2);
+ for(const sh of SHRINES)if(!sh.used)mark(sh.x,sh.y,'#ffe9a0',2);
+ for(const e of EN)if(e.boss)mark(e.x,e.y,'#e05555',3);
+ if(ANCHOR)mark(ANCHOR.x,ANCHOR.y,'#3fc9c1',3);
+ g.fillStyle='#fff';g.fillRect(MMW/2-1,MMH/2-1,2,2);
+ g.strokeStyle='#44444488';g.strokeRect(.5,.5,MMW-1,MMH-1)}
+// ---- per-biome sky + parallax. Depth has to LOOK like depth. ----
+const SKY=[['#28344a','#3d4d63'],['#101018','#191924'],['#131020','#1e1830'],
+           ['#14120e','#241f16'],['#180f0c','#2b1510'],['#08070c','#140d1c']];
+function biomeIdx(ty){for(let i=0;i<BIOMES.length;i++)if(ty<BIOMES[i][0])return i;return BIOMES.length-1}
+function drawSky(ox,oy){
+ const ty=P.y/TILE,i=biomeIdx(ty),pal=SKY[i]||SKY[5];
+ const gr=ctx.createLinearGradient(0,0,0,VH);
+ gr.addColorStop(0,pal[1]);gr.addColorStop(1,pal[0]);
+ ctx.fillStyle=gr;ctx.fillRect(0,0,VW,VH);
+ if(i===0){
+  // SURFACE: two parallax ridgelines anchored to the horizon, plus fixed stars.
+  // Deterministic from world position so they scroll instead of shimmering.
+  const hor=VH*0.62;
+  for(let L=0;L<2;L++){
+   const par=L?0.30:0.15, amp=L?22:13, step=L?30:46;
+   ctx.fillStyle=L?'#1a2233':'#141b29';
+   const bx=ox*par;
+   for(let x=-step;x<VW+step;x+=step){
+    const wx=Math.floor((bx+x)/step);
+    const h=amp+Math.abs(((wx*2654435761)>>>16)%amp);
+    const y=hor-h-(L?10:0);
+    ctx.fillRect(x-(bx%step),y,step+1,VH-y)}}
+  ctx.fillStyle='#ffffff26';
+  for(let s=0;s<26;s++){const hx=((s*2654435761)>>>0)%VW,hy=((s*40503)>>>0)%Math.floor(VH*0.45);
+   ctx.fillRect(hx,hy,1,1)}}
+ else{
+  // UNDERGROUND: no sky to see. A slow parallax back-wall reads as "there is rock behind
+  // the rock" and gives the descent a sense of volume without competing with the play space.
+  const par=0.35,step=26,bx=ox*par,by=oy*par;
+  ctx.fillStyle='#ffffff08';
+  for(let y=-step;y<VH+step;y+=step)for(let x=-step;x<VW+step;x+=step){
+   const wx=Math.floor((bx+x)/step),wy=Math.floor((by+y)/step);
+   if((((wx*73856093)^(wy*19349663))>>>7)%5)continue;
+   ctx.fillRect(x-(bx%step),y-(by%step),step-6,step-6)}}}
+// ---- depth darkness + a light around the player. The cheapest "this is a cave" signal. ----
+function drawLight(){
+ const ty=P.y/TILE;
+ // Ramps in over the first cave band and tops out well short of unplayable. The player's
+ // light is always the brightest thing on screen, which is what pulls the eye down.
+ const dark=Math.min(0.62,Math.max(0,(ty-SURFACE-40)/900)*0.62);
+ if(dark<=0.01)return;
+ const px=P.x-camOX,py=P.y-camOY;
+ // Radius scales with the viewport. A fixed radius looked fine on the old square-ish canvas
+ // and turned a tall phone screen into a black tunnel once the camera widened.
+ const base=Math.max(VW,VH)*0.42;
+ const r=base+(P.flying?24:0)+(P.shield>0?14:0);
+ const g=ctx.createRadialGradient(px,py,r*0.30,px,py,r*1.35);
+ g.addColorStop(0,'rgba(6,6,12,0)');
+ g.addColorStop(0.6,`rgba(6,6,12,${(dark*0.45).toFixed(3)})`);
+ g.addColorStop(1,`rgba(6,6,12,${dark.toFixed(3)})`);
+ ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH)}
+let camOX=0,camOY=0;
+function render(){
+ const sx=(RRNG()-0.5)*shake,sy=(RRNG()-0.5)*shake;
+ const ox=Math.round(cam.x-VW/2+sx),oy=Math.round(cam.y-VH/2+sy);
+ camOX=ox;camOY=oy;
+ drawSky(ox,oy);
+ // chunks in view
+ const c0x=Math.floor(ox/(CHUNK*TILE)),c1x=Math.floor((ox+VW)/(CHUNK*TILE));
+ const c0y=Math.floor(oy/(CHUNK*TILE)),c1y=Math.floor((oy+VH)/(CHUNK*TILE));
+ for(let cy=c0y;cy<=c1y;cy++)for(let cx=c0x;cx<=c1x;cx++){
+  if(cx<0||cy<0)continue;const c=getChunk(cx,cy);
+  if(c.dirty)drawChunk(c,cx,cy);
+  ctx.drawImage(c.cv,cx*CHUNK*TILE-ox,cy*CHUNK*TILE-oy)}
+ // camp marker
+ const campPx=CAMP_X*TILE-ox,campPy=(surfH(CAMP_X))*TILE-oy;
+ ctx.fillStyle='#d8a53f';ctx.fillRect(campPx-1,campPy-26,2,26);ctx.fillRect(campPx,campPy-26,10,7);
+ if(ANCHOR){const ax=ANCHOR.x-ox,ay=ANCHOR.y-oy;
+  ctx.fillStyle='#3fc9c1';ctx.fillRect(ax-1,ay-22,2,22);ctx.fillRect(ax,ay-22,9,6)}
+ // pickups
+ for(const k of PICK){const x=k.x-ox,y=k.y-oy;
+  if(x<-16||x>VW+16||y<-16||y>VH+16)continue;
+  if(k.kind==='shard'){const b=1+Math.sin(perf*8+k.x)*0.3;
+   ctx.fillStyle='#3fc9c1';ctx.fillRect(x-2,y-2,4,4);
+   ctx.fillStyle='#bffffb';ctx.fillRect(x-1,y-1,2*b,2*b)}
+  else if(k.kind==='gem'){const G=GEMS[k.id];ctx.fillStyle=G?SOCK[G.col||'r'].c:'#e6d34a';
+   ctx.fillRect(x-3,y-3,6,6);ctx.fillStyle='#fff';ctx.fillRect(x-1,y-1,2,2)}
+  else{ctx.fillStyle=['#e8e2d0','#6f8fe0','#e6d34a','#d8a53f'][k.item.rarity];ctx.fillRect(x-4,y-4,8,8);
+   ctx.fillStyle='#00000050';ctx.fillRect(x-4,y+2,8,2)}}
+ // shrines
+ for(const sh of SHRINES){const x=sh.x-ox,y=sh.y-oy;
+  if(x<-20||x>VW+20||y<-20||y>VH+20)continue;
+  ctx.fillStyle=sh.used?'#4a4a55':'#d8a53f';ctx.fillRect(x-5,y-2,10,7);
+  ctx.fillStyle=sh.used?'#3a3a44':'#ffe9a0';ctx.fillRect(x-2,y-12,4,10);
+  if(!sh.used){const p=1+Math.sin(perf*3)*0.5;ctx.fillStyle='#ffe9a055';ctx.fillRect(x-3-p,y-15-p,6+p*2,4+p*2)}}
+ // chests
+ for(const ch of CHESTS){const x=ch.x-ox,y=ch.y-oy;
+  if(x<-20||x>VW+20||y<-20||y>VH+20)continue;
+  ctx.fillStyle=ch.opened?'#5a5347':'#d8a53f';ctx.fillRect(x-7,y-5,14,10);
+  ctx.fillStyle='#00000040';ctx.fillRect(x-7,y-1,14,2)}
+ // sentry + decoy
+ for(const s of SENTRY){const x=s.x-ox,y=s.y-oy;
+  ctx.fillStyle='#d8a53f';ctx.fillRect(x-4,y-2,8,8);
+  ctx.fillStyle='#ffe9a0';ctx.fillRect(x-2,y-7,4,5)}
+ if(DECOY){const x=DECOY.x-ox,y=DECOY.y-oy;
+  ctx.globalAlpha=.55;ctx.fillStyle='#e8e2d0';ctx.fillRect(x-6,y-10,12,20);ctx.globalAlpha=1}
+ // ---- enemies. The windup tell is the single most important thing on screen. ----
+ for(const e of EN){const x=e.x-ox,y=e.y-oy;
+  if(x<-40||x>VW+40||y<-40||y>VH+40)continue;
+  const winding=e.wind>0,acting=e.act>0,charging=(e.swind||0)>0;
+  // swell + strobe during windup, white during the live frames
+  let w=e.w,h=e.h,col=e.c;
+  if(winding){const t=1-e.wind/((e.atk&&e.atk.wind)||0.35);
+   const s=1+t*0.28;w=e.w*s;h=e.h*s;
+   col=(Math.floor(perf*22)&1)?'#ffffff':'#ffd0a0';
+   // a ground marker showing where the lunge lands, so it can be dodged on sight
+   ctx.fillStyle='#e0555540';
+   ctx.fillRect(x+(e.dir>0?0:-(e.atk.range||30)),y+e.h/2-2,(e.atk.range||30),3)}
+  else if(acting)col='#fff';
+  else if(e.flash>0)col='#fff';
+  else if(charging)col=(Math.floor(perf*18)&1)?'#ffffff':e.c;
+  drawEntity(ctx,e.type,x,y,w,h,col,e.dir,perf*6);
+  if(e.st)for(const k in e.st){if(!e.st[k].length)continue;
+   ctx.fillStyle=STATUS[k].c;ctx.globalAlpha=.35;
+   ctx.fillRect(x-w/2,y-h/2,w,h);ctx.globalAlpha=1;break}
+  if(!ATLAS){ctx.fillStyle='#000';ctx.fillRect(x+e.dir*w/4-1,y-h/4,3,3)}
+  if(e.invT>0){ctx.strokeStyle='#ffffffcc';ctx.lineWidth=1;ctx.strokeRect(x-w/2-2,y-h/2-2,w+4,h+4)}
+  if(e.elite){ctx.fillStyle='#ffffff70';ctx.fillRect(x-w/2-1,y-h/2-1,w+2,1);
+   ctx.fillRect(x-w/2-1,y+h/2,w+2,1)}
+  if(e.boss){ctx.fillStyle='#000';ctx.fillRect(x-w/2,y-h/2-7,w,4);
+   ctx.fillStyle=e.phase>=2?'#ff5555':e.phase>=1?'#e0a03f':'#e05555';
+   ctx.fillRect(x-w/2,y-h/2-7,w*Math.max(0,e.hp/e.maxhp),4);
+   // phase pips so the fight reads as having a shape
+   if(e.ph)for(let i=0;i<e.ph.length;i++){ctx.fillStyle=e.phase>i?'#ffe9a0':'#ffffff40';
+    ctx.fillRect(x-w/2+w*e.ph[i].at-1,y-h/2-9,2,2)}}}
+ // projectiles — a short trail reads far better than a dot
+ for(const p of PROJ){const x=p.x-ox,y=p.y-oy;
+  if(x<-20||x>VW+20||y<-20||y>VH+20)continue;
+  const sp=Math.hypot(p.vx,p.vy)||1,tl=Math.min(9,sp*0.028);
+  ctx.strokeStyle=p.col;ctx.lineWidth=p.friendly?2:2;ctx.globalAlpha=.55;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-p.vx/sp*tl,y-p.vy/sp*tl);ctx.stroke();ctx.globalAlpha=1;
+  ctx.fillStyle=p.col;ctx.fillRect(x-2,y-2,4,4);
+  if(!p.friendly){ctx.fillStyle='#ffffff90';ctx.fillRect(x-1,y-1,2,2)}}
+ // lightning arcs from shock chains
+ for(const a of ARCS){ctx.strokeStyle=a.col;ctx.lineWidth=1.5;ctx.globalAlpha=Math.min(1,a.t*7);
+  ctx.beginPath();ctx.moveTo(a.x1-ox,a.y1-oy);
+  const mx=(a.x1+a.x2)/2-ox+rrR(-6,6),my=(a.y1+a.y2)/2-oy+rrR(-6,6);
+  ctx.lineTo(mx,my);ctx.lineTo(a.x2-ox,a.y2-oy);ctx.stroke();ctx.globalAlpha=1}
+ // player
+ if(!P.dead){const x=P.x-ox,y=P.y-oy;
+  if(P.shield>0){ctx.strokeStyle='#9fd0ffaa';ctx.lineWidth=1;
+   ctx.strokeRect(x-P.w/2-3,y-P.h/2-3,P.w+6,P.h+6)}
+  if(P.inv>0&&Math.floor(perf*20)%2===0){}else{
+   // dark outline so the player never disappears against pale stone
+   ctx.fillStyle='#12121a';ctx.fillRect(x-P.w/2-1,y-P.h/2-1,P.w+2,P.h+2);
+   drawEntity(ctx,'player',x,y,P.w,P.h,'#e8e2d0',P.face,perf*8);
+   if(!ATLAS){ctx.fillStyle='#28344a';ctx.fillRect(x-P.w/2,y-P.h/2,P.w,5);
+    ctx.fillStyle='#000';ctx.fillRect(x+P.face*2,y-P.h/2+2,2,2)}}
+  if(P.block){ctx.fillStyle='#9fd0ff';ctx.fillRect(x+P.face*7,y-P.h/2,3,P.h)}
+  if(ATK.melee&&P.mcd>ATK.melee.cd*0.7){ctx.fillStyle='#ffffff60';
+   ctx.fillRect(x+P.face*8,y-8,P.face*14,3)}
+  if(P.st){let i=0;for(const k in P.st){if(!P.st[k].length)continue;
+   ctx.fillStyle=STATUS[k].c;ctx.fillRect(x-6+i*5,y-P.h/2-6,3,3);i++}}}
+ if(GRAPPLE){ctx.strokeStyle='#d8a53f';ctx.lineWidth=1;ctx.beginPath();
+  ctx.moveTo(P.x-ox,P.y-oy);ctx.lineTo(GRAPPLE.x-ox,GRAPPLE.y-oy);ctx.stroke()}
+ // particles
+ for(const p of PART){ctx.fillStyle=p.col;ctx.fillRect(p.x-ox-1,p.y-oy-1,2,2)}
+ drawLight();
+ // damage numbers last so darkness never eats them. Crits are bigger and gold.
+ ctx.textAlign='center';
+ for(const n of DMGN){
+  ctx.font=(n.crit?'bold 11px ':'8px ')+'monospace';
+  ctx.fillStyle='#00000090';ctx.fillText(n.v,n.x-ox+1,n.y-oy+1);
+  ctx.fillStyle=n.col;ctx.fillText(n.v,n.x-ox,n.y-oy)}
+ if(CALLOUT){ctx.font='bold 13px monospace';
+  ctx.globalAlpha=Math.min(1,CALLOUT.t*2);
+  ctx.fillStyle='#00000090';ctx.fillText(CALLOUT.m,VW/2+1,VH*0.34+1);
+  ctx.fillStyle='#bfe8ff';ctx.fillText(CALLOUT.m,VW/2,VH*0.34);ctx.globalAlpha=1}
+ ctx.textAlign='left';
+ if(FLASH>0.004){ctx.fillStyle=`rgba(255,255,255,${(FLASH*0.6).toFixed(3)})`;ctx.fillRect(0,0,VW,VH)}
+ // Top-right, pushed below the MAP/BAG/CAMP row it used to sit on top of. The bottom-right
+ // is unusable — that is where the thumb buttons live.
+ if(MMON){if(--mmT<=0){mmT=8;drawMinimap()}
+  if(MM)ctx.drawImage(MM,VW-MMW-3,Math.ceil(34/SCALE)+4)}
+}
+function rrR(a,b){return a+RRNG()*(b-a)}
+// ============ MAIN LOOP ============
+let HOLDm=0,HOLDr=0,PREVm=false,PREVr=false,lastSweep=0;
+function sim(dt){
+ perf+=dt;
+ // normal weapons fire while held; shields: hold=block, tap-release=bash
+ if(HELD.mel){HOLDm+=dt;if(!isShield('melee'))doMelee()}
+ else{if(PREVm&&isShield('melee')&&HOLDm<=0.18)doMelee();HOLDm=0}
+ if(HELD.rng){HOLDr+=dt;if(!isShield('ranged'))doRanged()}
+ else{if(PREVr&&isShield('ranged')&&HOLDr<=0.18)doRanged();HOLDr=0}
+ P.block=(HELD.mel&&isShield('melee')&&HOLDm>0.18)||(HELD.rng&&isShield('ranged')&&HOLDr>0.18);
+ PREVm=HELD.mel;PREVr=HELD.rng;
+ IN.x=IN.tx!==undefined&&IN.tx!==0?IN.tx:kbAxis();
+ upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upSentry(dt);upDecoy(dt);upPickups(dt);
+ if(!P.dead){if(auraHas('regrowth'))P.hp=Math.min(P.maxhp,P.hp+2*dt);
+  if(auraHas('staticfield')&&(staticT-=dt)<=0){staticT=1.6;   // Static Field: periodic shock pulse
+   burst(P.x,P.y,'#e6d34a',8);
+   for(const e of EN)if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<90)applyStatus(e,{shock:1.25},false)}
+  if(nearCamp())P.hp=Math.min(P.maxhp,P.hp+12*dt)}
+ if(!P.dead)for(const sh of SHRINES){if(sh.used)continue;
+  if(Math.hypot(sh.x-P.x,sh.y-P.y)<20){openShrine(sh);break}}
+ tickBuffs();
+ if(GRAPPLE){GRAPPLE.t-=dt;if(GRAPPLE.t<=0)GRAPPLE=null}
+ if(perf-lastSweep>2){lastSweep=perf;sweepChunks()}
+ for(let i=PART.length-1;i>=0;i--){const p=PART[i];p.t-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=600*dt;if(p.t<=0)PART.splice(i,1)}
+ for(let i=DMGN.length-1;i>=0;i--){const n=DMGN[i];n.t-=dt;n.y+=n.vy*dt;if(n.t<=0)DMGN.splice(i,1)}
+ for(let i=ARCS.length-1;i>=0;i--){if((ARCS[i].t-=dt)<=0)ARCS.splice(i,1)}
+ if(CALLOUT&&(CALLOUT.t-=dt)<=0)CALLOUT=null;
+ FLASH=Math.max(0,FLASH-dt*2.2);
+ sfxBudget=Math.max(0,sfxBudget-dt*45);
+ shake=Math.max(0,shake-dt*30);
+ cam.x+=(P.x+P.face*24-cam.x)*Math.min(1,dt*5);
+ // lead the camera downward when falling fast — you need to see what you're landing on
+ cam.y+=((P.y-10+Math.max(0,Math.min(70,P.vy*0.16)))-cam.y)*Math.min(1,dt*5);
+ cam.x=Math.max(VW/2,Math.min(WORLD_W*TILE-VW/2,cam.x));
+ cam.y=Math.max(VH/2,Math.min(WORLD_H*TILE-VH/2,cam.y))}
+let staticT=1.6;
+function hud(){
+ $('hpfill').style.width=Math.max(0,P.hp/P.maxhp*100)+'%';
+ $('hpfill').style.background=P.hp<P.maxhp*0.3?'#ff3b3b':'#e05555';
+ $('fuelfill').style.width=Math.max(0,P.fuel/Math.max(1,P.maxfuel)*100)+'%';
+ $('fuelfill').style.background=(P.levT||0)>perf?'#ffe9a0':'#3fc9c1';
+ $('focfill').style.width=Math.max(0,P.focus/FOCUS_MAX*100)+'%';
+ const ab=ATK.abil;
+ $('focfill').style.background=(ab&&P.focus>=ab.fc&&P.acd<=0)?'#8fa8ff':'#4a5a90';
+ let line='◆'+META.shards+'  '+biomeName(Math.floor(P.y/TILE))+' '+Math.max(0,Math.floor(P.y/TILE)-SURFACE)+'m';
+ if(P.shield>0)line+='  ⛨'+Math.round(P.shield);
+ if(P.st){const k=Object.keys(P.st).filter(x=>P.st[x].length);if(k.length)line+='  ['+k.join(' ')+']'}
+ $('stats').textContent=line;
+ $('weight').textContent=P.weight>0?'THE WEIGHT '+'▮'.repeat(P.weight):'';
+ // ABIL button carries its own state: name, cooldown, and whether Focus can pay for it.
+ const b=$('bAbil');
+ if(!ab){b.textContent='—';b.className='tb cold'}
+ else if(P.acd>0){b.textContent=P.acd.toFixed(1)+'s';b.className='tb cold'}
+ else if(P.focus<ab.fc){b.textContent=ab.n.slice(0,6);b.className='tb cold'}
+ else{b.textContent=ab.n.slice(0,6);b.className='tb rdy'}
+ $('campBtn').style.display=nearCamp()?'inline-block':'none'}
+let last=0,acc=0;
+function frame(t){
+ requestAnimationFrame(frame);
+ const now=t/1000;let ft=Math.min(0.1,now-last);last=now;
+ if(hitstop>0){hitstop-=ft;ft=0}
+ if(!paused){acc+=ft;while(acc>=DT){sim(DT);acc-=DT}}
+ render();hud()}
+
+// ============ INIT ============
+loadMeta();newRun();
+cam.x=P.x;cam.y=P.y;
+toast('Descend. Die. Bank shards. (E=bag, C=camp)');
+requestAnimationFrame(frame);
+</script>
+</body></html>
