@@ -387,6 +387,99 @@ console.log('\n-- regressions --');
   newRun(); OFF(); CHESTS.length = 0;
 }
 
+{
+  // Regressions from the UIROOT refactor and the input rewrite. Every one of these shipped.
+  console.log('\n-- regressions II --');
+  // ESC on the pause screen must RESUME, not redraw the pause screen. backPanel mapped
+  // UIROOT==='pause' to openPause(), so the panel whose first row says "RESUME ENTER/ESC"
+  // re-opened itself forever.
+  newRun(); startRun();
+  openPause();
+  A(paused && UIROOT === 'pause', 'pause opens and roots itself');
+  fire('pause'); readInput();
+  A(!paused, 'ESC on the pause screen resumes the game');
+  // and a sub-panel of pause still backs out TO pause
+  openPause(); openSettings();
+  fire('cancel'); readInput();
+  A(paused && PANEL_FN === openPause, 'a sub-panel backs out to the pause menu');
+  fire('pause'); readInput();
+  A(!paused, 'and then out to the game');
+  // UIROOT must not persist: after pausing once, a bag opened from play must close to the game
+  openBag();
+  fire('pause'); readInput();
+  A(!paused, 'a panel opened during play closes to the game, not the pause menu');
+}
+{
+  // maxThreat was only raised on a first boss kill, so a save that felled every miniboss
+  // before Threat existed could never select any tier.
+  META.bosses = { warden: 1, sporemother: 1, sentinel: 1 };
+  META.maxThreat = 0;
+  localStorage.setItem('shardfall', JSON.stringify(META));
+  loadMeta();
+  A(META.maxThreat >= 3, `maxThreat is derived from bosses already felled (${META.maxThreat})`);
+  const before = META.maxThreat;
+  loadMeta();
+  A(META.maxThreat === before, 'and deriving it again is idempotent');
+  META.bosses = {}; META.maxThreat = 0; META.threat = 0;
+}
+{
+  // frame() checked paused once and then ran the whole accumulator, so up to six more sim
+  // steps ran behind a panel — re-rolling the shrine offer off the seeded RNG each time.
+  newRun(); startRun(); OFF();
+  SHRINES.length = 0;
+  SHRINES.push({ x: P.x, y: P.y, used: false });
+  let steps = 0, acc = 0.1;
+  while (acc >= DT && !paused) { sim(DT); acc -= DT; steps++ }
+  A(paused, 'the shrine paused the game');
+  A(steps <= 2, `the fixed-step loop stops at the pause (${steps} step${steps === 1 ? '' : 's'})`);
+  SHRINE_PICK = [BOONS[0]]; takeBoon(0); closePanel(true);
+  SHRINES.length = 0;
+}
+{
+  // One swing opened every chest in range. A sealed vault holds two, and both firing in one
+  // frame consumed two lore fragments while showing only the second.
+  newRun(); startRun(); OFF(); NOCRIT();
+  EN.length = 0; CHESTS.length = 0; PICK.length = 0;
+  EQ.melee = mkItem('sword', 0); refreshAttacks();
+  CHESTS.push({ x: P.x + 8, y: P.y, opened: false }, { x: P.x + 12, y: P.y, opened: false });
+  P.mcd = 0; doMelee();
+  A(CHESTS.filter(c => c.opened).length === 1, 'a single swing opens at most one chest');
+  CHESTS.length = 0; PICK.length = 0; closePanel(true);
+}
+{
+  // Second Wind lived inside hurtPlayer only, so a burn, bleed or Shatter tick killed straight
+  // through it.
+  newRun(); startRun(); OFF();
+  RUNM = RUNM0(); RUNM.secondWind = 1; P.secondWind = 0;
+  P.maxhp = 200; P.hp = 5; P.inv = 0; P.st = null; P.hpDrain = 0;
+  applyStatus(P, { burn: 400 }, true);
+  for (let i = 0; i < 30 && !P.dead && P.secondWind === 0; i++) upPlayer(1 / 60);
+  A(P.secondWind === 1, 'Second Wind fires on a fatal ailment tick');
+  A(!P.dead && P.hp > 0, 'and the player survives it');
+  A(!P.st, 'and the ailment that would have killed them is cleared');
+  RUNM = RUNM0(); newRun(); startRun();
+}
+{
+  // Buying a class set META.cls but never recorded it, so its codex page stayed sealed for a
+  // class you had bought and were playing.
+  META.seen.cls = {}; META.classes = { vanguard: 1 }; META.shards = 99999;
+  buyClass('marksman'); closePanel();
+  A(!!META.seen.cls.marksman, 'buying a class unlocks its codex page');
+  META.cls = 'vanguard'; newRun();
+}
+{
+  // INIT builds a run before the title is shown. Camp opened FROM the title edits META, so
+  // DESCEND used to start the run that was already built — every choice one run late.
+  META.classes = { vanguard: 1, marksman: 1 };
+  META.cls = 'vanguard'; newRun();
+  openTitle();
+  META.cls = 'marksman'; META.useClassKit = true;
+  startRun();
+  A(EQ.ranged && EQ.ranged.base === 'bow', 'DESCEND builds the run from the class chosen on the title');
+  A(GID(EQ.ranged.sockets[0]) === 'multishot', 'including its signature gem');
+  META.cls = 'vanguard'; newRun();
+}
+
 // ---------- 7. INTEGRATION ----------
 console.log('\n-- integration --');
 {

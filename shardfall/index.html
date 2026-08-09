@@ -1073,6 +1073,9 @@ function loadMeta(){
  if(!META.cls||!META.classes[META.cls])META.cls='vanguard';
  if(!Array.isArray(META.vault))META.vault=[];
  if(!META.bosses)META.bosses={};
+ // Derive rather than migrate: a save that felled bosses before Threat existed still earned
+ // the tiers. Idempotent, so a correct maxThreat is left alone.
+ META.maxThreat=Math.max(META.maxThreat|0,Math.min(THREATS.length-1,Object.keys(META.bosses).length));
  if(!META.seen)META.seen={};
  for(const k of ['en','item','biome','frag','cls'])if(!META.seen[k])META.seen[k]={};
  META.ver=SAVE_VER;
@@ -1499,7 +1502,9 @@ function doMelee(){
    // Aftershock's blast used to be hard-coded to 0 damage, so the gem cost 15% less damage
    // and gave literally nothing back. `skip` keeps it from double-hitting the enemy already struck.
    if(a.explode)explode(e.x,e.y,a.explode,a.dmg*0.6,a.col,a.st,a,e)}}
- for(const ch of CHESTS){if(!ch.opened&&Math.hypot(ch.x-P.x,ch.y-P.y)<a.range+10)openChest(ch)}
+ // One chest per swing. Sealed vaults hold two, and opening both in a single frame consumed
+ // two lore fragments while showing only the second. The next swing is 0.4s away.
+ for(const ch of CHESTS){if(!ch.opened&&Math.hypot(ch.x-P.x,ch.y-P.y)<a.range+10){openChest(ch);break}}
  // dig soft tiles in front
  const cut=carve(P.x+P.face*a.range*0.8,P.y,a.digR||TILE*1.5,a.dig>=0?a.dig:-1);
  if(cut&&CLASSES[META.cls].foc==='dig')gainFocus(cut*1.5);
@@ -1700,12 +1705,16 @@ function hurtPlayer(dmg,noArmor){if(P.inv>0||P.dead)return;
  dmgNum(P.x,P.y-P.h,dmg,'#e05555');
  if(RUNM.thorn)for(const e of EN){if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<44)
   hurtEnemy(e,14*depthMul(P.y),Math.sign(e.x-P.x)*120,'#8fdc6a',null,true)}
- // Second Wind fires once and is loud about it — a save you don't notice is a save wasted.
- if(P.hp<=0&&RUNM.secondWind&&!P.secondWind){
-  P.secondWind=1;P.hp=Math.round(P.maxhp*0.35);P.inv=2.0;
-  flash(0.5);shake=Math.max(shake,16);burst(P.x,P.y,'#ffe9a0',36);
-  sfx('level');toastQ('SECOND WIND');rumble(1,1,600);return}
- if(P.hp<=0)die()}
+ if(P.hp<=0&&!secondWind())die()}
+// Both fatal paths go through here — a direct hit and an ailment tick. It used to live inside
+// hurtPlayer only, so a burn or a Shatter killed straight through the save. Clearing status
+// matters as well: the drain path ignores P.inv, so the invulnerability would have been a lie.
+function secondWind(){
+ if(!RUNM.secondWind||P.secondWind)return false;
+ P.secondWind=1;P.hp=Math.round(P.maxhp*0.35);P.inv=2.0;P.st=null;P.hpDrain=0;
+ flash(0.5);shake=Math.max(shake,16);burst(P.x,P.y,'#ffe9a0',36);
+ sfx('level');toastQ('SECOND WIND');rumble(1,1,600);
+ return true}
 // ---- FOCUS: the ability resource (DESIGN-PLAN §3.2) ----
 // Cooldown-only abilities mean "press ABIL whenever it's up", which is not a decision.
 // Focus ties ability power to being IN the fight, which is what this genre wants.
@@ -2022,7 +2031,8 @@ function upPlayer(dt){
  // Drain, don't clear. Zeroing first discarded anything credited between frames — which is
  // most of the interesting cases, since ailments are applied from upProj and killEnemy.
  if(P.st)tickStatus(P,dt,true);
- if(P.hpDrain>0){const d=P.hpDrain;P.hpDrain=0;P.hp-=d;if(P.hp<=0){die();return}}
+ if(P.hpDrain>0){const d=P.hpDrain;P.hpDrain=0;P.hp-=d;
+  if(P.hp<=0&&!secondWind()){die();return}}
  const ms=moveSpd();
  if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*2.4;P.vy=Math.min(P.vy,0)}
  else{
@@ -2172,7 +2182,9 @@ function openPanel(html,modal,fn){
  menuIdx=0;menuFocus(0)}
 function backPanel(){
  if(UIROOT==='title')return openTitle();
- if(UIROOT==='pause')return openPause();
+ // PANEL_FN===openPause means the pause screen ITSELF is what's on display, so backing out of
+ // it must resume — not re-open it. Sub-panels carry their own fn and still return to pause.
+ if(UIROOT==='pause')return PANEL_FN===openPause?closePanel():openPause();
  closePanel()}
 // A modal panel demands a choice. Dismissing the death screen used to hide the overlay while
 // leaving paused=true — the game was still running nothing, with no way back.
@@ -2180,7 +2192,9 @@ function closePanel(force){if(MODAL&&!force)return;
  // Closing anything opened from the title returns to the title. Letting it fall through would
  // start the run with the HUD still hidden and no descent ever chosen.
  if(UIROOT==='title'&&!force)return openTitle();
- MODAL=false;PANEL_FN=null;$('overlay').style.display='none';if(!P.dead)paused=false;
+ // UIROOT is cleared on the branch that actually tears the panel down. The title and modal
+ // cases both return above this line, so neither is affected.
+ MODAL=false;PANEL_FN=null;UIROOT=null;$('overlay').style.display='none';if(!P.dead)paused=false;
  if(PANEL_Q.length&&!P.dead){const q=PANEL_Q.shift();openPanel(q[0],q[1],q[2])}}
 let toastT=null;
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',1600)}
@@ -2358,7 +2372,12 @@ function openTitle(){
   <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
   <button onclick="openControls()">CONTROLS</button>
   <button onclick="openSettings()">SETTINGS</button>`,true,openTitle)}
-function startRun(){document.body.classList.remove('titlemode');UIROOT=null;closePanel(true);if(SET.hints&&!META.runs)hint('move',`${pr('move')} to move · ${pr('jump')} to jump, HOLD to hover`)}
+function startRun(){
+ document.body.classList.remove('titlemode');
+ // Rebuild the run here. INIT builds one before the title is shown, so any camp choice made
+ // ON the title — class, starting loadout, descent anchor — would otherwise apply a run late.
+ newRun();cam.x=P.x;cam.y=P.y;
+ UIROOT=null;closePanel(true);if(SET.hints&&!META.runs)hint('move',`${pr('move')} to move · ${pr('jump')} to jump, HOLD to hover`)}
 // Contextual hints: each fires once per save, at the moment it is relevant, and never again.
 // Teaching by interruption is worse than teaching by timing.
 function hint(id,text){
@@ -2473,7 +2492,8 @@ function openClasses(){
 // classFx() is read live by inc(), so switching class changes every stat immediately — not
 // just on the next run. Without this the cached ATK, maxHP and armor all go stale the moment
 // you pick a class and walk away from camp without descending.
-function applyClass(){refreshAttacks();P.maxhp=maxHP();P.hp=Math.min(P.hp,P.maxhp);P.fuel=Math.min(P.fuel,P.maxfuel)}
+function applyClass(){discover('cls',META.cls,true);
+ refreshAttacks();P.maxhp=maxHP();P.hp=Math.min(P.hp,P.maxhp);P.fuel=Math.min(P.fuel,P.maxfuel)}
 function pickClass(id){if(META.classes[id]){META.cls=id;discover('cls',id,true);saveMeta();applyClass();toast(CLASSES[id].n)}openClasses()}
 function buyClass(id){const C=CLASSES[id];
  if(!META.classes[id]&&META.shards>=C.cost){META.shards-=C.cost;META.classes[id]=1;META.cls=id;saveMeta();applyClass();sfx('level');toast('Unlocked '+C.n)}
@@ -2739,6 +2759,20 @@ $('bagBtn').addEventListener('click',()=>fire('bag'));
 $('mapBtn').addEventListener('click',()=>fire('map'));
 $('campBtn').addEventListener('click',()=>fire('camp'));
 $('pauseBtn').addEventListener('click',()=>fire('pause'));
+
+// ---- audio arming ----
+// A browser refuses to start an AudioContext outside a user gesture, so the context cannot be
+// built at load. The input rewrite dropped this handler and the game shipped completely silent
+// — every sfx() call ran, found AC null, and returned. One listener, removed after it fires.
+function armAudio(){
+ if(AUDIO_ON)audioInit();
+ if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});
+ removeEventListener('pointerdown',armAudio,true);
+ removeEventListener('keydown',armAudio,true);
+ removeEventListener('touchstart',armAudio,true)}
+addEventListener('pointerdown',armAudio,true);
+addEventListener('keydown',armAudio,true);
+addEventListener('touchstart',armAudio,true);
 
 // ---- per-frame input resolution ----
 // Runs before the sim. Everything above only records intent; this is where intent becomes
@@ -3199,7 +3233,10 @@ function frame(t){
  const now=t/1000;let ft=Math.min(0.1,now-last);last=now;
  readInput();                       // devices -> intent -> actions, before anything simulates
  if(hitstop>0){hitstop-=ft;ft=0}
- if(!paused){acc+=ft;while(acc>=DT){sim(DT);acc-=DT}}
+ // Re-check `paused` INSIDE the loop: sim() is where modals open, and the remaining steps
+ // used to run behind the panel. `acc=0` matters too — otherwise the leftover fires as a
+ // burst of gameplay the moment the panel closes.
+ if(!paused){acc+=ft;while(acc>=DT&&!paused){sim(DT);acc-=DT}}else acc=0;
  render();hud()}
 
 // ============ INIT ============

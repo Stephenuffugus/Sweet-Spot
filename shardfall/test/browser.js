@@ -214,6 +214,20 @@ const ok = (c, m) => { console.log((c ? 'ok: ' : 'FAIL: ') + m); if (!c) fails++
   ok(revealed, 'a discovered page becomes readable');
   await page.evaluate(() => closePanel());
 
+  // Audio: the input rewrite once deleted the gesture handler and the game shipped silent.
+  // Only a real browser can tell us the AudioContext actually came up.
+  await page.evaluate(() => { closePanel(true); paused = false });
+  await page.keyboard.press('j'); await page.waitForTimeout(200);
+  const audio = await page.evaluate(() => ({ armed: !!AC, state: AC ? AC.state : 'none', on: AUDIO_ON }));
+  ok(audio.armed, `an AudioContext exists after a user gesture (state=${audio.state})`);
+  ok(audio.state === 'running' || audio.state === 'suspended', 'and it is in a usable state');
+
+  // ESC must resume from the pause screen — it used to just redraw it.
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => paused && document.getElementById('panel').innerHTML.includes('PAUSED')), 'Escape opens the pause menu');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => !paused), 'and Escape again resumes the game');
+
   ok(errors.length === 0, 'no errors across the whole session' + (errors.length ? '\n    ' + errors.join('\n    ') : ''));
 
   await browser.close();

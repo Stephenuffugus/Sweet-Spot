@@ -1,0 +1,440 @@
+<!doctype html>
+<!--
+SHARDFALL — ART DIRECTION PROTOTYPE
+
+The problem: the game is one HTML file with no asset files and no build step, and everything
+currently renders as flat coloured fillRect quads. That is the single biggest thing holding the
+look back, and "just add sprites" collides head-on with the single-file rule.
+
+The answer proposed here: sprites as DATA, baked once at load.
+
+Each sprite is a grid of characters. Each character indexes a palette ramp. At startup every
+sprite is baked into an offscreen canvas, once, and from then on the renderer just blits — so
+the runtime cost is identical to today's fillRect, the file stays one file with no binary
+payload, and adding a new enemy is still a table entry (CLAUDE.md rule 4).
+
+This page renders the CURRENT look beside the PROPOSED look so the difference is arguable
+rather than asserted. Open it directly in a browser.
+-->
+<html lang="en"><head>
+<meta charset="utf-8"><title>Shardfall — art direction prototype</title>
+<style>
+:root{--ui:#e8e2d0;--dim:#8a8578;--acc:#3fc9c1;--gold:#d8a53f}
+body{margin:0;background:#0a0a0f;color:var(--ui);font:13px/1.6 ui-monospace,Menlo,monospace;padding:18px 20px 60px}
+h1{font-size:19px;letter-spacing:3px;color:var(--acc);margin:0 0 2px}
+h2{font-size:13px;letter-spacing:2px;color:var(--gold);margin:26px 0 8px;border-bottom:1px solid #2a2a36;padding-bottom:5px}
+p{color:#bdb6a4;max-width:74ch;margin:6px 0}
+.sub{color:var(--dim)}
+canvas{image-rendering:pixelated;display:block}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;margin:10px 0}
+.card{background:#101019;border:1px solid #262633;padding:10px}
+.card h3{margin:0 0 8px;font-size:11px;letter-spacing:1px;color:var(--dim);font-weight:normal}
+table{border-collapse:collapse;font-size:12px}
+td,th{padding:3px 10px 3px 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:normal}
+.sw{display:inline-block;width:15px;height:15px;border:1px solid #00000060;vertical-align:middle}
+code{color:var(--acc)}
+</style></head><body>
+
+<h1>SHARDFALL</h1>
+<p class="sub">Art direction prototype — sprites as data, baked once, blitted like the rects they replace.</p>
+
+<h2>1 · THE PALETTE</h2>
+<p>Six terrain/creature ramps of five steps each, plus a reserved player ramp and four accents.
+Ramps are built by rotating hue slightly as value drops (warm highlights, cool shadows), which is
+what stops a ramp reading as "the same colour, dimmer".</p>
+<div id="pal"></div>
+
+<h2>2 · THE ONE RULE THAT MAKES THE PLAYER ICONIC</h2>
+<p><b>Nothing else in the game is allowed to be cream.</b> Every terrain and creature ramp tops out
+at a muted mid-value. The player's ramp is the brightest thing on screen, and the shard-lamp at their
+belt is the only pure highlight. In a dark, busy, destructible world, the eye finds you instantly —
+and it costs nothing but discipline about which hex values get used where.</p>
+
+<h2>3 · BEFORE AND AFTER</h2>
+<p>Same entities, same sizes, same hitboxes. Left is what ships today.</p>
+<div class="row">
+  <div class="card"><h3>CURRENT — flat quads</h3><canvas id="before" width="440" height="200"></canvas></div>
+  <div class="card"><h3>PROPOSED — baked sprites</h3><canvas id="after" width="440" height="200"></canvas></div>
+</div>
+
+<h2>4 · SILHOUETTE TEST</h2>
+<p>The real test of a roster: black out every sprite and see whether you can still name them.
+If two silhouettes read the same, one of them is redundant and needs a different top shape,
+stance or proportion.</p>
+<div class="row"><div class="card"><canvas id="sil" width="440" height="120"></canvas></div></div>
+
+<h2>5 · IN CONTEXT</h2>
+<p>Sprites against real terrain, with the darkness and the light radius the game actually uses.
+This is the frame that matters — a sprite that reads on a white page and vanishes in a cave is
+a failed sprite.</p>
+<div class="row"><div class="card"><canvas id="scene" width="440" height="260"></canvas></div></div>
+
+<h2>6 · THE COST</h2>
+<div id="cost"></div>
+
+<script>
+// ============================================================================
+// PALETTE
+// Ramps run light -> dark. Hue rotates warm-to-cool as value drops, which is what keeps a ramp
+// from reading as one colour at five brightnesses.
+// ============================================================================
+const RAMPS = {
+  stone:  ['#9aa3b0','#6f7889','#4e5666','#353b47','#22262e'],
+  dirt:   ['#b08a5e','#8a6743','#654a30','#46331f','#2b1f13'],
+  flesh:  ['#d98d6a','#b06a4c','#854b34','#5c3323','#382016'],
+  fungal: ['#c39ae0','#9a72bd','#71508f','#4d3563','#2f2040'],
+  forge:  ['#f0a05a','#c9743a','#97502a','#66351c','#3d1f10'],
+  void:   ['#a89af0','#7c6cc9','#574a97','#383066','#211c3d'],
+  // RESERVED — the player only. Nothing else may use this ramp.
+  hero:   ['#f4ecd8','#cfc4a8','#a1957a','#6d6350','#3d3830'],
+};
+const ACCENT = {
+  shard:  '#3fc9c1',   // the currency, the lamp, anything of the thing that fell
+  bright: '#bffffb',   // the single pure highlight, used sparingly
+  gold:   '#d8a53f',   // loot, chests, crits
+  blood:  '#e05555',   // damage, danger, boss health
+};
+const OUTLINE = '#14141c';   // near-black, never pure black — pure black reads as a hole
+
+// Character -> colour. Digits 1-5 are ramp steps (1 lightest). Uppercase are accents.
+// '.' is transparent, 'o' is the outline.
+function paletteFor(rampName) {
+  const r = RAMPS[rampName];
+  return { '1': r[0], '2': r[1], '3': r[2], '4': r[3], '5': r[4],
+           'o': OUTLINE, 'S': ACCENT.shard, 'B': ACCENT.bright, 'G': ACCENT.gold, 'R': ACCENT.blood };
+}
+
+// ============================================================================
+// SPRITES AS DATA
+// One string per pixel row. This is the entire art format — it diffs cleanly, it is editable
+// in the same file as the enemy's stats, and it costs no build step.
+//
+// Design rules applied to every sprite below:
+//   - light comes from the TOP-LEFT, so step 1 sits top/left and step 4 sits bottom/right
+//   - a 1px outline all the way round, so the sprite reads against any terrain
+//   - a DISTINCT TOP SHAPE per creature, because that is what the eye resolves first
+// ============================================================================
+const SPRITES = {
+  // The delver. Hooded, hunched, with the shard-lamp at the belt — the only pure highlight
+  // in the game. Distinct top shape: a pointed hood.
+  player: { ramp: 'hero', w: 14, h: 22, rows: [
+    '.....oooo.....',
+    '....o1111o....',
+    '...o111111o...',
+    '...o112211o...',
+    '..o11222211o..',
+    '..o1o2222o1o..',
+    '..o1o2222o1o..',
+    '..o11222211o..',
+    '.o1122332211o.',
+    '.o1223333221o.',
+    '.o1233443321o.',
+    '.o1233443321o.',
+    '.o12334433S1o.',
+    '.o1233443SBSo.',
+    '.o123344332So.',
+    '.o12233332 1o.',
+    '..o113333 1o..',
+    '..o1o3443o1o..',
+    '..o1o3443o1o..',
+    '..o2o4554o2o..',
+    '..o3o.oo.o3o..',
+    '...ooo..ooo...',
+  ]},
+  // CRAWLER — low, wide, legged. Top shape: FLAT. Nothing rises above the body.
+  crawler: { ramp: 'flesh', w: 16, h: 12, rows: [
+    '....oooooo....',
+    '..oo122221oo..',
+    '.o1122333221o.',
+    'o112233443221o',
+    'o12o3344433o1o',
+    'o12oo344oo3o1o',
+    'o122334443321o',
+    '.o1233444321o.',
+    '.oo23344432oo.',
+    'o2o.o4oo4o.o2o',
+    'o..oo3..3oo..o',
+    '....o....o....',
+  ]},
+  // BAT — wings wider than body, body thin. Top shape: a NOTCHED V between the wings.
+  bat: { ramp: 'void', w: 20, h: 12, rows: [
+    'oo..............oo..',
+    'o1oo..oooooo..oo1o..',
+    'o12o.o112211o.o21o..',
+    '.o12oo122221oo21o...',
+    '..o1223o11o3221o....',
+    '...o12o1221o21o.....',
+    '....oo122221oo......',
+    '......o1221o........',
+    '......o1221o........',
+    '.......o11o.........',
+    '.......o33o.........',
+    '........oo..........',
+  ]},
+  // BRUTE — tall, broad shoulders, tiny head. Top shape: SHOULDERS WIDER THAN HEAD.
+  brute: { ramp: 'flesh', w: 22, h: 24, rows: [
+    '........oooo........',
+    '.......o1111o.......',
+    '.......o1RR1o.......',
+    '......o111111o......',
+    '...oooo112211oooo...',
+    '..o1111122221111o...',
+    '.o112222333322211o..',
+    'o11223333443332221o.',
+    'o12233344444333221o.',
+    'o12233444444433221o.',
+    'o1223344o..o4433221o',
+    'o1223344o..o4433221o',
+    '.o122334444443321o..',
+    '.o12233444443321o...',
+    '..o1223344433221o...',
+    '..o122334443221o....',
+    '..o12233444321o.....',
+    '..o1223o.o4321o.....',
+    '..o1233o.o4331o.....',
+    '..o2344o.o4432o.....',
+    '..o3455o.o5543o.....',
+    '..o455o...o554o.....',
+    '..oooo.....oooo.....',
+    '....................',
+  ]},
+  // SPITTER — bulbous with a raised spout. Top shape: a SINGLE NOZZLE off-centre.
+  spitter: { ramp: 'fungal', w: 16, h: 14, rows: [
+    '..........oo....',
+    '.........o11o...',
+    '........o122o...',
+    '...ooooo1223o...',
+    '..o11122233o....',
+    '.o1122223333o...',
+    'o112222333433o..',
+    'o12222o33o433o..',
+    'o12223333344 3o.',
+    'o12233344444 o..',
+    '.o1233344443o...',
+    '.oo23344433oo...',
+    'o2o.o44oo4o.o2o.',
+    '.....oo..oo.....',
+  ]},
+  // ROCKLING — angular, crystalline, asymmetric. Top shape: JAGGED SHARDS.
+  rockling: { ramp: 'stone', w: 16, h: 14, rows: [
+    '.....o..o.......',
+    '....o1oo1o..o...',
+    '...o11oo11oo1o..',
+    '..o1122211o11o..',
+    '.o112233221221o.',
+    'o11223344332221o',
+    'o12233444433321o',
+    'o12234S44SS4321o',
+    'o12233444433321o',
+    'o11223344333221o',
+    '.o1122334432 1o.',
+    '.oo122333322oo..',
+    '..o.o4oo4o.o....',
+    '.....oo..oo.....',
+  ]},
+};
+
+// ============================================================================
+// THE BAKER
+// Every sprite becomes an offscreen canvas exactly once. From then on the renderer calls
+// drawImage — the same cost profile as the fillRect it replaces.
+// ============================================================================
+const BAKED = {};
+function bake(name) {
+  const s = SPRITES[name], pal = paletteFor(s.ramp);
+  const w = s.rows[0].length, h = s.rows.length;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  for (let y = 0; y < h; y++) {
+    const row = s.rows[y];
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch === '.' || ch === ' ') continue;
+      const col = pal[ch];
+      if (!col) continue;
+      g.fillStyle = col; g.fillRect(x, y, 1, 1);
+    }
+  }
+  BAKED[name] = c;
+  return c;
+}
+for (const k in SPRITES) bake(k);
+
+function blit(g, name, x, y, scale, flip) {
+  const c = BAKED[name];
+  g.save();
+  if (flip) { g.translate(x + c.width * scale, y); g.scale(-1, 1); g.drawImage(c, 0, 0, c.width * scale, c.height * scale); }
+  else g.drawImage(c, x, y, c.width * scale, c.height * scale);
+  g.restore();
+}
+
+// ============================================================================
+// PALETTE SWATCHES
+// ============================================================================
+{
+  let h = '<table><tr><th>ramp</th><th>1 light</th><th>2</th><th>3</th><th>4</th><th>5 dark</th><th></th></tr>';
+  for (const k in RAMPS) {
+    h += `<tr><td>${k}${k === 'hero' ? ' <span class="sub">(reserved)</span>' : ''}</td>`;
+    for (const c of RAMPS[k]) h += `<td><span class="sw" style="background:${c}"></span> <span class="sub">${c}</span></td>`;
+    h += '</tr>';
+  }
+  h += '<tr><td>accents</td>';
+  for (const k in ACCENT) h += `<td><span class="sw" style="background:${ACCENT[k]}"></span> <span class="sub">${k}</span></td>`;
+  h += `<td><span class="sw" style="background:${OUTLINE}"></span> <span class="sub">outline</span></td></tr></table>`;
+  document.getElementById('pal').innerHTML = h;
+}
+
+// ============================================================================
+// BEFORE / AFTER
+// ============================================================================
+const CAST = [
+  { name: 'player',  old: { w: 12, h: 20, c: '#e8e2d0' }, label: 'player' },
+  { name: 'crawler', old: { w: 14, h: 12, c: '#7d5340' }, label: 'crawler' },
+  { name: 'bat',     old: { w: 12, h: 10, c: '#6a5a8f' }, label: 'bat' },
+  { name: 'brute',   old: { w: 20, h: 22, c: '#8f4040' }, label: 'brute' },
+  { name: 'spitter', old: { w: 14, h: 14, c: '#5f8f5a' }, label: 'spitter' },
+  { name: 'rockling',old: { w: 14, h: 14, c: '#7a7f86' }, label: 'rockling' },
+];
+const S = 3;   // display zoom
+
+function drawBefore() {
+  const g = document.getElementById('before').getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#191924'; g.fillRect(0, 0, 440, 200);
+  let x = 18;
+  for (const e of CAST) {
+    const w = e.old.w * S, h = e.old.h * S;
+    g.fillStyle = e.old.c; g.fillRect(x, 150 - h, w, h);
+    // the current "face dot"
+    g.fillStyle = '#000'; g.fillRect(x + w * 0.6, 150 - h + h * 0.25, 3 * S / 2, 3 * S / 2);
+    g.fillStyle = '#8a8578'; g.font = '10px monospace'; g.textAlign = 'center';
+    g.fillText(e.label, x + w / 2, 172);
+    x += Math.max(w, 52) + 16;
+  }
+  g.fillStyle = '#2b1f13'; g.fillRect(0, 150, 440, 50);
+}
+function drawAfter() {
+  const g = document.getElementById('after').getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#191924'; g.fillRect(0, 0, 440, 200);
+  let x = 18;
+  for (const e of CAST) {
+    const c = BAKED[e.name], w = c.width * S, h = c.height * S;
+    // contact shadow — grounds the sprite for two lines of code
+    g.fillStyle = '#00000055';
+    g.beginPath(); g.ellipse(x + w / 2, 151, w * 0.34, 3, 0, 0, Math.PI * 2); g.fill();
+    blit(g, e.name, x, 150 - h, S, false);
+    g.fillStyle = '#8a8578'; g.font = '10px monospace'; g.textAlign = 'center';
+    g.fillText(e.label, x + w / 2, 172);
+    x += Math.max(w, 52) + 16;
+  }
+  g.fillStyle = '#2b1f13'; g.fillRect(0, 150, 440, 50);
+}
+
+// ============================================================================
+// SILHOUETTE TEST — if you cannot name them in black, the design has failed
+// ============================================================================
+function drawSil() {
+  const g = document.getElementById('sil').getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#d8d2c0'; g.fillRect(0, 0, 440, 120);
+  let x = 18;
+  for (const e of CAST) {
+    const c = BAKED[e.name], w = c.width * S, h = c.height * S;
+    // draw the sprite, then punch it to solid black via composite
+    const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
+    const tg = t.getContext('2d');
+    tg.drawImage(c, 0, 0);
+    tg.globalCompositeOperation = 'source-in';
+    tg.fillStyle = '#14141c'; tg.fillRect(0, 0, c.width, c.height);
+    g.drawImage(t, x, 96 - h, w, h);
+    x += Math.max(w, 52) + 16;
+  }
+}
+
+// ============================================================================
+// IN CONTEXT — real terrain, real darkness, real light radius
+// ============================================================================
+function drawScene() {
+  const cv = document.getElementById('scene'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  g.imageSmoothingEnabled = false;
+  // cave backdrop
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#191924'); grad.addColorStop(1, '#101018');
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  // back-wall parallax
+  g.fillStyle = '#ffffff08';
+  for (let y = 0; y < H; y += 26) for (let x = 0; x < W; x += 26)
+    if ((((x * 73856093) ^ (y * 19349663)) >>> 7) % 5 === 0) g.fillRect(x, y, 20, 20);
+  // floor + a wall, drawn from the stone ramp with a lit top edge
+  const T = 16;
+  const drawTile = (tx, ty, ramp) => {
+    const r = RAMPS[ramp];
+    g.fillStyle = r[2]; g.fillRect(tx, ty, T, T);
+    g.fillStyle = r[1]; g.fillRect(tx, ty, T, 2);          // lit top
+    g.fillStyle = r[3]; g.fillRect(tx, ty + T - 3, T, 3);  // shadowed base
+    g.fillStyle = r[1]; g.fillRect(tx, ty, 2, T - 3);      // lit left (light is top-left)
+    g.fillStyle = r[4]; g.fillRect(tx + T - 1, ty, 1, T);  // dark right
+  };
+  for (let x = 0; x < W; x += T) drawTile(x, 200, 'stone');
+  for (let x = 0; x < W; x += T) drawTile(x, 216, 'dirt');
+  for (let x = 0; x < W; x += T) drawTile(x, 232, 'dirt');
+  for (let y = 120; y < 200; y += T) { drawTile(W - T * 2, y, 'stone'); drawTile(W - T, y, 'stone'); }
+  // a shard-ore tile, because it is the thing the whole game is named after
+  g.fillStyle = RAMPS.stone[2]; g.fillRect(64, 216, T, T);
+  g.fillStyle = ACCENT.shard; g.fillRect(68, 220, 5, 5); g.fillRect(74, 226, 3, 3);
+  g.fillStyle = ACCENT.bright; g.fillRect(69, 221, 2, 2);
+
+  // cast
+  const ground = 200;
+  const put = (name, x, flip) => {
+    const c = BAKED[name];
+    g.fillStyle = '#00000055';
+    g.beginPath(); g.ellipse(x + c.width / 2, ground + 1, c.width * 0.34, 2.5, 0, 0, Math.PI * 2); g.fill();
+    blit(g, name, x, ground - c.height, 1, flip);
+  };
+  put('crawler', 96, false);
+  put('brute', 300, true);
+  put('spitter', 210, true);
+  blit(g, 'bat', 150, 120, 1, false);
+  put('player', 40, false);
+
+  // the light radius the game actually uses, so we see them in the dark they live in
+  const px = 47, py = ground - 11;
+  const lg = g.createRadialGradient(px, py, 30, px, py, 190);
+  lg.addColorStop(0, 'rgba(6,6,12,0)');
+  lg.addColorStop(0.6, 'rgba(6,6,12,0.28)');
+  lg.addColorStop(1, 'rgba(6,6,12,0.62)');
+  g.fillStyle = lg; g.fillRect(0, 0, W, H);
+}
+
+drawBefore(); drawAfter(); drawSil(); drawScene();
+
+// ============================================================================
+// COST REPORT — the plan has to survive the single-file rule, so measure it
+// ============================================================================
+{
+  let chars = 0, px = 0;
+  for (const k in SPRITES) {
+    for (const r of SPRITES[k].rows) { chars += r.length + 3; px += r.length; }
+  }
+  const perEntity = Math.round(chars / Object.keys(SPRITES).length);
+  const rosterEstimate = perEntity * 19;            // 19 enemies
+  const withFrames = rosterEstimate * 3;            // ~3 frames each
+  document.getElementById('cost').innerHTML = `<table>
+   <tr><th>sprites in this prototype</th><td>${Object.keys(SPRITES).length}</td></tr>
+   <tr><th>source characters</th><td>${chars.toLocaleString()} (~${(chars / 1024).toFixed(1)} KB)</td></tr>
+   <tr><th>average per entity</th><td>${perEntity} chars</td></tr>
+   <tr><th>projected: 19 enemies x 3 frames</th><td>~${(withFrames / 1024).toFixed(0)} KB of source</td></tr>
+   <tr><th>bake cost</th><td>once at load, ${px.toLocaleString()} fillRect calls total</td></tr>
+   <tr><th>runtime cost</th><td>one drawImage per entity — same as today's fillRect</td></tr>
+   <tr><th>build step required</th><td class="sub">none</td></tr>
+   <tr><th>asset files required</th><td class="sub">none</td></tr>
+  </table>
+  <p class="sub">For comparison, the game file is currently ~140 KB. A full sprite roster at this
+  density lands around 40-60 KB of readable source — real, and affordable, and it diffs.</p>`;
+}
+</script>
+</body></html>
