@@ -56,7 +56,9 @@ are the navigation.
 | **DATA TABLES** | tiles, status types, elites, biomes, enemies, gems, gear, uniques, affixes, classes, boons, tree, unlocks. **All content goes here.** |
 | **LORE** | world, biomes, bestiary, fragments, classes — the codex reads from here |
 | **ATTUNEMENTS + THREAT** | in-run level-up picks, and the across-run difficulty tiers |
-| RNG + NOISE | seeded mulberry32, value noise, `hash2` for deterministic per-chunk decisions |
+| RNG + NOISE + **THE LATTICE** | six independent strand seeds, glyph encoding, per-strand spatial hash |
+| **SIGILS / DISSONANCE** | the verbs that rewrite a strand, what it costs, and the way out |
+| **SPRITES** | palette ramps, sprite data, the baker |
 | AUDIO + FX | synthesized WebAudio SFX (no asset files), arcs, screen flash, callouts |
 | WORLD / CHUNKS | chunk generation, POI stamping, chunk canvas rendering, canvas eviction |
 | CARVE | `carve()` — the only terrain-removal function |
@@ -271,6 +273,7 @@ change. Blender to sprite sheets is exactly the Dead Cells pipeline and the righ
 | 5 | Status engine, ability system, uniques, 4 classes |
 | 6 | `carve()` unification, flight + fuel, fall damage, Bore/Excavate, 4 traversal abilities |
 | 7 | First browser render. Foundation lock (increased/more, crit, flat armor, status resist, stacking ailments, Shatter/Congeal/chain). Telegraphs on every attack + boss phases. Socket colors, Focus, gem tiers + fusion, the Vault, The Weight, descent bonus, death summary. 40 new gems, 10 new enemies, 12 alt uniques, 8 new affixes. Adaptive camera, depth lighting, parallax, art fallback layer, synthesized SFX, real PWA. Browser + PWA + screenshot harnesses. |
+| 9 | The full sprite roster (20 sprites, 35 frames) with the three visual laws enforced as tests. THE LATTICE: the world seed split into six independent strands, five sigils that rewrite them, dissonance as the world noticing, and an escape that overwrites the master glyph. |
 | 8 | Multi-device input (gamepad, mouse aim with assist, keyboard, touch) behind one abstraction, with prompts that follow the last device used. Title / pause / settings / controls screens, all controller-navigable from a single focus cursor. Codex: world, strata, bestiary, delvers and 13 depth-gated fragments, unlocked by playing. In-run levelling with three-choice attunements, and five Threat tiers unlocked by felling distinct bosses. Off-screen threat markers, loot comparison against equipped gear, and a full world map with fog of war and a depth ruler. |
 
 Bugs the headless harness caught that a human would have spent an evening on:

@@ -40,26 +40,34 @@ thumb, and with a stick, and with a cursor?".
    See DESIGN-PLAN §1.1 for why this is load-bearing.
 6. **Sockets hold `{id, tier}`** (or a bare string, from v1 saves). Always read them through
    `gemId()` / `gemTier()` / `gemOf()`. A raw `GEMS[socketValue]` lookup is a bug.
-7. **`o.st[k]` is always an array** of `{p, t}` instances, even for the non-stacking effects.
+7. **The world is generated from SIX seeds, not one.** `WEAVE` holds a seed per strand and
+   every generator reads through `hashS(strand, x, y)` or a per-strand chunk RNG. Strand
+   independence is the whole mechanic — if rerolling the caches moves the monsters, the Lattice
+   is broken. Suite 9 asserts it by fingerprinting each strand's output.
+8. **`o.st[k]` is always an array** of `{p, t}` instances, even for the non-stacking effects.
    One shape, one code path.
-8. **Run the tests before you claim anything works.** See below.
-9. **Input goes through the abstraction, never straight to a device.** Devices write into
+9. **Run the tests before you claim anything works.** See below.
+10. **Input goes through the abstraction, never straight to a device.** Devices write into
    `HELD` (continuous) and `fire()`/`consumed()` (one-shot); `readInput()` turns intent into
    actions once per frame, before `sim()`. A `keydown` handler that calls a gameplay function
    directly will fire while paused and behind menus.
-10. **Every prompt goes through `pr(action)`.** Hard-coding "press E" is a bug on a controller.
+11. **Every prompt goes through `pr(action)`.** Hard-coding "press E" is a bug on a controller.
     `GLYPH` carries the keyboard, Xbox, PlayStation and touch labels for every named action.
-11. **A panel that can be dismissed must not leave the game paused.** `openPanel(html, true)`
+12. **A panel that can be dismissed must not leave the game paused.** `openPanel(html, true)`
     marks a panel modal (title, death, shrine, level-up); modal panels demand a choice.
     `closePanel(force)` is the only way out of one.
-12. **Don't add scope that wasn't asked for.** The owner is explicit about this. Build the
+13. **Sprites are data.** A creature is a character grid in `SPR` indexing a palette ramp,
+    baked once at load. Three laws are tested, not assumed: nothing approaches the player's
+    ramp in luminance, every actor clears 3:1 against its ground, and no two enemies in a biome
+    share a top shape.
+14. **Don't add scope that wasn't asked for.** The owner is explicit about this. Build the
    thing requested, note adjacent opportunities in a comment or a message, don't just do them.
 
 ## Testing
 
 ```bash
-./test/run.sh          # all node suites (2-8)
-./test/run.sh 8        # one suite
+./test/run.sh          # all node suites (2-9)
+./test/run.sh 9        # one suite
 node test/browser.js   # real Chromium: boot, input, render, no console errors
 node test/pwa.js       # manifest, service worker, offline reload, save migration
 node test/shots.js     # writes screenshots to test/shots/ — the only way to judge FEEL

@@ -1,6 +1,7 @@
 # SHARDFALL — the long plan
 
-**Status:** written at the end of session 8, to be executed cold by a fresh session.
+**Status:** written at the end of session 8. **Session 9 executed Sprints 1 and 2 and added a
+system that was not in this plan — see §5.5 below.** Everything else stands.
 **Companion files:** `CURRENT-STATE.md` (generated, real numbers), `RESEARCH.md` (evidence,
 sourced), `art-prototype.html` (the visual spec, rendered).
 
@@ -262,7 +263,23 @@ actually changing behaviour.
 
 ---
 
-### Sprint 1 — Art foundation
+### Sprint 1 — Art foundation — DONE (session 9)
+
+Shipped together with Sprint 2. Sprites are data — character grids indexing palette ramps,
+baked once into offscreen canvases at load. 20 sprites, 35 frames, the full roster plus the
+player. The three visual laws are assertions in suite 8, not sentences here:
+
+- nothing may approach the player's ramp in luminance;
+- every actor clears 3:1 against the ground it stands on and 2.4:1 against its lit top edge;
+- every sprite is rectangular, palette-legal, and no two enemies sharing a biome share a top shape.
+
+All three caught real faults on first run. The bone ramp was at 0.82x the player's luminance —
+the sentinel was competing with the hero for "brightest thing on screen". Terrain was far too
+bright for anything to read against and is now measurably darker across the board.
+
+<details><summary>Original plan text</summary>
+
+### Sprint 1 — Art foundation (original)
 
 1. Port the sprite baker from `art-prototype.html` into `index.html` behind the existing
    `drawEntity()` seam. Ship it with the player and the four caves-band enemies only.
@@ -278,12 +295,22 @@ still renders correctly on the rect fallback.
 
 ---
 
-### Sprint 2 — Art rollout
+</details>
 
-The remaining 15 enemies, 12 gear bases (weapons should read in-hand), pickups, chests, shrines,
-the camp flag, and per-biome tile sets. Silhouette test must pass for the full roster.
+### Sprint 2 — Art rollout — DONE (session 9)
 
-**Exit:** black-fill every sprite; all 19 nameable. No two share a top-shape within a band.
+All 19 enemies drawn. Still outstanding: gear should read in-hand, and pickups/chests/shrines
+are still flat quads.
+
+### 5.5 — THE LATTICE — DONE (session 9, unplanned)
+
+Not in the original plan; requested mid-session and built. The world seed is decomposed into six
+independent strands, sigils let you rewrite them, dissonance is the world noticing, and the
+endgame is overwriting the master glyph to escape. See the commit and suite 9.
+
+**This changes several sprints below.** Sprint 4 (itemisation) should treat sigils as a drop
+class. Sprint 8 (world structure) must keep strand independence intact — a room-template system
+has to be stamped from the `terrain` strand alone or rerolling the caches will move the rooms.
 
 ---
 
