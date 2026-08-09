@@ -480,6 +480,107 @@ console.log('\n-- regressions --');
   META.cls = 'vanguard'; newRun();
 }
 
+// ---------- 6c. THE VISUAL LAWS ----------
+// The art direction has exactly two rules that can be checked by machine, so they are checked
+// by machine. A rule that lives only in a document drifts within a session.
+console.log('\n-- visual laws --');
+{
+  // WCAG relative luminance — the same formula the contrast ratio is built on.
+  const lum = hex => {
+    const h = hex.replace('#', '');
+    const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) };
+
+  // LAW 1 — nothing may be cream except the player. This is what makes the player findable in
+  // a dark, busy, destructible world, and it only holds if every other ramp stays below it.
+  const heroLum = lum(RAMPS.hero[0]);
+  const tooBright = Object.keys(RAMPS).filter(k => k !== 'hero' && lum(RAMPS[k][0]) > heroLum * 0.65);
+  A(tooBright.length === 0,
+    'no ramp approaches the player ramp in luminance' + (tooBright.length ? ': ' + tooBright.join(',') : ''));
+  A(Object.keys(RAMPS).every(k => k === 'hero' || lum(RAMPS[k][0]) < heroLum),
+    'the player ramp is the brightest in the game');
+
+  // LAW 2 — every actor must clear 3:1 against the terrain it will actually be seen against
+  // (WCAG 1.4.11, the non-text contrast threshold). An enemy you cannot pick out is a fairness
+  // bug, not just an ugly one.
+  //
+  // Two deliberate exclusions. Ore and secret seams are ACCENT tiles — bright on purpose,
+  // because finding them is the point, and they are ~1% of the world. And an enemy is only
+  // checked against the biomes it actually spawns in; the warden never stands on grass.
+  const ACCENT_TILES = Object.keys(TILES).filter(k => TILES[k].ore || TILES[k].secret);
+  const groundOf = biome => TILES[biome[2]] && TILES[biome[2]].c;
+  const lighten = hex => {
+    const h = hex.replace('#', '');
+    return '#' + [0, 2, 4].map(i => Math.min(255, Math.round(parseInt(h.slice(i, i + 2), 16) * 1.18))
+      .toString(16).padStart(2, '0')).join('');
+  };
+  const fails = [], litFails = [];
+  const check = (ramp, ground, who) => {
+    const r = ratio(RAMPS[ramp][0], ground);
+    if (r < 3) fails.push(`${who} on ${ground} ${r.toFixed(2)}:1`);
+    const rl = ratio(RAMPS[ramp][0], lighten(ground));
+    if (rl < 2.4) litFails.push(`${who} on lit ${ground} ${rl.toFixed(2)}:1`);
+  };
+  // the player goes everywhere, so it is checked against every ground tile
+  for (const b of BIOMES) { const g = groundOf(b); if (g) check('hero', g, 'player/' + b[1]) }
+  // every enemy against only the bands it spawns in
+  for (const b of BIOMES) {
+    const g = groundOf(b); if (!g) continue;
+    for (const t of b[4]) { const sp = SPR[t]; if (!sp) continue; check(sp.r, g, `${t}/${b[1]}`) }
+  }
+  A(fails.length === 0, 'every actor clears 3:1 against the ground it stands on' + (fails.length ? ': ' + fails.slice(0, 5).join(', ') : ''));
+  A(litFails.length === 0, 'and 2.4:1 against its lit tile edge' + (litFails.length ? ': ' + litFails.slice(0, 5).join(', ') : ''));
+  A(ACCENT_TILES.length > 0, 'accent tiles (ore, secret seams) are excluded from the contrast rule by design');
+
+  // Every ramp must actually be a ramp: monotonically darkening, five steps.
+  const badRamp = Object.keys(RAMPS).filter(k => {
+    const r = RAMPS[k];
+    if (r.length !== 5) return true;
+    for (let i = 1; i < r.length; i++) if (lum(r[i]) >= lum(r[i - 1])) return true;
+    return false;
+  });
+  A(badRamp.length === 0, 'every ramp is 5 steps and monotonically darkens' + (badRamp.length ? ': ' + badRamp.join(',') : ''));
+
+  // Silhouette law: every sprite is a rectangle of consistent width, uses only palette
+  // characters, and no two enemies in the same biome share a top-row shape.
+  const badRows = [], badChars = [];
+  const legal = new Set(['.', ' ', 'o', '1', '2', '3', '4', '5', 'S', 'B', 'G', 'R', 'E']);
+  for (const k in SPR) {
+    for (const frame of SPR[k].f) {
+      const w = frame[0].length;
+      if (frame.some(r => r.length !== w)) badRows.push(k);
+      for (const r of frame) for (const ch of r) if (!legal.has(ch)) badChars.push(k + ':' + ch);
+    }
+    if (!RAMPS[SPR[k].r]) badChars.push(k + ':ramp ' + SPR[k].r);
+  }
+  A(badRows.length === 0, 'every sprite frame is rectangular' + (badRows.length ? ': ' + [...new Set(badRows)].join(',') : ''));
+  A(badChars.length === 0, 'every sprite uses only palette characters' + (badChars.length ? ': ' + [...new Set(badChars)].slice(0, 6).join(',') : ''));
+
+  // Top-shape uniqueness within a biome — the eye resolves the top two rows first, so two
+  // enemies you meet together must not share one.
+  const clashes = [];
+  for (const b of BIOMES) {
+    const seen = {};
+    for (const t of b[4]) {
+      const sp = SPR[t]; if (!sp) continue;
+      const top = sp.f[0].slice(0, 2).join('|').replace(/[1-5SBGRE]/g, '#');
+      if (seen[top]) clashes.push(`${b[1]}: ${t} vs ${seen[top]}`);
+      seen[top] = t;
+    }
+  }
+  A(clashes.length === 0, 'no two enemies in a biome share a top shape' + (clashes.length ? ': ' + clashes.join(', ') : ''));
+
+  // Coverage: how much of the roster is drawn?
+  const drawn = Object.keys(ENEMIES).filter(k => SPR[k]).length;
+  console.log(`   sprites: ${drawn}/${Object.keys(ENEMIES).length} enemies + player, ` +
+    `${Object.values(SPR).reduce((a, s) => a + s.f.length, 0)} frames total`);
+  A(drawn === Object.keys(ENEMIES).length, `every enemy has a sprite (${drawn}/${Object.keys(ENEMIES).length})`);
+  A(!!SPR.player, 'the player has a sprite');
+}
+
 // ---------- 7. INTEGRATION ----------
 console.log('\n-- integration --');
 {

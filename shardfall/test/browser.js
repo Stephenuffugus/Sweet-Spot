@@ -113,10 +113,18 @@ const ok = (c, m) => { console.log((c ? 'ok: ' : 'FAIL: ') + m); if (!c) fails++
   await page.screenshot({ path: path.join(SHOTS, '02-hover.png') });
 
   // Hold, don't press: an instant down+up can land entirely between two sim ticks.
-  await page.keyboard.down('j'); await page.waitForTimeout(200); await page.keyboard.up('j');
-  await page.keyboard.down('k'); await page.waitForTimeout(200); await page.keyboard.up('k');
-  const acted = await page.evaluate(() => ({ mcd: P.mcd, part: PART.length }));
-  ok(acted.part > 0, `attacking spawns particles (${acted.part})`);
+  // Assert on the attack's own state, not on particles — particles live 0.2-0.5s and had
+  // usually expired by the time this ran, which made the check flaky rather than wrong.
+  await page.evaluate(() => { P.mcd = 0; P.rcd = 0; EQ.melee = mkItem('sword', 0); EQ.ranged = mkItem('bow', 0); refreshAttacks() });
+  await page.keyboard.down('j'); await page.waitForTimeout(120);
+  const melee = await page.evaluate(() => ({ mcd: P.mcd, cd: ATK.melee.cd }));
+  await page.keyboard.up('j');
+  ok(melee.mcd > 0, `melee swings and starts its cooldown (${melee.mcd.toFixed(2)}/${melee.cd.toFixed(2)}s)`);
+  await page.evaluate(() => { PROJ.length = 0; P.rcd = 0 });
+  await page.keyboard.down('k'); await page.waitForTimeout(120);
+  const ranged = await page.evaluate(() => ({ n: PROJ.length, friendly: PROJ[0] && PROJ[0].friendly }));
+  await page.keyboard.up('k');
+  ok(ranged.n > 0 && ranged.friendly === 1, `ranged fires a friendly projectile (${ranged.n})`);
 
   // Dig down and travel: this is the core traversal loop and the deepest render path.
   await page.evaluate(() => { for (let i = 0; i < 40; i++) carve(P.x, P.y + i * TILE, TILE * 1.6, 3); });

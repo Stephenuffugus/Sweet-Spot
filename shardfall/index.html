@@ -246,18 +246,241 @@ const FOCUS_MAX=100, FOCUS_HIT=8, FOCUS_KILL=25, FOCUS_REGEN=2;
 const WEIGHT_EVERY=18, WEIGHT_GRACE=90, WEIGHT_MAX=10;
 
 // ============ DATA TABLES (append content here — everything is data-driven) ============
+// ============ SPRITES ============
+// Real pixel art with no asset files and no build step: each sprite is a grid of characters,
+// one string per row, each character indexing a palette ramp. Baked ONCE into an offscreen
+// canvas at load, blitted thereafter — so the runtime cost is the same drawImage the flat
+// fillRect version cost, and adding a creature is still a table entry (CLAUDE.md rule 4).
+//
+// RAMPS run light -> dark. Hue rotates warm-to-cool as value drops, which is what stops a ramp
+// reading as one colour at five brightnesses. Light comes from the TOP-LEFT in every sprite.
+const RAMPS={
+ stone: ['#9aa3b0','#6f7889','#4e5666','#353b47','#22262e'],
+ dirt:  ['#b08a5e','#8a6743','#654a30','#46331f','#2b1f13'],
+ flesh: ['#d98d6a','#b06a4c','#854b34','#5c3323','#382016'],
+ fungal:['#c39ae0','#9a72bd','#71508f','#4d3563','#2f2040'],
+ forge: ['#f0a05a','#c9743a','#97502a','#66351c','#3d1f10'],
+ void:  ['#a89af0','#7c6cc9','#574a97','#383066','#211c3d'],
+ bone:  ['#bfb595','#9c9276','#746b55','#4f4839','#2e2a21'],
+ rot:   ['#a8c07a','#7f9455','#5c6b3b','#3e4726','#252b15'],
+ // RESERVED — the player only. Nothing else may use this ramp, which is the whole reason the
+ // eye finds you instantly in a dark, busy, destructible world.
+ hero:  ['#f4ecd8','#cfc4a8','#a1957a','#6d6350','#3d3830'],
+};
+const ACC={shard:'#3fc9c1',bright:'#bffffb',gold:'#d8a53f',blood:'#e05555',ember:'#ff8a3f'};
+const OUTLINE='#14141c';   // near-black, never pure black — pure black reads as a hole
+function palOf(r){const c=RAMPS[r]||RAMPS.stone;
+ return {'1':c[0],'2':c[1],'3':c[2],'4':c[3],'5':c[4],'o':OUTLINE,
+  'S':ACC.shard,'B':ACC.bright,'G':ACC.gold,'R':ACC.blood,'E':ACC.ember}}
+// SILHOUETTE LAW — every family owns a distinct TOP SHAPE and GROUND-CONTACT count, because
+// the top two rows and the feet are what the eye resolves first at 16px in the dark.
+//   player  single tuft, 2 legs      beast   two horns w/ gap, 4 legs
+//   construct flat overhang, 2 blocks swarm  domed, no top feature
+//   wraith  single tapered spike, floats (visible gap under it)
+const SPR={
+ // ---- PLAYER: hooded delver. The shard-lamp is the only pure highlight in the game. ----
+ player:{r:'hero',f:[[
+  '.....oooo.....','....o1111o....','...o111111o...','...o112211o...',
+  '..o11222211o..','..o1o2222o1o..','..o1o2222o1o..','..o11222211o..',
+  '.o1122332211o.','.o1223333221o.','.o1233443321o.','.o1233443321o.',
+  '.o12334433S1o.','.o1233443SBSo.','.o123344332So.','.o122333321o..',
+  '..o113333o1o..','..o1o3443o1o..','..o1o3443o1o..','..o2o4554o2o..',
+  '..o3o.oo.o3o..','...ooo..ooo...'],[
+  '.....oooo.....','....o1111o....','...o111111o...','...o112211o...',
+  '..o11222211o..','..o1o2222o1o..','..o1o2222o1o..','..o11222211o..',
+  '.o1122332211o.','.o1223333221o.','.o1233443321o.','.o1233443321o.',
+  '.o12334433S1o.','.o1233443SBSo.','.o123344332So.','.o122333321o..',
+  '..o113333o1o..','..oo13443o1o..','.o2o.3443o1o..','.o3o.o4554o2o.',
+  '.....o3o.oo3o.','......ooo.ooo.'],[
+  '.....oooo.....','....o1111o....','...o111111o...','...o112211o...',
+  '..o11222211o..','..o1o2222o1o..','..o1o2222o1o..','..o11222211o..',
+  '.o1122332211o.','.o1223333221o.','.o1233443321o.','.o1233443321o.',
+  '.o12334433S1o.','.o1233443SBSo.','.o123344332So.','.o122333321o..',
+  '..o113333o1o..','..o1o3443oo2o.','..o1o3443o.o3o','..o2o4554o....',
+  '..o3o.oo.o3o..','...ooo..ooo...']]},
+ // ---- BEASTS: horned top, four legs ----
+ crawler:{r:'flesh',f:[[
+  '..o..oooo..o..','.o1oo1221oo1o.','o112233443221o','o12o3344433o1o',
+  'o12oo344oo3o1o','o122334443321o','.o1233444321o.','.oo23344432oo.',
+  'o2o.o4oo4o.o2o','o..oo3..3oo..o','....o....o....','..............'],[
+  '..o..oooo..o..','.o1oo1221oo1o.','o112233443221o','o12o3344433o1o',
+  'o12oo344oo3o1o','o122334443321o','.o1233444321o.','.oo23344432oo.',
+  '.o2oo4oo4oo2o.','o..o3o..o3o..o','..oo......oo..','..............']]},
+ rockling:{r:'stone',f:[[
+  '..o..o..o..o..','.o1oo1oo1oo1o.','o11o22o33o22o1','o1122334433221',
+  'o12233S44S3321','o12233444443 1','o11223344333 1','.o1122333322o.',
+  '.oo1223333 2o.','o2o.o44oo4o.o2','o..oo3o..o3oo.','...o......o...',
+  '..............','..............'],[
+  '..o..o..o..o..','.o1oo1oo1oo1o.','o11o22o33o22o1','o1122334433221',
+  'o12233S44S3321','o12233444443 1','o11223344333 1','.o1122333322o.',
+  '.oo1223333 2o.','.o2oo44oo44oo2','o...o3o..o3o..','.....o....o...',
+  '..............','..............']]},
+ sporeling:{r:'fungal',f:[[
+  '...o.oooo.o...','..o1o1221o1o..','.o1122332211o.','o112233443221o',
+  'o122334443321o','o1223o44o3321o','.o1233444321o.','.oo123333 1oo.',
+  '.o2o.o44o.o2o.','o..oo3oo3oo..o','...o......o...','..............',
+  '..............'],[
+  '...o.oooo.o...','..o1o1221o1o..','.o1122332211o.','o112233443221o',
+  'o122334443321o','o1223o44o3321o','.o1233444321o.','.oo123333 1oo.',
+  '..o2o44oo44o..','.o..o3o..o3o..','..o........o..','..............',
+  '..............']]},
+ voidspawn:{r:'void',f:[[
+  '...o..oo..o...','..o1oo1221oo..','.o1122334 21o.','o112233443221o',
+  'o12233SSSS3321','o122334SS43321','o1223344443321','.o1223344332o.',
+  '.oo1223333 2oo','o2o.o4oo4o.o2o','o..oo3o..o3oo.','...o......o...',
+  '..............','..............','..............','..............'],[
+  '...o..oo..o...','..o1oo1221oo..','.o1122334 21o.','o112233443221o',
+  'o12233SSSS3321','o122334SS43321','o1223344443321','.o1223344332o.',
+  '.oo1223333 2oo','.o2oo4oo4oo2o.','o...o3o..o3o..','....o....o....',
+  '..............','..............','..............','..............']]},
+ voidling:{r:'void',f:[[
+  '.o..oo..o.','o1oo1221o1','o1122S3221','o122SS3321',
+  'o12233 321','.o1233 21o','.oo1 32oo.','o2o.oo.o2o',
+  '..oo..oo..','..........']]},
+ stalker:{r:'fungal',f:[[
+  '..o..oo..o..','.o1oo1221o1o','o11223344221','o1223R44R321',
+  'o12233444321','o1223344 321','.o122334432o','.o11223343o.',
+  '.oo1223332o.','o2o.o44o.o2o','o..oo3oo3o.o','...o.o..o.o.',
+  '....o....o..','............','............'],[
+  '..o..oo..o..','.o1oo1221o1o','o11223344221','o1223R44R321',
+  'o12233444321','o1223344 321','.o122334432o','.o11223343o.',
+  '.oo1223332o.','.o2o44oo44o.','o..o3o..o3o.','..o......o..',
+  '............','............','............']]},
+ // ---- CONSTRUCTS: flat overhanging top, two wide ground blocks ----
+ brute:{r:'flesh',f:[['oooooooooooooooooooo.','o111111111111111111o.','o1RR1111111111111RR1.','.o1111112211111111o..','..oo1122222222 11oo..','.o11122223322221111o.','o1122233344333222211.','o1223334444443332221.','o1223344444444433221.','o1223344o......o43221','o1223344o......o43221','o122334444444443321o.','o12233444444443321o..','.o122334444433221o...','.o1223344443221oo....','.o12233444321o.......','.o1223o..o4321o......','.o1233o..o4331o......','.o2344o..o4432o......','.o3455o..o5543o......','.oo455o..o554oo......','..oooo....oooo.......'],['oooooooooooooooooooo.','o111111111111111111o.','o1RR1111111111111RR1.','.o1111112211111111o..','..oo1122222222 11oo..','.o11122223322221111o.','o1122233344333222211.','o1223334444443332221.','o1223344444444433221.','o1223344o......o43221','o1223344o......o43221','o122334444444443321o.','o12233444444443321o..','.o122334444433221o...','.o1223344443221oo....','..o1223344321o.......','..o123o..o4331o......','.o1234o..o4432o......','.o2345o..o5543o......','.o3455o...o554o......','.oo45oo....oo55o.....','..oooo......oooo.....']]},
+ shieldman:{r:'stone',f:[[
+  'oooooooooooooooooo','o1111111111111111o','o1122111111112211o',
+  'o1o22111RR11122o11','o1o2211111111122o1','o11221122221122211',
+  '11223344444433221o','11o233444444332o1o','11o233444444332o1o',
+  '11223344444433221o','1122334444443322 o','o1223344444433 1o.',
+  'o122334444443321o.','o12233444444332 o.','o1223344444433 o..',
+  'o122334444443321o.','o12o344444443o21o.','o12o34444444 o21o.',
+  'o22oo444oo444oo22o','oooo.ooo..ooo.oooo'],[
+  'oooooooooooooooooo','o1111111111111111o','o1122111111112211o',
+  'o1o22111RR11122o11','o1o2211111111122o1','o11221122221122211',
+  '11223344444433221o','11o233444444332o1o','11o233444444332o1o',
+  '11223344444433221o','1122334444443322 o','o1223344444433 1o.',
+  'o122334444443321o.','o12233444444332 o.','o1223344444433 o..',
+  'o122334444443321o.','o12o3444444443o1o.','oo2o344444444o2oo.',
+  '.o2oo444oo444oo2o.','..oo..ooo..ooo.oo.']]},
+ smith:{r:'forge',f:[[
+  'oooooooooooooooooooooooo','o1111111111111111111111o','o11EE11111111111111EE11o',
+  'o1111112222222211111111o','.oo1122223333222211111o.','.o112223334433322211 1o.',
+  'o1122233344444333222211o','o1222333444444433322221o','o12233344444444433322 1o',
+  'o1223344444444444433221o','o1223344o........o433221','o1223344o........o433221',
+  'o1223344444444444433221o','o122334444444444443321o.','o12233444444444443321o..',
+  'o1223344444444444321o...','o122334444444444321o....','o12233444444444321o.....',
+  'o1223o444444444o21o.....','o1233o44444444o331o.....','o2344o4444444o4432o.....',
+  'o3455o444444o55543o.....','o455oo4444oo555543o.....','oo45o.oooo.o5554oo......',
+  '.ooo.......oooooo.......','........................'],[
+  'oooooooooooooooooooooooo','o1111111111111111111111o','o11EE11111111111111EE11o',
+  'o1111112222222211111111o','.oo1122223333222211111o.','.o112223334433322211 1o.',
+  'o1122233344444333222211o','o1222333444444433322221o','o12233344444444433322 1o',
+  'o1223344444444444433221o','o1223344o........o433221','o1223344o........o433221',
+  'o1223344444444444433221o','o122334444444444443321o.','o12233444444444443321o..',
+  'o1223344444444444321o...','o122334444444444321o....','o1223344444444 321o.....',
+  'oo223o4444444o4o21o.....','.o233o444444o4433o1o....','.o344oo44444o4432o......',
+  '.o3455o4444o555543o.....','.oo455oooooo55554o......','..oo45o....o555oo.......',
+  '...ooo......ooooo.......','........................']]},
+ archer:{r:'bone',f:[[
+  '..o.oooo.o...','.o1o1221o1o..','o1122332211o.','o1223G44G321o',
+  'o12233444321o','o1223344432oG','.o12233443oGG','.o1223344o.GG',
+  '.o1122333oGGG','.oo1223 3o.GG','.o2o44oo4o.GG','o..o3o..o3o.G',
+  '..o......o..G','.............','.............','.............'],[
+  '..o.oooo.o...','.o1o1221o1o..','o1122332211o.','o1223G44G321o',
+  'o12233444321o','o1223344432o.','.o12233443o..','.o1223344o...',
+  '.o1122333o...','.oo1223 3o...','.o2o44oo4o...','o..o3o..o3o..',
+  '..o......o...','.............','.............','.............']]},
+ // ---- RANGED / EXPLOSIVE ----
+ spitter:{r:'rot',f:[[
+  '..........oo..','.........o11o.','........o122o.','...ooooo1223o.',
+  '..o11122233o..','.o1122223333o.','o112222333433o','o12222o33o433o',
+  'o12223333344 3','o12233344444 o','.o1233344443o.','.oo23344433oo.',
+  'o2o.o44oo4o.o2','...oo3o..o3oo.'],[
+  '..........oo..','.........o11o.','........o122o.','...ooooo1223o.',
+  '..o11122233o..','.o1122223333o.','o112222333433o','o12222o33o433o',
+  'o12223333344 3','o12233344444 o','.o1233344443o.','.oo23344433oo.',
+  '.o2oo44oo44oo2','o...o3o..o3o..']]},
+ ember:{r:'forge',f:[[
+  '....oooo.....','..oo1221oo...','.o11EEEE11o..','o112EBBE211o.',
+  'o122EBBE221o.','o1223EE3221o.','o1223333221o.','.o12233321o..',
+  '.oo1223 1oo..','o2o.oooo.o2o.','o..oo..oo..o.','...o....o....',
+  '.............'],[
+  '....oooo.....','..oo1221oo...','.o11EBBE11o..','o112BBBB211o.',
+  'o122BBBB221o.','o1223EE3221o.','o1223333221o.','.o12233321o..',
+  '.oo1223 1oo..','.o2oo..oo2o..','o...o..o...o.','....o..o.....',
+  '.............']]},
+ // ---- SWARM / FLOATERS: domed or spiked, no ground contact ----
+ bat:{r:'void',f:[[
+  'oo............oo','o1oo.oooo.oo1o..','o12o.o11o.o21o..','.o12oo1221oo1o..',
+  '..o123o11o321o..','...o12o11o21o...','....o11221o.....','.....o1221o.....',
+  '.....o1221o.....','......o11o......','......o33o......','.......oo.......'],[
+  '.o............o.','o1oooooooooooo1o','o1211111111121o.','.o12222222221o..',
+  '..o12o1111o21o..','...o12o11o21o...','....o11221o.....','.....o1221o.....',
+  '.....o1221o.....','......o11o......','......o33o......','.......oo.......']]},
+ wraith:{r:'void',f:[[
+  '......oo......','.....o11o.....','....o1221o....','...o122221o...',
+  '..o11233211o..','..o1o2332o1o..','..o1o2332o1o..','.o1122332211o.',
+  '.o1223333221o.','.o122o33o221o.','..o12o33o21o..','..o1o3443o1o..',
+  '...o.3443.o...','....o3443o....','.....o44o.....','......oo......',
+  '..............','..............'],[
+  '......oo......','.....o11o.....','....o1221o....','...o122221o...',
+  '..o11233211o..','..o1o2332o1o..','..o1o2332o1o..','.o1122332211o.',
+  '.o1223333221o.','.o122o33o221o.','..o12o33o21o..','...o13443o1o..',
+  '....o3443o....','.....o443o....','......o4o.....','..............',
+  '..............','..............']]},
+ // ---- MINIBOSSES: same laws, bigger, with an accent that names them ----
+ warden:{r:'dirt',f:[['..o..oooooooooooo..o....','.o1oo1111111111111oo1o..','o112211GG111111GG112211.','o1122111111111111112211.','.o11222222222222222211o.','.o1122233333333332221o..','o11222333444444433322211','o12233344444444443332221','o12233444444444444433221','o1223344o........o443321','o1223344o........o443321','o12233444444444444433221','o1223344444444444443321o','o122334444444444443321o.','o12233444444444443321o..','o1223344444444443321o...','o122334444444443321o....','o1223o4444444o3321o.....','o1233o444444o43321o.....','o2344o4444o443321o......','o3455o44oo4443321o......','o455oo4o..o443321o......','oo45o.o....oo4321o......','.ooo.........ooooo......','........................','........................','........................','........................','........................','........................']]},
+ sporemother:{r:'fungal',f:[[
+  '....o..o..oo..o..o....','...o1oo1oo1221oo1oo1o.','..o1122334444332211o..',
+  '.o112233444444433221o.','o11223344SSSS44332211o','o1223344SSSSSS4433221o',
+  'o1223344SSBBSS4433221o','o1223344SSSSSS4433221o','o12233444SSSS44433221o',
+  'o122334444444444433221','.o1223344444444433221o','.o1223344o..o4433221o.',
+  '..o122334o..o433221o..','..o1223344444433221o..','...o1223344443321o....',
+  '....o1223344332 1o....','.....o1223343321o.....','.....o122o44o221o.....',
+  '....o12o.o44o.o21o....','...o1o...o44o...o1o...','..o1o....o44o....o1o..',
+  '..o......o44o......o..','.........o44o.........','.........o44o.........',
+  '..........oo..........','......................']]},
+ sentinel:{r:'bone',f:[['oooooooooooooooooooooooooo','o1111111111111111111111111','o11GG111111111111111GG11o.','o1111111122221111111111 o.','.oo11122223322221111111o..','.o1122223333332222211 o...','o1122233344444333222211o..','o1223334444444433322221o..','o12233444444444433322 1o..','o1223344444444444433221o..','o1223344o........o433221o.','o1223344o........o433221o.','o1223344o........o433221o.','o12233444444444444433221o.','o1223344444444444443321o..','o122334444444444443321o...','o12233444444444443321o....','o1223344444444443321o.....','o122334444444443321o......','o12233444444443321o.......','o1223o44444444o321o.......','o1233o444444444o21o.......','o2344o4444444444o1o.......','o3455o44444444444o........','o455oo444444o4444o........','oo45o.o44444o4444o........','.ooo..o4444o.o444o........','......o444o..o44oo........','......oo4oo..oo4o.........','.......ooo....ooo.........','..........................','..........................']]},
+ forgelord:{r:'forge',f:[['..oooo..........oooo..........','.o1EE1oooooooooo1EE1o.........','o11EE1111111111 1EE11o........','o1111112222222211111 o........','.oo11222233332222111 o........','.o1122233344433322211o........','o112223334444443332221o.......','o122333444444444433322 o......','o12334444444444444433321o.....','o1233444444444444444433221o...','o1233444o..........o4433221o..','o1233444o..EEEE....o4433221o..','o1233444o..EBBE....o4433221o..','o1233444o..EEEE....o4433221o..','o1233444444444444444433221o...','o123344444444444444443321o....','o12334444444444444443321o.....','o1233444444444444443321o......','o123344444444444443321o.......','o12334444444444443321o........','o1233o44444444444321o.........','o1233o4444444444321o..........','o2344o444444444321o...........','o3455o44444444321o............','o455oo4444444321o.............','oo45o.o44444321o..............','.ooo..o4444321o...............','......o444321o................','......oo4321o.................','.......ooooo..................','..............................','..............................','..............................','..............................']]},
+ voidmaw:{r:'void',f:[[
+  '....o......oo......o....','...o1oo..oo1221oo..oo1o.','..o1122oo1122221oo2211o.',
+  '.o11223344SSSS44332211o.','o1122334SSSSSSSS4332211o','o122334SSBBBBBBSS433221o',
+  'o12334SSBBRRRRBBSS433221','o1233SSBBRRRRRRBBSS33221','o1233SSBRRRRRRRRBSS33221',
+  'o12334SSBBRRRRBBSS433221','o122334SSBBBBBBSS433221o','o1122334SSSSSSSS4332211o',
+  '.o11223344SSSS44332211o.','..o1122334444443322 1o..','...o11223344443322 o....',
+  '....o112233443322 o.....','...o1o1223343221o1o.....','..o1o.o1223321o.o1o.....',
+  '.o1o...o12221o...o1o....','o1o....o1221o.....o1o...','.o......o11o.......o....',
+  '.........oo.............','........................','........................',
+  '........................','........................','........................',
+  '........................','........................','........................']]},
+};
+// Bake once. Sprites are keyed by (name, frame); a missing sprite silently falls back to the
+// flat quad, so the game keeps rendering while the roster is only half drawn.
+const BAKED={};
+function bakeSprites(){
+ for(const name in SPR){const S=SPR[name],pal=palOf(S.r);
+  BAKED[name]=S.f.map(rows=>{
+   const w=rows[0].length,h=rows.length;
+   const c=document.createElement('canvas');c.width=w;c.height=h;
+   const g=c.getContext('2d');
+   for(let y=0;y<h;y++){const row=rows[y];
+    for(let x=0;x<row.length;x++){const ch=row[x];if(ch==='.'||ch===' ')continue;
+     const col=pal[ch];if(!col)continue;g.fillStyle=col;g.fillRect(x,y,1,1)}}
+   return c})}}
+
 const TILES={
  0:{air:1},
- 1:{c:'#6b4a2e',hard:0},           // dirt
- 9:{c:'#4a7d3a',hard:0},           // grass
- 2:{c:'#5a5f66',hard:1},           // stone
+ 1:{c:'#54381f',hard:0},           // dirt
+ 9:{c:'#33552a',hard:0},           // grass
+ 2:{c:'#41464e',hard:1},           // stone
  3:{c:'#1c1c20',hard:9},           // bedrock
- 4:{c:'#5d4a7a',hard:0},           // fungus
- 5:{c:'#7a6f5a',hard:1},           // ruin brick
- 6:{c:'#6e3f34',hard:1},           // forge stone
- 7:{c:'#2e2a3a',hard:2},           // abyss stone
+ 4:{c:'#42335c',hard:0},           // fungus
+ 5:{c:'#544a3a',hard:1},           // ruin brick
+ 6:{c:'#4e2a22',hard:1},           // forge stone
+ 7:{c:'#241f2e',hard:2},           // abyss stone
  8:{c:'#3fc9c1',hard:0,ore:1},     // shard ore
- 10:{c:'#5a5f66',hard:0,secret:1}, // secret wall — mimics stone, breaks to any weapon
+ 10:{c:'#41464e',hard:0,secret:1}, // secret wall — mimics stone, breaks to any weapon
 };
 // biome by tile depth: [maxY, name, groundTile, caveScale, enemyTypes]
 const BIOMES=[
@@ -2921,13 +3144,47 @@ let RRNG=mulberry(0x5eed);
 // Everything visual goes through drawEntity(). With no atlas loaded it draws the flat rects
 // the game shipped with; drop in a sprite sheet later and nothing else has to change, so the
 // "single file, no build step, works offline" property survives an art pass.
-let ATLAS=null;
+// Everything visual goes through here. A baked sprite blits at its own pixel size, centred on
+// the entity and sitting ON the given box rather than being squashed into it — a sprite scaled
+// to a hitbox stops being pixel art. Anything without a sprite falls back to the flat quad, so
+// the game renders correctly with a half-finished roster.
+let SPRITES_ON=true;
 function drawEntity(g,kind,x,y,w,h,col,face,frame){
- if(ATLAS&&ATLAS.map&&ATLAS.map[kind]){
-  const s=ATLAS.map[kind],fr=s.frames?(frame|0)%s.frames:0;
-  g.save();if(face<0){g.translate(x,0);g.scale(-1,1);g.translate(-x,0)}
-  g.drawImage(ATLAS.img,s.x+fr*s.w,s.y,s.w,s.h,Math.round(x-w/2),Math.round(y-h/2),w,h);g.restore();return}
- g.fillStyle=col;g.fillRect(Math.round(x-w/2),Math.round(y-h/2),w,h)}
+ const set=SPRITES_ON&&BAKED[kind];
+ if(set&&set.length){
+  const c=set[(frame|0)%set.length];
+  const px=Math.round(x), dy=Math.round(y+h/2-c.height), dx=px-(c.width>>1);
+  // translate(2x) + scale(-1,1) mirrors about x, so the sprite flips IN PLACE rather than
+  // sliding sideways by its own width.
+  g.save();
+  if(face<0){g.translate(px*2,0);g.scale(-1,1)}
+  g.drawImage(c,dx,dy);
+  g.restore();
+  return true}
+ g.fillStyle=col;g.fillRect(Math.round(x-w/2),Math.round(y-h/2),w,h);return false}
+// A white/coloured copy of a sprite, cached, for hit flashes and status tints. Rebuilding this
+// per frame would be the single most expensive thing in the renderer.
+const TINTED={};
+function tintedSprite(kind,fr,col){
+ const key=kind+'|'+fr+'|'+col;
+ if(TINTED[key])return TINTED[key];
+ const set=BAKED[kind];if(!set||!set.length)return null;
+ const src=set[fr%set.length];
+ const c=document.createElement('canvas');c.width=src.width;c.height=src.height;
+ const g=c.getContext('2d');
+ g.drawImage(src,0,0);
+ g.globalCompositeOperation='source-in';
+ g.fillStyle=col;g.fillRect(0,0,c.width,c.height);
+ TINTED[key]=c;return c}
+function drawEntityTinted(g,kind,x,y,h,face,frame,col,alpha){
+ const set=BAKED[kind];if(!set||!set.length)return false;
+ const fr=(frame|0)%set.length, t=tintedSprite(kind,fr,col);
+ if(!t)return false;
+ const px=Math.round(x), dy=Math.round(y+h/2-t.height), dx=px-(t.width>>1);
+ g.save();g.globalAlpha=alpha===undefined?1:alpha;
+ if(face<0){g.translate(px*2,0);g.scale(-1,1)}
+ g.drawImage(t,dx,dy);
+ g.restore();return true}
 // ---- minimap: rebuilt every 8 frames (cheap sampling, not per-frame) ----
 let MM=null,mmT=0,MMON=true;
 const MMW=68,MMH=54,MMSTEP=4;
@@ -3070,11 +3327,28 @@ function render(){
   else if(acting)col='#fff';
   else if(e.flash>0)col='#fff';
   else if(charging)col=(Math.floor(perf*18)&1)?'#ffffff':e.c;
-  drawEntity(ctx,e.type,x,y,w,h,col,e.dir,perf*6);
-  if(e.st)for(const k in e.st){if(!e.st[k].length)continue;
-   ctx.fillStyle=STATUS[k].c;ctx.globalAlpha=.35;
-   ctx.fillRect(x-w/2,y-h/2,w,h);ctx.globalAlpha=1;break}
-  if(!ATLAS){ctx.fillStyle='#000';ctx.fillRect(x+e.dir*w/4-1,y-h/4,3,3)}
+  // Windup swells the sprite; the flash and status tint are masked copies so the silhouette
+  // survives instead of being replaced by a coloured rectangle.
+  const anim=(e.act>0)?2:(winding?1:((perf*4+e.x)|0));
+  const flashing=(winding&&(Math.floor(perf*22)&1))||acting||e.flash>0;
+  let drew=false;
+  if(SPRITES_ON&&BAKED[e.type]){
+   if(winding&&w!==e.w){ // scale the swell without losing crispness
+    ctx.save();ctx.translate(x,y+h/2);ctx.scale(w/e.w,h/e.h);ctx.translate(-x,-(y+e.h/2));
+    drew=drawEntity(ctx,e.type,x,y,e.w,e.h,col,e.dir,anim);ctx.restore()}
+   else drew=drawEntity(ctx,e.type,x,y,e.w,e.h,col,e.dir,anim);
+   if(drew&&flashing)drawEntityTinted(ctx,e.type,x,y,e.h,e.dir,anim,acting?'#ffffff':'#ffd9b0',acting?0.9:0.65);
+   if(drew&&e.st)for(const k in e.st){if(!e.st[k].length)continue;
+    drawEntityTinted(ctx,e.type,x,y,e.h,e.dir,anim,STATUS[k].c,0.38);break}}
+  if(!drew){
+   drawEntity(ctx,e.type,x,y,w,h,col,e.dir,anim);
+   if(e.st)for(const k in e.st){if(!e.st[k].length)continue;
+    ctx.fillStyle=STATUS[k].c;ctx.globalAlpha=.35;
+    ctx.fillRect(x-w/2,y-h/2,w,h);ctx.globalAlpha=1;break}
+   ctx.fillStyle='#000';ctx.fillRect(x+e.dir*w/4-1,y-h/4,3,3)}
+  // contact shadow — two lines, and it is what stops entities floating
+  ctx.globalAlpha=.35;ctx.fillStyle='#000';
+  ctx.fillRect(x-e.w*0.38,y+e.h/2-1,e.w*0.76,2);ctx.globalAlpha=1;
   if(e.invT>0){ctx.strokeStyle='#ffffffcc';ctx.lineWidth=1;ctx.strokeRect(x-w/2-2,y-h/2-2,w+4,h+4)}
   if(e.elite){ctx.fillStyle='#ffffff70';ctx.fillRect(x-w/2-1,y-h/2-1,w+2,1);
    ctx.fillRect(x-w/2-1,y+h/2,w+2,1)}
@@ -3101,12 +3375,18 @@ function render(){
  if(!P.dead){const x=P.x-ox,y=P.y-oy;
   if(P.shield>0){ctx.strokeStyle='#9fd0ffaa';ctx.lineWidth=1;
    ctx.strokeRect(x-P.w/2-3,y-P.h/2-3,P.w+6,P.h+6)}
+  ctx.globalAlpha=.35;ctx.fillStyle='#000';
+  ctx.fillRect(x-P.w*0.42,y+P.h/2-1,P.w*0.84,2);ctx.globalAlpha=1;
   if(P.inv>0&&Math.floor(perf*20)%2===0){}else{
-   // dark outline so the player never disappears against pale stone
-   ctx.fillStyle='#12121a';ctx.fillRect(x-P.w/2-1,y-P.h/2-1,P.w+2,P.h+2);
-   drawEntity(ctx,'player',x,y,P.w,P.h,'#e8e2d0',P.face,perf*8);
-   if(!ATLAS){ctx.fillStyle='#28344a';ctx.fillRect(x-P.w/2,y-P.h/2,P.w,5);
-    ctx.fillStyle='#000';ctx.fillRect(x+P.face*2,y-P.h/2+2,2,2)}}
+   // 0 idle, 1 stride, 2 airborne — three keyposes, per the animation budget
+   const pf=!P.onG?2:(Math.abs(P.vx)>18?((perf*9)|0)%2?1:0:0);
+   const drew=drawEntity(ctx,'player',x,y,P.w,P.h,'#e8e2d0',P.face,pf);
+   if(!drew){
+    ctx.fillStyle='#12121a';ctx.fillRect(x-P.w/2-1,y-P.h/2-1,P.w+2,P.h+2);
+    ctx.fillStyle='#e8e2d0';ctx.fillRect(x-P.w/2,y-P.h/2,P.w,P.h);
+    ctx.fillStyle='#28344a';ctx.fillRect(x-P.w/2,y-P.h/2,P.w,5);
+    ctx.fillStyle='#000';ctx.fillRect(x+P.face*2,y-P.h/2+2,2,2)}
+   if(drew&&P.inv>0.45)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#ffffff',0.5)}
   if(P.block){ctx.fillStyle='#9fd0ff';ctx.fillRect(x+P.face*7,y-P.h/2,3,P.h)}
   if(ATK.melee&&P.mcd>ATK.melee.cd*0.7){ctx.fillStyle='#ffffff60';
    ctx.fillRect(x+P.face*8,y-8,P.face*14,3)}
@@ -3245,6 +3525,7 @@ loadMeta();loadSet();
 // should never show them. Coarse pointer + no hover is the only reliable "this is a touch
 // device" signal that doesn't misfire on touchscreen laptops with a mouse attached.
 try{if(matchMedia('(hover: none) and (pointer: coarse)').matches)setMode('touch');else setMode('kb')}catch(e){setMode('kb')}
+bakeSprites();
 refreshPrompts();
 newRun();
 cam.x=P.x;cam.y=P.y;
