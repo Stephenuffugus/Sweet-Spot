@@ -1,0 +1,561 @@
+<title>Shardfall — the long plan</title>
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────────────
+   Light is the base set. Dark redefines only the tokens, once behind
+   prefers-color-scheme (guarded so an explicit light choice wins) and once
+   behind the explicit dark stamp. No component ever declares a colour outside
+   this block. Neutrals lean warm stone in light, blue-violet in dark — the
+   game is rock and shard-light, and a pure grey would read as unconsidered. */
+:root{
+  --ground:#F2EFE9; --raised:#FBF9F5; --sunk:#E8E3D9;
+  --ink:#1E2028; --ink-soft:#4A4D5A; --muted:#6E7180;
+  --rule:#DDD8CE; --rule-soft:#EAE5DC;
+  --accent:#0E7C74; --accent-soft:#0E7C7418; --accent-ink:#0A5F59;
+  --amber:#8A5D14; --amber-soft:#8A5D1418;
+  --alarm:#A33A2E; --alarm-soft:#A33A2E14;
+  --shadow:0 1px 2px rgba(30,32,40,.05), 0 8px 24px -12px rgba(30,32,40,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1116; --raised:#161922; --sunk:#0A0C10;
+    --ink:#E4E2DA; --ink-soft:#B8B7B0; --muted:#868894;
+    --rule:#262A33; --rule-soft:#1C2029;
+    --accent:#3FC9C1; --accent-soft:#3FC9C11A; --accent-ink:#7FE0DA;
+    --amber:#D8A53F; --amber-soft:#D8A53F1A;
+    --alarm:#E0705F; --alarm-soft:#E0705F16;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1116; --raised:#161922; --sunk:#0A0C10;
+  --ink:#E4E2DA; --ink-soft:#B8B7B0; --muted:#868894;
+  --rule:#262A33; --rule-soft:#1C2029;
+  --accent:#3FC9C1; --accent-soft:#3FC9C11A; --accent-ink:#7FE0DA;
+  --amber:#D8A53F; --amber-soft:#D8A53F1A;
+  --alarm:#E0705F; --alarm-soft:#E0705F16;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+/* ── type ───────────────────────────────────────────────────────────────────
+   Mono for headings, labels and every number — it echoes the game's own HUD
+   and the fact that this document is mostly tables. Serif for running prose,
+   because 450 lines of plan is something a person has to actually read. */
+:root{
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--serif); font-size:17px; line-height:1.66;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{display:grid; grid-template-columns:1fr; max-width:1180px; margin:0 auto; padding:0 22px 100px}
+@media(min-width:1000px){
+  .wrap{grid-template-columns:210px minmax(0,68ch); gap:56px; padding-left:34px}
+}
+
+/* ── masthead ── */
+header{grid-column:1/-1; padding:64px 0 30px; border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--muted); margin:0 0 14px}
+h1{font-family:var(--mono); font-size:clamp(30px,6vw,46px); line-height:1.04; letter-spacing:-.02em;
+  font-weight:600; margin:0 0 16px; color:var(--ink); text-wrap:balance}
+h1 .dim{color:var(--muted); font-weight:400}
+.standfirst{font-size:19px; line-height:1.6; color:var(--ink-soft); margin:0; max-width:60ch; text-wrap:pretty}
+.meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:24px}
+.meta span{font-family:var(--mono); font-size:11.5px; letter-spacing:.04em; color:var(--muted);
+  border:1px solid var(--rule); border-radius:2px; padding:4px 9px; background:var(--raised)}
+
+/* ── section rail ── */
+nav{display:none}
+@media(min-width:1000px){
+  nav{display:block; position:sticky; top:0; align-self:start; padding-top:44px; max-height:100vh; overflow-y:auto}
+  nav ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+  nav a{display:grid; grid-template-columns:20px 1fr; gap:9px; font-family:var(--mono); font-size:11.5px;
+    line-height:1.35; color:var(--muted); text-decoration:none; padding:6px 8px; border-radius:3px;
+    border-left:2px solid transparent}
+  nav a:hover{color:var(--ink); background:var(--raised)}
+  nav a .n{color:var(--accent); font-variant-numeric:tabular-nums}
+  nav .grp{font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); opacity:.65; padding:16px 8px 6px}
+}
+main{grid-column:1/-1; padding-top:44px}
+@media(min-width:1000px){ main{grid-column:2} }
+
+/* ── headings ── */
+h2{font-family:var(--mono); font-size:13px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--accent); font-weight:600; margin:64px 0 6px; display:flex; gap:12px; align-items:baseline}
+h2 .n{color:var(--muted); font-variant-numeric:tabular-nums; font-weight:400}
+h2 + .lede{font-size:26px; line-height:1.28; letter-spacing:-.01em; color:var(--ink);
+  margin:0 0 22px; font-family:var(--serif); text-wrap:balance}
+h3{font-family:var(--mono); font-size:15px; font-weight:600; letter-spacing:-.005em;
+  color:var(--ink); margin:38px 0 10px; text-wrap:balance}
+h4{font-family:var(--mono); font-size:12.5px; font-weight:600; letter-spacing:.02em;
+  color:var(--ink-soft); margin:26px 0 8px}
+p{margin:0 0 16px; text-wrap:pretty}
+p:last-child{margin-bottom:0}
+a{color:var(--accent-ink); text-decoration:underline; text-underline-offset:2px;
+  text-decoration-thickness:1px; text-decoration-color:var(--rule)}
+a:hover{text-decoration-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
+strong{font-weight:600; color:var(--ink)}
+em{font-style:italic; color:var(--ink-soft)}
+code{font-family:var(--mono); font-size:.855em; background:var(--sunk); border:1px solid var(--rule-soft);
+  border-radius:3px; padding:1px 5px; color:var(--ink-soft)}
+ul,ol{margin:0 0 16px; padding-left:22px}
+li{margin:0 0 7px}
+li::marker{color:var(--muted)}
+hr{border:0; border-top:1px solid var(--rule); margin:52px 0}
+
+/* ── evidence chips ────────────────────────────────────────────────────────
+   The load-bearing distinction in this document is "we measured this" versus
+   "we propose this". It gets a visual encoding rather than a word. */
+.chip{display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10px;
+  letter-spacing:.14em; text-transform:uppercase; padding:3px 8px; border-radius:2px;
+  vertical-align:middle; white-space:nowrap; border:1px solid}
+.chip.measured{color:var(--alarm); border-color:var(--alarm); background:var(--alarm-soft)}
+.chip.confirmed{color:var(--alarm); border-color:var(--alarm); background:var(--alarm-soft)}
+.chip.proposal{color:var(--amber); border-color:var(--amber); background:var(--amber-soft)}
+.chip.decided{color:var(--accent); border-color:var(--accent); background:var(--accent-soft)}
+h3 .chip{margin-left:8px; position:relative; top:-1px}
+
+/* ── tables ── */
+.tw{overflow-x:auto; margin:0 0 20px; border:1px solid var(--rule); border-radius:4px; background:var(--raised)}
+table{border-collapse:collapse; width:100%; font-family:var(--mono); font-size:12.5px;
+  font-variant-numeric:tabular-nums; line-height:1.5}
+th,td{text-align:left; padding:9px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+thead th{font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
+  font-weight:500; background:var(--sunk); border-bottom:1px solid var(--rule); white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+.bad{color:var(--alarm); font-weight:600}
+.good{color:var(--accent); font-weight:600}
+
+/* ── callouts ── */
+.note{border-left:2px solid var(--accent); background:var(--accent-soft); padding:14px 18px;
+  margin:0 0 20px; border-radius:0 3px 3px 0}
+.note.warn{border-left-color:var(--amber); background:var(--amber-soft)}
+.note p{margin:0 0 10px} .note p:last-child{margin:0}
+.note .lbl{display:block; font-family:var(--mono); font-size:10px; letter-spacing:.15em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:7px}
+
+pre{font-family:var(--mono); font-size:12.5px; line-height:1.6; background:var(--sunk);
+  border:1px solid var(--rule); border-radius:4px; padding:14px 16px; overflow-x:auto; margin:0 0 20px}
+pre code{background:none; border:0; padding:0; color:var(--ink-soft)}
+
+/* ── sprint blocks: the numbering is real, these are dependency-ordered ── */
+.sprint{border:1px solid var(--rule); border-radius:4px; background:var(--raised);
+  padding:20px 22px; margin:0 0 16px; box-shadow:var(--shadow)}
+.sprint > h3{margin:0 0 4px; display:flex; align-items:baseline; gap:11px; flex-wrap:wrap}
+.sprint .sn{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--accent); border:1px solid var(--accent); border-radius:2px; padding:2px 7px}
+.sprint .goal{color:var(--muted); font-family:var(--serif); font-size:16px; font-style:italic;
+  margin:0 0 14px}
+.exit{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); border-top:1px solid var(--rule-soft);
+  padding-top:11px; margin-top:14px}
+.exit b{color:var(--accent); font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:10px}
+
+.foot{margin-top:72px; padding-top:26px; border-top:1px solid var(--rule); color:var(--muted);
+  font-size:15px}
+@media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Shardfall · design plan · session 8</p>
+  <h1>The long plan <span class="dim">— what's broken, and the order to fix it in</span></h1>
+  <p class="standfirst">Eight sessions in, the game is playable, installs offline and plays on three device classes.
+  This plan is what seven parallel research passes and a round of measurement said to do next — starting with
+  three structural faults nobody knew were there.</p>
+  <div class="meta">
+    <span>429 node assertions</span><span>36 browser checks</span><span>24 PWA checks</span>
+    <span>~3,200 lines, one file</span><span>10 sprints</span>
+  </div>
+</header>
+
+<nav aria-label="Sections">
+  <div class="grp">Orientation</div>
+  <ol>
+    <li><a href="#s0"><span class="n">0</span><span>How to start</span></a></li>
+    <li><a href="#s1"><span class="n">1</span><span>Where we are</span></a></li>
+    <li><a href="#s2"><span class="n">2</span><span>The five things that matter</span></a></li>
+  </ol>
+  <div class="grp">Decisions</div>
+  <ol>
+    <li><a href="#s3"><span class="n">3</span><span>Art direction</span></a></li>
+    <li><a href="#s4"><span class="n">4</span><span>Combat maths</span></a></li>
+    <li><a href="#s6"><span class="n">6</span><span>The descent arc</span></a></li>
+  </ol>
+  <div class="grp">Execution</div>
+  <ol>
+    <li><a href="#s5"><span class="n">5</span><span>The sprint plan</span></a></li>
+    <li><a href="#s7"><span class="n">7</span><span>Decisions for Stephen</span></a></li>
+    <li><a href="#s8"><span class="n">8</span><span>What this isn't</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<h2 id="s0"><span class="n">00</span> How to start the next session</h2>
+<p class="lede">Everything green before anything changes.</p>
+<pre><code>cd shardfall
+./test/run.sh          # 429 assertions across 7 suites
+node test/browser.js   # 36 checks in real Chromium
+node test/pwa.js       # 24 checks: offline, save migration
+node test/shots.js     # screenshots — the only way to judge feel
+./design/audit.sh      # regenerate CURRENT-STATE.md from live tables</code></pre>
+<p>Then read <code>CLAUDE.md</code> for the hard rules, then §1 and §2 here, then start Sprint&nbsp;0.</p>
+<div class="note warn">
+  <span class="lbl">Do not start by adding content</span>
+  <p>§2 lists five structural faults, three of them confirmed by measurement. Every one of them
+  makes new content worth less than it looks.</p>
+</div>
+
+<h2 id="s1"><span class="n">01</span> Where we actually are</h2>
+<p class="lede">Playable, tested, and completely unvalidated as a game.</p>
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Content</th><td>62 gems · 12 gear bases · 24 uniques · 19 enemies · 12 affixes · 68 unlocks · 22 attunements · 5 threat tiers · 13 lore fragments</td></tr>
+    <tr><th>Systems</th><td>increased/more damage pools · crit · flat armour · stacking ailments with elemental interactions · telegraphed attacks · boss phases · Focus · socket colours · gem tiers and fusion · the Vault · The Weight · in-run levelling · threat tiers · codex</td></tr>
+    <tr><th>Size</th><td>~3,200 lines in one file, ~150 KB</td></tr>
+    <tr><th>Verified</th><td class="good">logic · offline install · save migration · input on three device classes</td></tr>
+    <tr><th>Not verified</th><td class="bad">feel · difficulty · pacing · whether any of it is fun</td></tr>
+  </tbody>
+</table></div>
+<p>That last row has been true for eight sessions and is still the largest risk in the project.
+Everything below improves the game; none of it substitutes for somebody playing it.</p>
+
+<h2 id="s2"><span class="n">02</span> The five things that actually matter</h2>
+<p class="lede">Ranked by how much they devalue everything else.</p>
+
+<h3>2.1 · The descent has no shape <span class="chip measured">Measured</span></h3>
+<p>Sampling a 40×40 tile block at the middle of each biome band:</p>
+<div class="tw"><table>
+  <thead><tr><th>Biome</th><th class="num">Density param</th><th class="num">Actual air fraction</th></tr></thead>
+  <tbody>
+    <tr><td>surface</td><td class="num">0</td><td class="num">0.507</td></tr>
+    <tr><td><strong>caves</strong></td><td class="num">0.055</td><td class="num bad">0.904</td></tr>
+    <tr><td>fungal</td><td class="num">0.06</td><td class="num">0.381</td></tr>
+    <tr><td>ruins</td><td class="num">0.05</td><td class="num">0.411</td></tr>
+    <tr><td>forge</td><td class="num">0.055</td><td class="num">0.355</td></tr>
+    <tr><td>abyss</td><td class="num">0.045</td><td class="num">0.433</td></tr>
+  </tbody>
+</table></div>
+<p>The caves band is 90% air — an open void, not caves. Then the world abruptly becomes
+<em>more</em> solid and stays flat for the remaining 2,800 tiles. No opening out, no tightening,
+no rhythm. The code comment claims density “grows a touch with depth”; it does the opposite,
+and then does nothing.</p>
+
+<h3>2.2 · Boss phases do nothing <span class="chip confirmed">Confirmed</span></h3>
+<p><code>bossPhase()</code> sets <code>e.pat = next.pat</code>, and <strong><code>e.pat</code> is
+never read anywhere in the file.</strong> The pattern fires once as a burst on transition, then
+the boss reverts to identical behaviour. The comment above it claims <code>e.pat</code> “then
+colors ongoing behaviour”. It does not.</p>
+<p>So the five minibosses are still, functionally, the HP sponges the original handoff complained
+about — now with a roar and a brief invulnerability.</p>
+
+<h3>2.3 · Every telegraph draws the wrong distance <span class="chip measured">Measured</span></h3>
+<p>The whole point of the windup system is that a hit is readable before it lands, and the ground
+marker shows <code>atk.range</code>. But the enemy <em>lunges</em> on the active frame, so real
+reach is <code>range + lunge × act</code>:</p>
+<div class="tw"><table>
+  <thead><tr><th>Enemy</th><th class="num">Marker shows</th><th class="num">Actual reach</th><th class="num">Lie factor</th></tr></thead>
+  <tbody>
+    <tr><td>rockling</td><td class="num">26</td><td class="num">93</td><td class="num bad">3.58×</td></tr>
+    <tr><td>stalker</td><td class="num">24</td><td class="num">79</td><td class="num bad">3.30×</td></tr>
+    <tr><td>wraith</td><td class="num">28</td><td class="num">82</td><td class="num bad">2.94×</td></tr>
+    <tr><td>ember</td><td class="num">22</td><td class="num">64</td><td class="num bad">2.91×</td></tr>
+    <tr><td>voidmaw</td><td class="num">40</td><td class="num">108</td><td class="num bad">2.71×</td></tr>
+    <tr><td colspan="4"><em>all 19 enemies range 1.6× – 3.6×</em></td></tr>
+  </tbody>
+</table></div>
+<p>Standing just outside the marker is not safe on any enemy in the game. This teaches the player
+the wrong thing, which is worse than having no marker at all.</p>
+
+<h3>2.4 · Loot has no depth axis</h3>
+<p><code>mkItem(baseId, rarity)</code> takes no item level. Affix ranges are constant forever, the
+base pool is unlock-gated but not depth-gated, and rarity odds are fixed at the drop site. Only
+<em>shard count</em> scales with depth.</p>
+<p>A sword found at 3,000 m is statistically identical to one found at 50 m — which quietly
+removes the entire reason an ARPG exists.</p>
+
+<h3>2.5 · Everything looks the same because everything is a rectangle</h3>
+<p>Flat quads with a face dot. A rockling and a crawler differ only by hue, and under the depth
+darkness at 1,500 m they differ by almost nothing. This is a <em>fairness</em> problem before it
+is an aesthetic one — you cannot react to a threat you cannot identify.</p>
+
+<hr>
+
+<h2 id="s3"><span class="n">03</span> Art direction <span class="chip decided">Decided</span></h2>
+<p class="lede">Real pixel art, no asset files, no build step.</p>
+
+<h3>Sprites are data, baked once</h3>
+<p>One string per pixel row, characters indexing a palette ramp, baked into offscreen canvases at
+load and blitted thereafter. Runtime cost equals the <code>fillRect</code> it replaces. Adding an
+enemy stays a table entry. Full roster projects to <strong>40–60 KB of readable, diffable
+source</strong>, against a current file of ~150 KB.</p>
+
+<h3>One rig, many skins</h3>
+<p>Dead Cells' real saving wasn't 3D — it was reusing one skeleton across every monster. Its
+artist says that alone “spared me hundred of hours”. We can't ship a 3D pipeline, but we can ship
+that idea: three parametric rigs — humanoid, quadruped, floater — and each of the 19 enemies
+becomes a <code>(rig, proportions, ramp, top-shape, scale)</code> tuple.</p>
+
+<h3>The palette</h3>
+<p>Six five-step ramps plus one reserved player ramp and four accents, with hue rotating warm→cool
+as value drops — which is what stops a ramp reading as one colour at five brightnesses.</p>
+<div class="note">
+  <span class="lbl">The rule that does most of the work</span>
+  <p><strong>Nothing in the game may be cream except the player.</strong> Every terrain and creature
+  ramp tops out at a muted mid-value. In a dark, destructible, visually busy world the eye finds you
+  instantly — and it costs nothing but discipline about which hex values go where.</p>
+</div>
+<p>The research pass built and <em>measured</em> a 63-colour version against the real WCAG luminance
+formula. Its first attempt failed — a rust enemy at 1.14:1 against lit terrain — and the corrected
+version clears 3.92:1 against terrain base and 2.61:1 against the brightest terrain highlight. Use
+the measured values, not the prototype's first pass.</p>
+
+<h3>Silhouette law</h3>
+<p>Every entity family gets a mandatory unique <strong>top-shape</strong> in the top two rows of its
+sprite box, and a unique <strong>ground-contact count</strong>. Player: single tuft, 2 legs. Beast:
+two horns with a gap, 4 legs. Construct: flat overhanging top, 2 wide blocks. Swarm: domed, no top
+feature, 4 thin. Wraith: single tapered spike, floats with a visible gap.</p>
+<p>The test is mechanical: black-fill every sprite and name them. If two read the same, one is
+redundant.</p>
+
+<h3>Animation budget</h3>
+<p>Keyposes first, VFX over frames. Dead Cells is pose-to-pose at 30 fps with interpolation only
+<em>outside</em> keys. A 2-keypose attack with an arc streak, hitstop and a flash reads better than
+an 8-frame attack with none. Budget: idle 2, walk 4, attack 3 (windup / strike / recover), hit 1,
+death 3.</p>
+
+<h2 id="s4"><span class="n">04</span> Combat maths <span class="chip decided">Decided</span></h2>
+<p class="lede">Keep the shape, cap the extremes, split the curves.</p>
+
+<h3>Keep flat armour, but cap it</h3>
+<p><code>max(1, dmg − armor)</code> is the right shape — strong against swarms, weak against one big
+hit — and it's what differentiates Vanguard from Marksman. But unbounded flat subtraction against
+depth-scaled damage inverts at depth.</p>
+<p><strong>Decision:</strong> keep flat subtraction, add a floor of 15% of incoming damage.
+<code>taken = max(dmg × 0.15, dmg − armor)</code>. Armour can remove at most 85% of a hit, ever.</p>
+
+<h3>Split HP and damage scaling <span class="chip proposal">Proposal</span></h3>
+<p>Today <code>depthMul = 1 + depth/900</code> reaches 4.5× at the floor and is applied to HP
+<em>and</em> damage. Linear scaling on both axes degrades time-to-kill and time-to-die together,
+which flattens the curve into a wall. Split them, so deep enemies are <em>tougher</em> rather than
+<em>deadlier</em>:</p>
+<div class="tw"><table>
+  <thead><tr><th class="num">Depth (m)</th><th class="num">HP mult</th><th class="num">Damage mult</th></tr></thead>
+  <tbody>
+    <tr><td class="num">0</td><td class="num">1.00</td><td class="num">1.00</td></tr>
+    <tr><td class="num">400</td><td class="num">1.55</td><td class="num">1.30</td></tr>
+    <tr><td class="num">900</td><td class="num">2.30</td><td class="num">1.65</td></tr>
+    <tr><td class="num">1600</td><td class="num">3.40</td><td class="num">2.05</td></tr>
+    <tr><td class="num">2400</td><td class="num">4.80</td><td class="num">2.45</td></tr>
+    <tr><td class="num">3140</td><td class="num">6.20</td><td class="num">2.80</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Time-to-kill targets</h3>
+<div class="tw"><table>
+  <thead><tr><th>Target</th><th class="num">Hits to kill</th><th class="num">Seconds</th></tr></thead>
+  <tbody>
+    <tr><td>trash grunt</td><td class="num">2–3</td><td class="num">0.8–1.5</td></tr>
+    <tr><td>tough grunt</td><td class="num">5–7</td><td class="num">2.5–4</td></tr>
+    <tr><td>elite</td><td class="num">8–12</td><td class="num">4–7</td></tr>
+    <tr><td>miniboss</td><td class="num">45–70</td><td class="num">40–75</td></tr>
+    <tr><td><strong>player</strong></td><td class="num"><strong>6–9</strong></td><td class="num">—</td></tr>
+  </tbody>
+</table></div>
+<p>Write these as assertions: build a representative loadout at each depth and check TTK lands in
+band. This is the single highest-value test we do not yet have — it's how balance stops being vibes.</p>
+
+<h2 id="s6"><span class="n">06</span> The descent arc <span class="chip proposal">Proposal</span></h2>
+<p class="lede">Tight → open → built → tight → vast.</p>
+<div class="tw"><table>
+  <thead><tr><th>Band</th><th class="num">Depth</th><th>Shape</th><th class="num">Air target</th><th>Identity</th></tr></thead>
+  <tbody>
+    <tr><td>Rim</td><td class="num">0–10</td><td>open sky, safe</td><td class="num">—</td><td>tutorial, camp</td></tr>
+    <tr><td>Caves</td><td class="num">10–340</td><td><strong>tight, winding</strong></td><td class="num">0.42</td><td>teaches dodge</td></tr>
+    <tr><td>Bloom</td><td class="num">340–840</td><td><strong>open caverns, shafts</strong></td><td class="num">0.58</td><td>spore clouds block sight</td></tr>
+    <tr><td>Ruins</td><td class="num">840–1540</td><td><strong>rooms and corridors</strong></td><td class="num">0.48</td><td>flanking; built geometry</td></tr>
+    <tr><td>Forge</td><td class="num">1540–2340</td><td><strong>narrow and hot</strong></td><td class="num">0.36</td><td>heat drains fuel</td></tr>
+    <tr><td>Abyss</td><td class="num">2340–3140</td><td><strong>vast, dark, sparse</strong></td><td class="num">0.62</td><td>your lamp is the only light</td></tr>
+  </tbody>
+</table></div>
+<p>Tension and relief alternate, and the final band is the most open <em>and</em> the most dangerous
+— which is the note to end on. Caves at 0.42 rather than today's 0.90 is the single biggest change.</p>
+
+<hr>
+
+<h2 id="s5"><span class="n">05</span> The sprint plan</h2>
+<p class="lede">Ordered by dependency, not by appeal. Each ends green on all suites.</p>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 0</span> Fix what's broken</h3>
+  <p class="goal">Small, and it comes first because everything else is worth less until it's done.</p>
+  <ol>
+    <li><strong>Telegraph honesty.</strong> Draw the real reach, and cut the worst offenders
+    (rockling 420→260, stalker 460→300) so the tell is readable rather than merely accurate.</li>
+    <li><strong>Boss patterns.</strong> Make <code>e.pat</code> do something, or delete it and stop
+    claiming it does.</li>
+    <li><strong>World shape.</strong> Give the descent the arc in §6.</li>
+    <li><strong>Windup floor.</strong> Human reaction is ~250 ms; several grunts sit at 220 ms and
+    Threat III multiplies windups by 0.8, pushing 11 of 14 below it. Hard floor of 0.26 s after all
+    multipliers; Threat III shortens <em>recovery</em> instead.</li>
+    <li><strong>Add a recovery state.</strong> <em>Tell → punish window → reset</em> is two-thirds
+    built: there's no recovery, so there's no punish window.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — all suites green, plus assertions for marker accuracy, the windup
+  floor, and <code>e.pat</code> actually changing behaviour.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 1</span> Art foundation</h3>
+  <p class="goal">Prove the pipeline on one band before committing the roster.</p>
+  <ol>
+    <li>Port the sprite baker behind the existing <code>drawEntity()</code> seam — player and the
+    four caves-band enemies only.</li>
+    <li>Adopt the WCAG-measured palette. Add a contrast assertion: every actor ramp against every
+    terrain ramp must clear 3:1. A test, not a guideline.</li>
+    <li>Retile terrain with the lit-edge treatment (lit top and left, shadowed base and right).</li>
+    <li>Three parametric rigs, so the remaining 15 enemies are cheap.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — the caves band looks finished; the rest still renders on the rect fallback.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 2</span> Art rollout</h3>
+  <p class="goal">The remaining roster, gear, pickups, POIs and per-biome tile sets.</p>
+  <p class="exit"><b>Exit</b> — black-fill every sprite; all 19 nameable, no two sharing a top-shape within a band.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 3</span> Combat maths and difficulty</h3>
+  <p class="goal">Make balance measurable.</p>
+  <ol>
+    <li>Split HP/damage scaling; armour floor; crit multiplier soft cap at 4.0×.</li>
+    <li>Build the <strong>TTK harness</strong> — assemble a representative build per depth and assert
+    hits-to-kill and hits-to-die land in band.</li>
+    <li>Rebalance Threat tiers against the new curves.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — the TTK harness passes at every depth, for every class.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 4</span> Itemisation with a depth axis</h3>
+  <p class="goal">The missing ARPG spine. A real refactor.</p>
+  <ol>
+    <li><code>mkItem(baseId, rarity, ilvl)</code>, where <code>ilvl</code> derives from drop depth.</li>
+    <li><strong>Affix tiers</strong> — five per affix with ascending ranges, gated by <code>ilvl</code>.</li>
+    <li>Depth-gate base availability; scale rarity odds with depth and Threat.</li>
+    <li>Fewer, better drops: target 8–12 items per run, 2–3 worth a look, 1 worth equipping.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — a 3,000 m item is visibly and statistically better than a 100 m item.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 5</span> Boss and enemy design</h3>
+  <p class="goal">Three real phases, and roles the roster is missing.</p>
+  <ol>
+    <li>Three distinct phases per miniboss, not one burst plus a colour change.</li>
+    <li>The roster over-indexes on rushers; missing are area-denial, a healer/buffer, and a
+    positional threat.</li>
+    <li>Threat-budget per spawn group rather than uniform random, so fights have shape.</li>
+    <li>Audit elite modifiers for the ones that feel unfair.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — every boss fight has three recognisably different phases.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 6</span> Skill, gear and buff depth</h3>
+  <p class="goal">Supports that change a skill's contract, not just its numbers.</p>
+  <ol>
+    <li>Rework supports so each answers “what does this let the skill do that it couldn't?”</li>
+    <li>Audit for soup: 62 gems × 22 attunements × 12 boons × 15 tree nodes is a lot of stacking.
+    Explicit power budgets per source.</li>
+    <li>Build an <strong>archetype validator</strong> — construct each of the 8 target builds
+    headlessly and assert it reaches viable numbers at 1,500 m.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — all 8 archetypes validate, and no build exceeds 1.6× the weakest viable one.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 7</span> Game feel</h3>
+  <p class="goal">Every number here is currently wrong in a specific, measured way.</p>
+  <ol>
+    <li><strong>Screenshake is 5.9% of screen width at max</strong> (16 px on a 272 px view). Hades is
+    0.4%. Cap at 8 px, <code>trauma²</code> decay, distance falloff — and stop shaking on ordinary
+    hits. In Hades only 3 of 207 enemies shake the screen on death, all explosive.</li>
+    <li><strong>Add player-damage hitstop.</strong> Hades gives ~10–40 ms at 10% speed for dealing
+    damage and ~140 ms at 1% for taking it. We have none. Highest-value single feel change available.</li>
+    <li>Rewrite hitstop as a time-scale system — the impact frame must play at full speed
+    <em>before</em> the freeze, and the freeze must never be a hard zero.</li>
+    <li><strong>Buffer and forgiveness timers must run on unscaled time.</strong> A 160 ms hitstop
+    currently eats the entire 120 ms jump buffer.</li>
+    <li>Widen the camera toward 22 tiles. At 17 the player is 13% of screen height — twice Celeste's
+    ratio, in a game with flight and ranged enemies. <em>Prototype first; it changes engagement
+    ranges.</em></li>
+    <li>Coalesce damage numbers by source; never float one for damage <em>taken</em>.</li>
+    <li>Voice budget 6 → 16 with per-class caps, a compressor, and panning by screen position.</li>
+    <li><code>prefers-reduced-motion</code>, intensity sliders, and Okabe–Ito damage colours — which
+    work because they vary luminance, not just hue, so it's a palette swap rather than a redesign.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — shot-for-shot comparisons, and a feel checklist in the handoff.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 8</span> World structure</h3>
+  <p class="goal">A descent you can feel the shape of with the HUD off.</p>
+  <ol>
+    <li>Implement the §6 arc.</li>
+    <li>Room templates stamped into the noise. Spelunky ships a small template set and gets enormous
+    variety from placement; we have none.</li>
+    <li>A hazard and a traversal rule unique to each band, so a biome isn't a palette swap.</li>
+    <li>Signposting so secrets are findable rather than lucky.</li>
+  </ol>
+  <p class="exit"><b>Exit</b> — a blind descent has a felt rhythm.</p>
+</div>
+
+<div class="sprint">
+  <h3><span class="sn">Sprint 9</span> Content wave 2, then ship</h3>
+  <p class="goal">Fill the gaps the archetype validator exposes, tune against the TTK harness, release.</p>
+</div>
+
+<hr>
+
+<h2 id="s7"><span class="n">07</span> Decisions for Stephen</h2>
+<p class="lede">Five forks where my recommendation shouldn't be the last word.</p>
+<ol>
+  <li><strong>Camera width.</strong> Research says 17 tiles is roughly half what a game with flight
+  and ranged enemies wants. But widening changes every engagement range.
+  <em>Recommendation: dynamic — 17 at rest, 22 when moving fast.</em></li>
+  <li><strong>Art scope.</strong> The roster is ~2 sprints. Worth it now, or ship mechanics first?
+  <em>Recommendation: now. Everything else is invisible until the game reads.</em></li>
+  <li><strong>How hard should this be?</strong> 6–9 hits to die is Hades-ish; 3–4 would be Dead
+  Cells-ish. <em>Recommendation: 6–9, because flight and destructible terrain give you more ways to
+  make mistakes.</em></li>
+  <li><strong>Does the Vault stay?</strong> It's the one thing softening the roguelite loop. Built
+  and working — but the first thing to cut if art and feel work make the game easier.</li>
+  <li><strong>Sky Wolf Studios.</strong> Shardfall hasn't been raised with the Director. If it joins
+  the sunbeams economy, shards need a conversion story — and that's a Sprint 4 dependency, not an
+  afterthought.</li>
+</ol>
+
+<h2 id="s8"><span class="n">08</span> What this plan is not</h2>
+<p class="lede">It is not a promise that the game will be good.</p>
+<p>Every number here is either sourced from a shipped game or marked as a proposal, and none of it
+has been tested against a person playing <em>this</em> game. The plan's own §1 says the largest risk
+is that nobody has played it, and nine sprints of work do not change that.</p>
+<div class="note">
+  <span class="lbl">The highest-value thing that could happen next</span>
+  <p>Somebody spends ten minutes with it on a phone and writes down what felt bad.</p>
+</div>
+
+<p class="foot">Shardfall · <code>design/PLAN.md</code> · companion files <code>CURRENT-STATE.md</code>
+(generated), <code>RESEARCH.md</code> (sourced evidence), <code>art-prototype.html</code> (the visual
+spec, rendered).</p>
+
+</main>
+</div>

@@ -9,6 +9,7 @@ Planning and reference material. None of it ships — the game is still just `..
 | [RESEARCH.md](RESEARCH.md) | 1,500 lines of sourced research across seven lenses. | Don't read front to back. Search it when a decision needs justifying. |
 | [art-prototype.html](art-prototype.html) | The visual spec, rendered: palette, before/after, silhouette test, in-context. | Open it in a browser. |
 | [audit.js](audit.js) / [audit.sh](audit.sh) | Generator for CURRENT-STATE.md. | `./design/audit.sh` |
+| [plan-page.html](plan-page.html) | PLAN.md as a readable page, for reviewing away from the machine. | Published at claude.ai/code/artifact/1ede0937-a506-4268-97d3-c71f8773f71c |
 
 ## Why CURRENT-STATE.md is generated
 
