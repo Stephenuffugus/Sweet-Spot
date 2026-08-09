@@ -13,6 +13,14 @@ Read `CLAUDE.md` first (rules + testing). This file is the map. `DESIGN-PLAN.md`
 
 ## 0. The one thing to do first
 
+> **Session 8 wrote `design/PLAN.md`.** It measured three structural faults that were not
+> previously known — the descent has no shape (the caves band is 90% air, and density does not
+> vary meaningfully after it), boss phase patterns are written and never read, and every enemy's
+> telegraph marker understates its real reach by 1.6–3.6×. Read that plan before building
+> anything; it reorders the roadmap below.
+
+
+
 **Play it on an actual phone.** It has now been rendered and driven in headless Chromium, and
 `test/shots.js` writes screenshots of staged moments — but nobody has yet held it in one hand
 with a thumb on the buttons. Everything about pacing, button reach and difficulty is judged

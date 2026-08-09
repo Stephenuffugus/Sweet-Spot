@@ -1,7 +1,11 @@
 # CLAUDE.md — SHARDFALL
 
-Read this before touching anything. Then read `HANDOFF.md` for the system-by-system map and
-`DESIGN-PLAN.md` for where the game is going.
+Read this before touching anything. Then:
+- **`design/PLAN.md`** — the long plan, and what to do next. Start there.
+- `HANDOFF.md` — the system-by-system map of what exists.
+- `design/CURRENT-STATE.md` — every live table as real numbers (generated; run `design/audit.sh`).
+- `design/RESEARCH.md` — sourced evidence behind the plan's decisions. Search it, don't read it.
+- `DESIGN-PLAN.md` — the original design reasoning from sessions 1–7. Historical.
 
 ## What this is
 
