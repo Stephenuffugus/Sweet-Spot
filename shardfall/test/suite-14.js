@@ -362,5 +362,31 @@ console.log('\n-- pockets --');
   }
 }
 
+// ---------- THE MASTER ARENA ----------
+console.log('\n-- the master arena --');
+{
+  CHUNKS.clear();
+  getChunk(16, 65); getChunk(17, 65); getChunk(16, 66); getChunk(17, 66);
+  let air = 0; for (let y = 3151; y <= 3167; y++) for (let x = 781; x <= 818; x++) if (getTile(x, y) === 0) air++;
+  A(air > 500, 'the arena interior is open (' + air + ' air tiles)');
+  A(getTile(800, 3168) === 3, 'the glyph slab is bedrock — nothing deletes the ending');
+  A(getTile(778, 3158) === 7 && getTile(821, 3158) === 7, 'the wall ring stands');
+  A(getTile(799, 3148) === 0, 'the entrance is open before the wake');
+  // the bare-room law: those chunks carry no POI spawns
+  for (const [cx, cy] of [[16, 65], [17, 65], [16, 66], [17, 66]]) {
+    const c = getChunk(cx, cy);
+    A(!c.spawns.some(x => x.type === 'chest' || x.type === 'shrine' || x.type === 'vent' || x.type === 'voidmaw'),
+      '(' + cx + ',' + cy + ') is bare — the room\'s reward is the ending');
+  }
+  // solidity is boss-strand property: identical under every other strand's reroll
+  const sig = () => { let g = ''; for (let y = 3148; y <= 3171; y += 2) for (let x = 778; x <= 821; x += 2) g += (getTile(x, y) === 0 ? 0 : 1); return g };
+  const base = sig(); const saved = {};
+  for (const k of ['poi', 'ore', 'spawn', 'flux']) { saved[k] = WEAVE[k]; WEAVE[k] = (WEAVE[k] ^ 0xBEEF11) >>> 0 }
+  CHUNKS.clear(); getChunk(16, 65); getChunk(17, 65); getChunk(16, 66); getChunk(17, 66);
+  A(sig() === base, 'the arena ignores poi/ore/spawn/flux rerolls (boss-strand charter)');
+  for (const k in saved) WEAVE[k] = saved[k];
+  CHUNKS.clear();
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

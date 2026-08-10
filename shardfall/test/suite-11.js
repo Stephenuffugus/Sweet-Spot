@@ -512,5 +512,70 @@ console.log('\n-- the bench --');
     A((ENEMIES[sp].pack || 0) >= 2, sp + ' is written as a pack species');
 }
 
+// ---------- THE WEFT'S TOOLS ----------
+console.log('\n-- press and seal --');
+{
+  // stage the fight in the real arena so seal's interior checks hold
+  META.cls = 'vanguard'; newRun();
+  P.x = MG.tx * TILE; P.y = (MG.ty - 6) * TILE; P.vx = 0; P.vy = 0; P.noFall = 99; P.dead = false; P.hp = P.maxhp; P.inv = 999;
+  getChunk(16, 65); getChunk(17, 65); getChunk(16, 66); getChunk(17, 66);
+  EN.length = 0; HAZ.length = 0; SPAWNQ.length = 0;
+  const w = mkEnemy('weft', P.x, P.y - 60, null, threat(), null); EN.push(w);
+  w.pats = ['press']; w.acd = 99; w.scd = 99; w.spd = 0;
+  // press: the lock paints a harmless mark ON the player...
+  for (let i = 0; i < 400 && !HAZ.some(h => h.kind === 'mark'); i++) upEnemies(DT);
+  const mk = HAZ.find(h => h.kind === 'mark');
+  A(!!mk && mk.dmg === 0, 'the press paints a harmless mark first');
+  A(Math.abs(mk.x - P.x) < 2 && Math.abs(mk.y - P.y) < 2, 'exactly where you are standing');
+  // ...and the strike lands at the LOCK even after you leave
+  const lx = mk.x; P.x += 300;
+  for (let i = 0; i < 120 && !HAZ.some(h => h.kind === 'shock' && !h.friendly); i++) upEnemies(DT);
+  const st2 = HAZ.find(h => h.kind === 'shock' && !h.friendly);
+  A(!!st2 && Math.abs(st2.x - lx) < 2, 'the press lands where you WERE — moving is the counterplay');
+  A(st2.dmg > 0, 'and it is not friendly-neutered');
+  // a dead weft's pending press never lands
+  P.x = MG.tx * TILE; HAZ.length = 0; w.prT = 0;
+  for (let i = 0; i < 400 && !(w.prT > 0); i++) upEnemies(DT);
+  A(w.prT > 0, 'a press is pending');
+  w.hp = 0;
+  for (let i = 0; i < 120; i++) upEnemies(DT);
+  A(!HAZ.some(h => h.kind === 'shock' && !h.friendly && h.dmg > 0), "a corpse's press never lands");
+  // seal: marks pockets, then puts the rock back — but never the tile under you
+  EN.length = 0; HAZ.length = 0;
+  const w2 = mkEnemy('weft', P.x, P.y - 60, null, threat(), null); EN.push(w2);
+  w2.pats = ['seal']; w2.acd = 99; w2.scd = 99; w2.spd = 0; w2.hp = w2.maxhp;
+  let solid0 = 0; for (let y = 3150; y <= 3168; y++) for (let x = 780; x <= 819; x++) if (getTile(x, y) !== 0) solid0++;
+  for (let i = 0; i < 60 * 12 && !(w2.sq && w2.sq.length === 0 && HAZ.some(h => h.kind === 'shock')); i++) upEnemies(DT);
+  let solid1 = 0; for (let y = 3150; y <= 3168; y++) for (let x = 780; x <= 819; x++) if (getTile(x, y) !== 0) solid1++;
+  A(solid1 > solid0, 'the seal puts rock back (' + solid0 + ' -> ' + solid1 + ' solid tiles)');
+  A(getTile(Math.floor(P.x / TILE), Math.floor(P.y / TILE)) === 0, 'and the tile under you is NEVER filled');
+  // pending marks die with the body, terrain untouched
+  w2.sq = [{ tx: 790, ty: 3155, t: 0.5 }]; w2.hp = 0;
+  const t0 = getTile(790, 3155) + getTile(791, 3155) + getTile(792, 3155);
+  for (let i = 0; i < 90; i++) upEnemies(DT);
+  A(getTile(790, 3155) + getTile(791, 3155) + getTile(792, 3155) === t0, 'a dead weft seals nothing');
+  // budget: a minute of the full kit stays inside the caps
+  EN.length = 0; HAZ.length = 0;
+  const w3 = mkEnemy('weft', P.x, P.y - 60, null, threat(), null); EN.push(w3);
+  w3.pats = ['press', 'seal', 'summon']; w3.acd = 99; w3.scd = 99;
+  let bad = 0;
+  for (let i = 0; i < 60 * 60; i++) { upEnemies(DT); upHaz(DT); flushSpawns();
+    if (HAZ.length > HAZ_MAX || !isFinite(w3.hp)) bad++ }
+  A(bad === 0, 'sixty seconds of the full kit stays inside every cap');
+  EN.length = 0; HAZ.length = 0; P.inv = 0;
+}
+{ // the witness appears only in remade worlds
+  META.echoLv = 0; refreshEcho(); CHUNKS.clear();
+  let at0 = 0, at3 = 0;
+  for (let cx = 4; cx < 30; cx++) for (let cy = 61; cy < 65; cy++)
+    at0 += genChunk(cx, cy).spawns.filter(x => x.type === 'witness').length;
+  META.echoLv = 3; refreshEcho(); CHUNKS.clear();
+  for (let cx = 4; cx < 30; cx++) for (let cy = 61; cy < 65; cy++)
+    at3 += genChunk(cx, cy).spawns.filter(x => x.type === 'witness').length;
+  A(at0 === 0, 'no witness in an unremade world');
+  A(at3 >= 1, 'the witness arrives at Echo III (' + at3 + ' found)');
+  META.echoLv = 0; refreshEcho(); CHUNKS.clear();
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

@@ -237,6 +237,7 @@ console.log('\n-- the escape --');
   DISSONANCE = 120;
   const s0 = META.shards, t0 = META.maxThreat || 0, e0 = META.escapes || 0;
   runDepth = 1500; WOVEN = 3;
+  MGS = 2;   // the endings gate on the felled Weft now; the alias stamps it for stale callers
   doEscape();
   A((META.escapes || 0) === e0 + 1, 'escaping is recorded');
   A(META.shards > s0, 'and tears loose a payout');

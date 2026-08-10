@@ -287,7 +287,7 @@ META.cls = 'vanguard'; newRun(); OFF(1000);
   A(mine <= 4, 'and it is capped, so a long fight cannot bury you in adds (' + mine + ')');
 }
 { // every named pattern must be implemented — a phase that names a pattern nothing handles is a lie
-  const impl = ['slam', 'volley', 'spores', 'firewall', 'summon', 'beam', 'devour'];
+  const impl = ['slam', 'volley', 'spores', 'firewall', 'summon', 'beam', 'devour', 'press', 'seal'];
   let unhandled = [];
   for (const id in ENEMIES) { const E = ENEMIES[id]; if (!E.ph) continue;
     for (const p of E.ph) if (impl.indexOf(p.pat) < 0) unhandled.push(id + ':' + p.pat) }
@@ -357,6 +357,22 @@ console.log('\n-- integrity --');
   A(bad === 0, 'a fully tiered Threat V build produces finite numbers everywhere');
   A(ATK.melee.critMult <= CRIT_SOFT + 2, 'and its crit multiplier is still capped');
   META.threat = 0;
+}
+
+// ---------- THE WEFT: the hits band is the truth ----------
+console.log('\n-- the weft --');
+{
+  // reference band-5 build; tune ENEMIES.weft.hp ONLY if this drifts
+  const at = build('vanguard', BANDS[BANDS.length - 1]);
+  NOCRIT();
+  const liveHP = ENEMIES.weft.hp * depthHP(MG.ty * TILE);
+  const perHit = Math.max(1, ATK.melee.dmg - ENEMIES.weft.arm);
+  const H = Math.ceil(liveHP / perHit);
+  console.log('   weft live hp ' + Math.round(liveHP) + ', reference per-hit ' + perHit.toFixed(0) + ' -> ' + H + ' hits');
+  A(H >= 90 && H <= 320, 'the weft dies in the designed band (' + H + ' hits, want 90-320)');
+  A(atkReach(ENEMIES.weft.atk) <= 105, 'the weft honors the boss reach cap');
+  const press = applyArmor(34 * depthDmg(MG.ty * TILE) * 1.1, P.armor || 0);
+  A(press < P.maxhp * 0.55, 'the press stays under the boss-heavy clamp (' + press.toFixed(0) + ' vs ' + (P.maxhp * 0.55).toFixed(0) + ')');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

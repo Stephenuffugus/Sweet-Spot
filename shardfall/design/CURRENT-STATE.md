@@ -69,6 +69,8 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | sentinel **(boss)** | 700 | 25 | 40 | 10 | 26x32 | walk | 0.44 | 0.2 | 2 | 240 | cd 1.4 dmg 14 x2 r460 | 75 |
 | forgelord **(boss)** | 900 | 30 | 44 | 8 | 32x34 | walk | 0.46 | 0.22 | 2 | 250 | cd 2 dmg 16 x3 r420 | 100 |
 | voidmaw **(boss)** | 1200 | 26 | 76 | 6 | 34x30 | fly | 0.36 | 0.18 | 1.8 | 300 | cd 1.2 dmg 16 x4 r480 | 140 |
+| weft **(boss)** | 2000 | 34 | 52 | 12 | 38x36 | fly | 0.52 | 0.2 | 2.2 | 300 | cd 2.2 dmg 15 x3 r500 | 220 |
+| witness **(boss)** | 1500 | 28 | 60 | 6 | 26x34 | fly | 0.46 | 0.18 | 2 | 280 | cd 1.6 dmg 15 x2 r520 | 170 |
 
 ### Depth scaling
 
@@ -493,14 +495,14 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | gems | 108 |
 | gear bases | 17 |
 | uniques | 34 |
-| enemies | 38 |
+| enemies | 40 |
 | affixes | 16 |
 | unlocks | 119 |
 | tree nodes | 15 |
 | boons | 21 |
 | attunements | 29 |
 | threat tiers | 6 |
-| lore fragments | 16 |
+| lore fragments | 19 |
 | modifier affixes | 17 |
 | elite modifiers | 11 |
 | room templates | 15 |

@@ -298,6 +298,7 @@ const RAMPS={
  void:  ['#a89af0','#7c6cc9','#574a97','#383066','#211c3d'],
  bone:  ['#bfb595','#9c9276','#746b55','#4f4839','#2e2a21'],
  rot:   ['#a8c07a','#7f9455','#5c6b3b','#3e4726','#252b15'],
+ seam:  ['#6ec4bc','#4f9da1','#3a747f','#2b525f','#1d3440'],  // shard-teal cooling to depth-blue — the Weft wears the seam
  // RESERVED — the player only. Nothing else may use this ramp, which is the whole reason the
  // eye finds you instantly in a dark, busy, destructible world.
  hero:  ['#f4ecd8','#cfc4a8','#a1957a','#6d6350','#3d3830'],
@@ -525,6 +526,23 @@ const SPR={
   '....oooooo....','...oo....oo...','..o11o..o11o..','..o12o..o21o..','.o112o..o211o.','.o122oooo221o.','.o1223333221o.','..o12233221o..','...o122321o...','....o1221o....','.....o12o.....','.....o2o......','......o2o.....','..............','..............'],[
   '....oooooo....','...oo....oo...','..o11o..o11o..','..o12o..o21o..','.o112o..o211o.','.o122oooo221o.','.o1223333221o.','..o12233221o..','...o122321o...','....o1221o....','.....o12o.....','......o2o.....','.......o2o....','..............','..............']]},
  // ---- MINIBOSSES: same laws, bigger, with an accent that names them ----
+ weft:{r:'seam',f:[[
+  '................................','................................','................................',
+  '.............oooooo.............','........ooooo222222ooooo........','......oo2222222222333333oo......',
+  '....oo22222222223333333333oo....','...o222222222223333333333334o...','..o222222222SSSSSSSS333333444o..',
+  '..o22222222SS33BB33SS33344444o..','.o222222223SS33BB33SS344444444o.','..o22222333SS333333SS44444444o..',
+  '..o222333333SSSSSSSS444444444o..','...o233333333333344444444444o...','....oo33333333334444444444oo....',
+  '......oo3333334444444444oo......','........ooooo444444ooooo........','........4....oooooo....4........',
+  '........4.......4......4........','........4.......4......4........','........4.......4......4........',
+  '........o.......4......4........','........4.......4......4........','........4.......4......4........',
+  '........o.......4......o........','................4......4........','................S......4........',
+  '................4......o........','................4...............','................4...............',
+  '................o...............','................................','................................',
+  '................................','................................','................................',
+  '................................','................................']]},
+ witness:{r:'void',f:[[
+  '..........o...........','.........o1o..........','.........o1o..........','........o112o.........','........o112o.........','.......o11223o........','.......o11223o........','......o1122334o.......','.....o112233443o......','....o11223344433o.....','...o1122334444332o....','..o112233SSSS44332o...','..o12233SS33SS4433o...','.o1223344S33S544433o..','.o12233445SS5544433o..','.o1223344555554443 o..','.o1223344555554443o...','..o12233445554443o....','..o1223344555443o.....','...o12233445443o......','....o122334443o.......','.....o12233443o.......','......o122334o........','......o12233o.........','.......o1223o.........','.......o122o..........','........o12o..........','........o22o..........','.........o2o..........','.........o3o..........','..........o...........','......................','......................','......................','......................','......................']]},
+
  warden:{r:'dirt',f:[['..o..oooooooooooo..o....','.o1oo1111111111111oo1o..','o112211GG111111GG112211.','o1122111111111111112211.','.o11222222222222222211o.','.o1122233333333332221o..','o11222333444444433322211','o12233344444444443332221','o12233444444444444433221','o1223344o........o443321','o1223344o........o443321','o12233444444444444433221','o1223344444444444443321o','o122334444444444443321o.','o12233444444444443321o..','o1223344444444443321o...','o122334444444443321o....','o1223o4444444o3321o.....','o1233o444444o43321o.....','o2344o4444o443321o......','o3455o44oo4443321o......','o455oo4o..o443321o......','oo45o.o....oo4321o......','.ooo.........ooooo......','........................','........................','........................','........................','........................','........................']]},
  sporemother:{r:'fungal',f:[[
   '....o..o..oo..o..o....','...o1oo1oo1221oo1oo1o.','..o1122334444332211o..',
@@ -1195,6 +1213,19 @@ const ENEMIES={
    atk:{cd:1.8,range:40,wind:.36,act:.18,rec:.26,kb:260,lunge:300},
    shoot:{cd:1.2,dmg:16,speed:300,count:4,spread:.7,col:'#a08fff',range:480,st:{chill:0.6},wind:.34},
    ph:[{at:.66,pat:'volley'},{at:.33,pat:'devour'}]},
+ // THE WEFT — the thing that has been mending the world around you. Fought at the master
+ // glyph only; never rostered, never arena-stamped by BIOME_BOSS. `end:1` = killing it opens
+ // the ending choice (consumed once in killEnemy, keyed off the field, never the id).
+ weft:{hp:2000,dmg:34,spd:52,w:38,h:36,ai:'fly',c:'#3fc9c1',shards:220,boss:1,arm:12,phase:1,end:1,
+   atk:{cd:2.2,range:44,wind:.52,act:.20,rec:.40,kb:340,lunge:300},
+   shoot:{cd:2.2,dmg:15,speed:320,count:3,spread:.26,col:'#3fc9c1',range:500,wind:.42,st:{shock:1.25}},
+   ph:[{at:.70,pat:'press'},{at:.45,pat:'seal'},{at:.20,pat:'summon'}]},
+ // THE WITNESS — the sixth knot, not on any map. Appears only in worlds remade often enough
+ // to need checking (Echo III+). Reuses shipped patterns only.
+ witness:{hp:1500,dmg:28,spd:60,w:26,h:34,ai:'fly',c:'#a89af0',shards:170,boss:1,arm:6,phase:1,
+   atk:{cd:2.0,range:40,wind:.46,act:.18,rec:.32,kb:280,lunge:280},
+   shoot:{cd:1.6,dmg:15,speed:340,count:2,spread:.18,col:'#a89af0',range:520,wind:.40,st:{shock:1.25}},
+   ph:[{at:.66,pat:'beam'},{at:.33,pat:'devour'}]},
 };
 // STATUS EFFECTS — generic, applies to enemies AND the player.
 //   stack:1 => independent instances up to STACK_MAX, each with its own timer (rewards attack
@@ -1256,6 +1287,13 @@ function eliteFor(E){
   return true});
  return ok.length?ok[ri(0,ok.length-1)]:null}
 const BIOME_BOSS={caves:'warden',fungal:'sporemother',ruins:'sentinel',forge:'forgelord',abyss:'voidmaw'};
+// The five Knots, one source of truth (R9): MEND's gate names exactly these — weft and
+// witness enter META.bosses but can never satisfy it.
+const KNOTS=Object.values(BIOME_BOSS);
+const allKnots=m=>KNOTS.every(b=>(m.bosses||{})[b]);
+// THE MASTER GLYPH — fixed, not hashed: the glyph is the SEED; its address does not reroll.
+// Straight below the camp. "Look down the shaft at night and you can see the glow."
+const MG={tx:CAMP_X,ty:3170};
 // META TREE: 3 branches (Might/Cunning/Sorcery), 5 nodes each. All fx are ADDITIVE (`increased`).
 const TREE=[
  {id:'m1',br:'Might',  n:'+10% melee dmg',   cost:20, fx:{meleeDmg:.10}},
@@ -1516,6 +1554,20 @@ going down. The ones who keep going are the ones this game is actually about.`,b
 It phases, it chills, it comes apart and reassembles slightly wrong, and it is the last thing
 between a delver and whatever is actually down there. Killing it does not open anything.
 It just means you get to keep going.`,boss:1},
+  weft:{n:'The Weft',d:`The shuttle. The thing the strands are pulled through, still running
+the loom nine hundred years after the loom stopped being a sky.
+
+Every wall that healed behind you, every chunk that forgot your digging, every time the deep
+felt watched — that was not the world. That was maintenance. It does not hate you. You are a
+tear, and it closes tears.
+
+It has never once been interrupted at its work. Be the first.`,boss:1},
+  witness:{n:'The Witness',d:`There is no record of it because it is the thing that keeps the
+records.
+
+It stands in none of the strata. It arrives when the world has been remade often enough to
+need checking, and it checks. Delvers who descend into their sixth or seventh rewritten world
+report being read — not watched, read — and the guild has stopped correcting the verb.`,boss:1},
  },
  // Fragments, found in the world. Depth-gated so the story arrives roughly in order.
  frag:[
@@ -1591,6 +1643,13 @@ Every lamp in the camp. Every gem in your axe. Nine hundred years of us cutting 
 and carrying them up into the light and wiring our whole world to them.
 
 It has been very patient.`},
+  {id:'f14',depth:3100,n:'Scored into the glyph slab',d:`Not words. Tally marks.
+
+Whatever kept the glyph did not read it. It counted against it — checked the world against the
+figure, stroke by stroke, and mended every place the two disagreed. You have felt it do this.
+You have been one of the places.
+
+The marks stop mid-row.`},
   {id:'escape',depth:-1,n:'What you wrote',d:`You reached the bottom, which does not exist,
 and found it was not a floor but a surface — the outside of the thing, seen from inside.
 
@@ -1608,6 +1667,37 @@ Nine hundred years of us cutting pieces off it and carrying them into the light,
 out the pieces were the point. Not the shards. Us. We were the part that got planted.
 
 You have escaped exactly as far as the inside of a thing that is still growing.
+
+Descend again.`},
+  {id:'mended',depth:-1,n:'What you mended',d:`You stood on the outside of the thing, which is
+the bottom of the world, and you did not write a way out.
+
+You wrote the sky.
+
+Six symbols is not enough to describe a sky, but it turns out it does not need describing. It
+needs permission. Every knot you cut on the way down was a hand letting go of a rope, and when
+the last one let go the whole weight of heaven remembered where it used to hang.
+
+The camp woke to a colour nobody had a name for, because the last person with the name died
+eight hundred years ago.
+
+It is not finished. It may never be finished. But the shaft is closing, slowly, from the
+bottom, like a wound that has finally been left alone.
+
+Descend while you still can.`},
+  {id:'usurped',depth:-1,n:'What you became',d:`The glyph was never a lock. It was a signature.
+
+You read it, all six symbols, and you understood that the thing below had signed the world the
+way a mason signs a foundation stone — once, at the bottom, where nobody argues.
+
+So you wrote your name over it.
+
+The rock agreed. The rock has to. That is what you are now: the thing it agrees with. The
+Weight does not come for you anymore, because the Weight reports to you, and somewhere very
+far down, something that was patient for nine hundred years has begun, for the first time, to
+wait.
+
+The world re-forms harder. You would not have it any other way.
 
 Descend again.`},
  ],
@@ -2074,6 +2164,7 @@ const TIPS=[
  {id:'collect',ev:'unique',msg:()=>'The codex keeps a collection. What you have seen, and the shape of what you have not'},           // copy: story spec ratifies
 ];
 let TIP=null,TIPQ=[],TIPHm=false,TIPHr=false;
+let MGS=0,MGSEAT=0;   // master glyph: 0 dormant, 1 woken, 2 felled — run-scoped
 const BANDCTX={bn:''};   // reusable ctx for the per-frame band hook (no-alloc convention)
 function bossNear(){for(const e of EN)if(e.boss&&e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<560)return true;return false}
 function tipEv(ev,ctx){if(!SET.hints)return;
@@ -2218,7 +2309,25 @@ function genChunk(cx,cy){
  if(cy*CHUNK> SURFACE-4){
   const SH=BSHAPE[B0[1]]||{};
   // ---- ROOMS ----
-  if(SH.rooms&&hashS('terrain',cx*29+3,cy*29+11)<SH.rooms){
+  // ---- THE MASTER ARENA ---- fixed at MG, boss-strand charter (the one strand allowed to
+  // shape rock). Deterministic writes, zero stream draws — dissonance churn rebuilds it
+  // bit-identically. Chunks touching it stay bare: the room's reward is the ending.
+  const inMG=cx>=16&&cx<=17&&cy>=65&&cy<=66;
+  if(inMG){
+   const x0=Math.max(778,cx*CHUNK),x1=Math.min(821,cx*CHUNK+CHUNK-1);
+   const y0=Math.max(3148,cy*CHUNK),y1=Math.min(3171,cy*CHUNK+CHUNK-1);
+   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const edge=(x<=779||x>=820||y<=3149||y>=3169);
+    let v=edge?7:0;
+    if(y===3168&&x>=794&&x<=805)v=3;                  // the glyph slab — bedrock; Quake cannot delete the ending
+    if(y<=3149&&y>=3148&&x>=797&&x<=802)v=0;          // the entrance: you drop in from the shaft
+    t[(y-cy*CHUNK)*CHUNK+(x-cx*CHUNK)]=v}
+   // two pillars (press/beam cover) — positional boss-strand hash so both chunks agree
+   const po=8+Math.floor(hashS('boss',MG.tx,MG.ty)*5);
+   for(const px of [800-po,800+po])
+    for(let y=3164;y<=3167;y++)for(let x=px;x<px+2;x++)
+     if(x>=x0&&x<=x1&&y>=y0&&y<=y1)t[(y-cy*CHUNK)*CHUNK+(x-cx*CHUNK)]=7}
+  if(!inMG&&SH.rooms&&hashS('terrain',cx*29+3,cy*29+11)<SH.rooms){
    const pool=ROOMS.filter(Rm=>!Rm.b||Rm.b===B0[1]);
    if(pool.length){
     const R=pool[Math.floor(hashS('terrain',cx*31+5,cy*31+7)*pool.length)%pool.length].g;
@@ -2230,7 +2339,7 @@ function genChunk(cx,cy){
       if(ch==='#'||ch==='=')t[idx]=B0[2];else if(ch==='.')t[idx]=0}}}}
   // ---- VENTS ---- a fixed feature of the band that makes the FLOOR the thing you read.
   // Structural, so it comes from the terrain strand and survives a cache reroll.
-  if(SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<(SH.ventP||0.42)){
+  if(!inMG&&SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<(SH.ventP||0.42)){
    for(let tr=0;tr<12;tr++){const lx=rS('terrain',2,CHUNK-3),ly=rS('terrain',2,CHUNK-3);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'vent',vent:SH.vent});break}}}
@@ -2273,13 +2382,13 @@ function genChunk(cx,cy){
     spawns.push({x:tx*TILE+(q?rS('spawn',-26,26):0),y:ty*TILE-(q?rS('spawn',0,10):0),type:pick.ty,pk:q?1:0})
   }
   // treasure chest POI: rare, needs a floor cavity
-  if(hashS('poi',cx*7+5,cy*7+3)<0.12){
+  if(!inMG&&hashS('poi',cx*7+5,cy*7+3)<0.12){
    for(let tr=0;tr<14;tr++){const lx=rS('poi',2,CHUNK-3),ly=rS('poi',2,CHUNK-3);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0&&t[(ly-1)*CHUNK+lx]===0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'chest'});break}}}
   // SHRINE POI: needs a cavity that is already there. It used to carve its own, which made
   // the cache strand an editor of the rock.
-  if(hashS('poi',cx*11+2,cy*11+9)<0.18){
+  if(!inMG&&hashS('poi',cx*11+2,cy*11+9)<0.18){
    for(let tr=0;tr<22;tr++){const lx=rS('poi',3,CHUNK-4),ly=rS('poi',3,CHUNK-4);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0&&t[(ly-1)*CHUNK+lx]===0
       &&t[ly*CHUNK+lx-1]===0&&t[ly*CHUNK+lx+1]===0){
@@ -2287,7 +2396,7 @@ function genChunk(cx,cy){
   // SEALED VAULT: hard-walled room w/ chest inside. Needs a digger (axe) or Fireball to crack.
   // The ROOM is terrain — it is a built place, part of the shape of the world. Only what is
   // inside it belongs to the cache strand.
-  if(hashS('terrain',cx*13+7,cy*13+4)<0.10){
+  if(!inMG&&hashS('terrain',cx*13+7,cy*13+4)<0.10){
    const rw=rS('terrain',9,13),rh=rS('terrain',6,8),lx=rS('terrain',3,CHUNK-rw-3),ly=rS('terrain',3,CHUNK-rh-3);
    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     const edge=(x===0||y===0||x===rw-1||y===rh-1);
@@ -2296,7 +2405,7 @@ function genChunk(cx,cy){
    if(cS('poi',.5))spawns.push({x:(cx*CHUNK+lx+2)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});}
   // SECRET CACHE: sealed pocket whose wall is a secret tile (breaks to ANY weapon). Same rule —
   // the pocket is terrain, the thing in it is cache.
-  if(hashS('terrain',cx*19+3,cy*19+8)<0.14){
+  if(!inMG&&hashS('terrain',cx*19+3,cy*19+8)<0.14){
    const rw=5,rh=4,lx=rS('terrain',4,CHUNK-rw-4),ly=rS('terrain',4,CHUNK-rh-4);
    let buried=true;
    for(let y=-1;y<=rh;y++)for(let x=-1;x<=rw;x++){if(t[(ly+y)*CHUNK+lx+x]===0)buried=false}
@@ -2311,7 +2420,7 @@ function genChunk(cx,cy){
   // fuel regens on the ground, and digging always works. Teal rim = somebody cut this.
   // ---- THE UNDERCUT ---- a drop-shaft under the floor. Falling in is free; the way out is
   // the lesson. Rock is terrain; the bonus chest is the cache strand's call.
-  if(SH.under&&hashS('terrain',cx*41+11,cy*41+7)<0.055){
+  if(!inMG&&SH.under&&hashS('terrain',cx*41+11,cy*41+7)<0.055){
    for(let tr=0;tr<10;tr++){
     const lx=rS('terrain',5,CHUNK-8),ly=rS('terrain',6,CHUNK-14);
     let ok=1;for(let x=0;x<3;x++)if(t[ly*CHUNK+lx+x]!==0||t[(ly+1)*CHUNK+lx+x]===0)ok=0;
@@ -2325,7 +2434,7 @@ function genChunk(cx,cy){
   // ---- THE FLUE ---- a capped bore above a cavern ceiling. Fuel is the price; the chest is
   // the argument. Fungal bores are short (12-15 — climbable on the base tank with handholds);
   // the abyss keeps the long bore (16-20) and is SUPPOSED to want the movement track.
-  if(SH.flue&&hashS('terrain',cx*23+9,cy*23+5)<0.05){
+  if(!inMG&&SH.flue&&hashS('terrain',cx*23+9,cy*23+5)<0.05){
    for(let tr=0;tr<10;tr++){
     const lx=rS('terrain',6,CHUNK-9),ly=rS('terrain',26,CHUNK-4);
     if(t[ly*CHUNK+lx]!==0||t[ly*CHUNK+lx+1]!==0)continue;               // open air to enter from
@@ -2337,7 +2446,7 @@ function genChunk(cx,cy){
     spawns.push({x:(cx*CHUNK+lx-1)*TILE+8,y:(cy*CHUNK+ly-h-1)*TILE+8,type:'chest'});break}}
   // ---- THE TRAVERSE ---- a sealed gallery with a fire pit at its waist. The band's own heat
   // prices the crossing. Rock is terrain; the vent kind is the band's own.
-  if(SH.trav&&hashS('terrain',cx*43+7,cy*43+19)<0.05){
+  if(!inMG&&SH.trav&&hashS('terrain',cx*43+7,cy*43+19)<0.05){
    for(let tr=0;tr<10;tr++){
     const rw=16,rh=6,lx=rS('terrain',4,CHUNK-rw-4),ly=rS('terrain',4,CHUNK-rh-4);
     let buried=true;
@@ -2351,13 +2460,23 @@ function genChunk(cx,cy){
     break}}
   // BOSS ARENA: one miniboss per biome band, deterministic per chunk
   const bname=BIOME_BOSS[B0[1]];
-  if(bname&&hashS('boss',cx*17+11,cy*17+6)<0.045){
+  if(!inMG&&bname&&hashS('boss',cx*17+11,cy*17+6)<0.045){
    const rw=26,rh=16,lx=rS('boss',3,CHUNK-rw-3),ly=rS('boss',3,CHUNK-rh-3);
    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     const edge=(y===0||y===rh-1||x===0||x===rw-1);
     if(edge&&(y===rh-1||y===0))t[(ly+y)*CHUNK+lx+x]=B0[2];
     else if(!edge)t[(ly+y)*CHUNK+lx+x]=0}
    spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE,y:(cy*CHUNK+ly+rh-3)*TILE,type:bname});}
+  // THE WITNESS — echo-gated sixth knot: appears only in worlds remade often enough to need
+  // checking. Fresh positional boss hash; its stream draws are APPENDED after the miniboss
+  // arena's (and only fire at Echo III+, where the world is already a different world).
+  if(!inMG&&(META.echoLv|0)>=3&&depthM>2800&&hashS('boss',cx*23+7,cy*23+17)<0.03){
+   const rw=26,rh=16,lx=rS('boss',3,CHUNK-rw-3),ly=rS('boss',3,CHUNK-rh-3);
+   for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
+    const edge=(y===0||y===rh-1||x===0||x===rw-1);
+    if(edge&&(y===rh-1||y===0))t[(ly+y)*CHUNK+lx+x]=B0[2];
+    else if(!edge)t[(ly+y)*CHUNK+lx+x]=0}
+   spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE,y:(cy*CHUNK+ly+rh-3)*TILE,type:'witness'});}
  }
  return {tiles:t,cv:null,dirty:true,spawned:false,spawns}
 }
@@ -3469,7 +3588,8 @@ function killEnemy(e){
    if(n>(META.maxThreat||0)&&n<THREATS.length){META.maxThreat=n;
     UNLOCK_MSG.push('THREAT '+THREATS[n].n);toastQ('THREAT UNLOCKED')}
    checkMoves();   // boss deeds (wallkick, longarm) land the moment the knot falls
-   saveMeta()}}
+   saveMeta()}
+  if(D.end)glyphFelled()}   // the Weft: killing it opens the ending choice (field, never id)
  dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?(e.elite.loot||3):1)*rr(0.7,1.3)));
  if(e.tithed)dropShards(e.x,e.y,e.tithed);   // the tithing corpse refunds everything it took, on top of its loot
  if(e.elite){
@@ -3640,7 +3760,8 @@ function bossPhase(e){
  toast(e.type.toUpperCase()+' — '+PAT_NAME[next.pat]);
  bossPattern(e,next.pat)}
 const PAT_NAME={slam:'IT BRINGS THE ROOF DOWN',volley:'IT OPENS UP',spores:'THE AIR TURNS',
- firewall:'IT LEAVES A TRAIL',summon:'IT CALLS',beam:'IT TAKES AIM',devour:'IT BREATHES IN'};
+ firewall:'IT LEAVES A TRAIL',summon:'IT CALLS',beam:'IT TAKES AIM',devour:'IT BREATHES IN',
+ press:'THE WEIGHT COMES DOWN',seal:'IT PUTS THE ROCK BACK'};
 function bossPat(e,pat){return !!(e.pats&&e.pats.indexOf(pat)>=0)}
 // The transition burst. Still fires — it is the punctuation on the phase change — but it is no
 // longer the entire content of the phase.
@@ -3653,7 +3774,9 @@ function bossPattern(e,pat){
   PROJ.push({x:e.x+k*26,y:e.y-10,vx:0,vy:-40,dmg:e.dmg*0.45,pierce:0,explode:34,st:{burn:e.dmg*0.3},col:'#ff8a3f',t:2.4,friendly:0})}
  else if(pat==='summon')bossSummon(e,3);
  else if(pat==='beam'){addShake(10);burst(e.x,e.y,'#ffe9a0',22)}
- else if(pat==='devour'){addShake(12);burst(e.x,e.y,'#a08fff',26)}}
+ else if(pat==='devour'){addShake(12);burst(e.x,e.y,'#a08fff',26)}
+ else if(pat==='press'){addShake(9);burst(P.x,P.y,'#3fc9c1',14);sfx('deny')}
+ else if(pat==='seal'){sealShell();addShake(12);flash(0.3);sfx('dig')}}
 function bossRing(e,n,speed,mul){
  for(let k=0;k<n&&PROJ.length<220;k++){const a=k/n*Math.PI*2;
   PROJ.push({x:e.x,y:e.y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,dmg:e.dmg*mul,pierce:0,explode:0,st:null,
@@ -3664,6 +3787,35 @@ function bossSlam(e){
  // the shockwave is a hazard on the floor, so it can be jumped rather than being an unavoidable tax
  addHaz(e.x,e.y+e.h/2,110,0.55,e.dmg*0.8,null,'#b0a070',0,'shock');
  carve(e.x,e.y+TILE,TILE*4,1);sfx('kill')}
+// ---- THE WEFT's tools. sealFill PLACES rock (setTile is the sanctioned placement path —
+// anchor-pocket precedent; carve stays the only removal). The player-overlap skip is the
+// whole safety case: the fill may never entomb — the 0.4s shock burst punishes the pocket,
+// not the rock.
+function sealPick(e){
+ for(let tr=0;tr<10;tr++){
+  const ang=rr(0,6.283),d=rr(40,90),cx2=P.x+Math.cos(ang)*d,cy2=P.y+Math.sin(ang)*d;
+  const tx=Math.floor(cx2/TILE)-1,ty=Math.floor(cy2/TILE)-1;
+  if(tx<779||tx+2>820||ty<3150||ty+2>3168)continue;          // inside the arena interior
+  if(ty+2>=3166&&tx+2>=792&&tx<=807)continue;                // never near the glyph slab
+  let air=0;for(let y=0;y<3;y++)for(let x=0;x<3;x++)if(getTile(tx+x,ty+y)===0)air++;
+  if(air<6)continue;
+  if(Math.abs((tx+1.5)*TILE-P.x)<P.w/2+24&&Math.abs((ty+1.5)*TILE-P.y)<P.h/2+24)continue;
+  if(Math.abs((tx+1.5)*TILE-e.x)<e.w/2+24&&Math.abs((ty+1.5)*TILE-e.y)<e.h/2+24)continue;
+  return [tx,ty]}
+ return null}
+function sealFill(tx,ty,e){
+ for(let y=0;y<3;y++)for(let x=0;x<3;x++){const wx=tx+x,wy=ty+y;
+  if(getTile(wx,wy)!==0)continue;
+  if(Math.abs((wx+0.5)*TILE-P.x)<P.w/2+TILE/2&&Math.abs((wy+0.5)*TILE-P.y)<P.h/2+TILE/2)continue;
+  if(Math.abs((wx+0.5)*TILE-e.x)<e.w/2+TILE/2&&Math.abs((wy+0.5)*TILE-e.y)<e.h/2+TILE/2)continue;
+  setTile(wx,wy,7)}}
+function sealShell(){
+ for(let y=3148;y<=3171;y++)for(let x=778;x<=821;x++){
+  const edge=(x<=779||x>=820||y<=3149||y>=3169);
+  if(!edge)continue;
+  if(getTile(x,y)!==0)continue;
+  if(Math.abs((x+0.5)*TILE-P.x)<P.w/2+TILE/2&&Math.abs((y+0.5)*TILE-P.y)<P.h/2+TILE/2)continue;
+  setTile(x,y,7)}}
 function bossSummon(e,n){
  const t=BIOMES.find(b=>b[1]===biomeName(Math.floor(e.y/TILE)));
  const types=(t&&t[4])||['crawler'];
@@ -3684,6 +3836,22 @@ function bossOngoing(e,dt,dx,dy,d){
   // line from anywhere on screen, and spores dropped on a dummy.
   const pdx=P.x-e.x,pdy=P.y-e.y,pd=Math.hypot(pdx,pdy)||1;
   if(pat==='volley'){if(tick('volley',4.6)&&d<620)bossRing(e,e.phase>=2?18:12,240,0.42)}
+  else if(pat==='press'){
+   if((e.prT||0)>0){e.prT-=dt;
+    if(e.prT<=0){ // the press lands where you WERE. Moving is the whole counterplay.
+     addHaz(e.prX,e.prY,54,0.9,e.dmg*1.1,{chill:0.6},'#3fc9c1',0,'shock');
+     burst(e.prX,e.prY,'#3fc9c1',18);addShake(11);sfx('kill')}}
+   else if(tick('press',5.8)){e.prT=1.2;e.prX=P.x;e.prY=P.y;
+    addHaz(e.prX,e.prY,48,1.2,0,null,'#3fc9c1',0,'mark');sfx('deny')}}
+  else if(pat==='seal'){
+   if(e.sq)for(let i=e.sq.length-1;i>=0;i--){const sq=e.sq[i];sq.t-=dt;
+    if(sq.t<=0){sealFill(sq.tx,sq.ty,e);
+     addHaz(sq.tx*TILE+24,sq.ty*TILE+24,30,0.4,e.dmg*0.5,null,'#3fc9c1',0,'shock');
+     e.sq.splice(i,1)}}
+   if(tick('seal',7.0)){e.sq=e.sq||[];
+    for(let k=0;k<2;k++){const t2=sealPick(e);if(!t2)continue;   // 3x3 air pocket near P
+     e.sq.push({tx:t2[0],ty:t2[1],t:1.1});
+     addHaz(t2[0]*TILE+24,t2[1]*TILE+24,26,1.1,0,null,'#3fc9c1',0,'mark')}}}
   else if(pat==='spores'){if(tick('spores',3.2)&&pd<520){
    // dropped ON the player, so standing still is the mistake — this is area denial, not damage
    addHaz(P.x,P.y+8,42,5.0,e.dmg*0.22,{chill:0.7},'#c98fe0',0,'cloud');
@@ -4365,7 +4533,7 @@ function newRun(){
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
  P.pd=0;P.airDash=1;P.dodgeAir=0;P.grapCd=0;P.thunkT=0;P.lastDodge=-9;
  P.stormN=0;P.lode=null;P.kickW=0;   // wave-4 run state: stormcall charge, lodestone anchor
- MOVE_CK=0;tipDismiss();TIPQ.length=0;SECRETT=0;   // dismiss, not null — a held tip toast must not haunt the death screen
+ MOVE_CK=0;tipDismiss();TIPQ.length=0;SECRETT=0;MGS=0;MGSEAT=0;   // dismiss, not null — a held tip toast must not haunt the death screen
  shake=0;HS={t:0,dur:0,frac:1,pre:0};TSCALE=1;FLASH=0;CALLOUT=null;HURT=null;
  UIROOT=null;MODAL=false;PANEL_FN=null;PANEL_Q.length=0;
  closePanel(true);
@@ -4562,7 +4730,7 @@ function openLattice(){
    <span class="glyph r3">${seedGlyph(WEAVE[st.k])}</span>
    <span class="sub"><br>${st.d}${locked?' — <b>bound</b>':''}</span></button>`}
  if(!SIGILS.length)h+='<div class="sub" style="margin-top:8px">You carry no sigils. They are found deep, in sealed places.</div>';
- if(canEscape())h+=`<button class="escape" onclick="openEscape()">THE WAY OUT <span class="sub">the world is thin enough</span></button>`;
+ if(canEscape())h+=`<div class="sub" style="color:#d8a53f">THE WAY OUT — the glyph is at the floor of the shaft, ${Math.max(0,3110-runDepth)}m further down. What keeps it will not step aside.</div>`;
  else if(DISSONANCE>=100)h+='<div class="sub" style="color:var(--gold)">The world is thin — but you have not felled enough of its wardens to walk through.</div>';
  h+=`<button onclick="backPanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`;
  openPanel(h,false,openLattice)}
@@ -4626,37 +4794,65 @@ function graftGo(k){
  openLattice()}
 // THE ESCAPE. A world with no bottom cannot be walked out of — the only exit is to overwrite
 // the master seed and have reality re-form with you inside it.
-function openEscape(){
- openPanel(`<div class="sub">DISSONANCE ${Math.round(DISSONANCE)} — ${dissStage().n.toUpperCase()}</div>
-  <h2>THE WAY OUT</h2>
-  <div class="lore">${loreHTML(`You have rewritten this place ${WOVEN} time${WOVEN===1?'':'s'} and it has stopped
-pretending not to notice.
+function openGlyphSeat(){
+ let h=`<div class="sub">DISSONANCE ${Math.round(DISSONANCE)} — ${dissStage().n.toUpperCase()}</div>
+  <h2>${seedGlyph(SEED)}</h2><div class="sub">the master glyph</div>`;
+ const live=EN.some(en=>en.type==='weft'&&en.hp>0);
+ if(MGS===2)h+=`<button onclick="openEnding()">THE GLYPH IS BARE <span class="sub">choose what it says</span></button>`;
+ else if(canEscape()&&!live)h+=`<button onclick="wakeWeft()">WAKE IT <span class="sub">write the first stroke</span></button>`;
+ else if(DISSONANCE<100)h+=`<div class="sub">The world is not thin enough to write on. It heals faster than you can mark it.</div>`;
+ else h+=`<div class="sub">Something below is still holding the weave shut. Fell the wardens of three strata first.</div>`;
+ h+=`<button onclick="closePanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,openGlyphSeat)}
+function wakeWeft(){
+ closePanel(true);
+ // the door was never a door. The fill SKIPS any player-overlapping tile — a doorway-stander
+ // is shoved by the spawn, never entombed (the sealFill safety case, same skip).
+ for(let x=797;x<=802;x++)for(let y=3148;y<=3149;y++){
+  if(Math.abs((x+0.5)*TILE-P.x)<P.w/2+TILE/2&&Math.abs((y+0.5)*TILE-P.y)<P.h/2+TILE/2)continue;
+  setTile(x,y,7)}
+ // queueEnemy silently refuses at the 120 cap with NO boss exception — a crowded floor would
+ // no-op the climax. Evict-then-push directly, mirroring spawnFromChunks' boss path.
+ while(EN.length>=124&&evictFar());
+ EN.push(mkEnemy('weft',MG.tx*TILE,(MG.ty-14)*TILE,null,threat(),null));
+ MGS=1;addShake(10);flash(0.5);sfx('bosskill');toast('IT PUTS DOWN ITS WORK')}
+function glyphFelled(){MGS=2;toastQ('THE LOOM IS STILL');
+ openEnding()}   // modal; queues behind a same-frame level-up via PANEL_Q, as shipped
+function openEnding(){
+ if(MGS<2)return;
+ const mendOK=allKnots(META),usurpOK=(META.echoLv|0)>=6;
+ const knotCount=KNOTS.filter(b=>(META.bosses||{})[b]).length;
+ openPanel(`<h2>SIX SYMBOLS</h2>
+  <div class="lore">${loreHTML(`The glyph is bare. The thing that kept it is not coming back, and the rock is waiting to be told what it is.
 
-There is no bottom. There was never going to be. The shaft does not end because the thing at the
-end of it is what the shaft is made of, and you have been cutting pieces off it and carrying them
-up into the light for nine hundred years.
-
-But you have made the world thin. Thin enough to write on.
-
-Overwrite the master glyph and reality re-forms — around you, with you inside it, holding
-everything you carried down. That is not escape. That is the only kind of escape there is.`)}</div>
-  <button onclick="doEscape()">REWRITE THE WORLD</button>
-  <button onclick="openLattice()">NOT YET <span class="sub">${pr('cancel')}</span></button>`,true,null)}
-function doEscape(){
+Choose what they say.`)}</div>
+  <button onclick="doEnding('escape')">ESCAPE <span class="sub">write a way out, and leave it growing</span></button>
+  <button ${mendOK?'':'disabled'} onclick="doEnding('mend')">MEND <span class="sub">${mendOK?'reweave the sky':'the five knots still hold — '+knotCount+'/5 felled'}</span></button>
+  <button ${usurpOK?'':'disabled'} onclick="doEnding('usurp')">USURP <span class="sub">${usurpOK?'become the law':'descend at Echo VI or deeper to claim it'}</span></button>
+  <button onclick="closePanel(true)">NOT YET <span class="sub">${pr('cancel')}</span></button>`,true,null)}
+function doEnding(kind){
+ if(MGS<2)return;
+ if(kind==='mend'&&!allKnots(META))return;                    // gates re-checked — never trust a button
+ if(kind==='usurp'&&(META.echoLv|0)<6)return;
+ // (replay wave: bounty bank lands HERE, before the purse — the one seam, R9)
  META.escapes=(META.escapes||0)+1;
- // Every escape opens one more rung of the ladder. This is the only thing past Threat V, and
- // it is unbounded on purpose: the answer to "what is hour 40" has to not have a ceiling.
+ // Every ending opens one more rung of the ladder — USURP is the ladder's fiction, but MEND
+ // and ESCAPE climb it too. Equal payout: no ending is the farm ending.
  META.maxEcho=Math.max(META.maxEcho||0,META.escapes||0);
- checkMoves();   // seamstep's deed; this hook moves into doEnding when the endings land (R9)
  META.shards+=Math.round(400+DISSONANCE*6);
  META.maxThreat=Math.min(THREATS.length-1,(META.maxThreat||0)+1);
- discover('frag','escape',true);
+ META.endings=META.endings||{};META.endings[kind]=1;
+ discover('frag',kind==='mend'?'mended':kind==='usurp'?'usurped':'escape',true);
+ checkMoves();   // seamstep's deed — moved here from doEscape (R9)
  saveMeta();
  flash(0.9);addShake(20);sfx('level');rumble(1,1,900);
- openPanel(`<h2>THE WORLD RE-FORMS</h2>
-  <div class="lore">${loreHTML(`You wrote a glyph and the rock agreed to it.
+ const F=LORE.frag.find(x=>x.id===(kind==='mend'?'mended':kind==='usurp'?'usurped':null));
+ const title=kind==='mend'?'THE SKY REMEMBERS':kind==='usurp'?'THE ROCK AGREES':'THE WORLD RE-FORMS';
+ const body=F?F.d:`You wrote a glyph and the rock agreed to it.
 
-Escape ${META.escapes}. Somewhere below, the shaft is already the wrong depth.`)}</div>
+Escape ${META.escapes}. Somewhere below, the shaft is already the wrong depth.`;
+ openPanel(`<h2>${title}</h2>
+  <div class="lore">${loreHTML(body)}</div>
   <table class="sum">
    <tr><td>Depth reached</td><td>${runDepth}m</td></tr>
    <tr><td>Strands rewritten</td><td>${WOVEN}</td></tr>
@@ -4665,6 +4861,7 @@ Escape ${META.escapes}. Somewhere below, the shaft is already the wrong depth.`)
    <tr><td>Threat ceiling</td><td>${THREATS[META.maxThreat].n}</td></tr>
   </table>
   <button onclick="newRun()">DESCEND AGAIN</button>`,true,null)}
+function doEscape(){MGS=2;doEnding('escape')}   // compat alias: suite-9 and any stale caller
 
 // -------- full map --------
 // The corner minimap is for moment-to-moment orientation. This is for deciding where to go:
@@ -4694,6 +4891,7 @@ function openMap(){
  for(const e of EN)if(e.boss)mark(e.x,e.y,'#e05555',5);
  if(ANCHOR)mark(ANCHOR.x,ANCHOR.y,'#3fc9c1',5);
  mark(CAMP_X*TILE,surfH(CAMP_X)*TILE,'#d8a53f',5);
+ if(canEscape())mark(MG.tx*TILE,MG.ty*TILE,'#d8a53f',6);   // the way out, once the world is thin
  // world edges, so the shaft reads as a place with sides rather than an infinite void
  const ex0=(0-ptx)/SX+W/2, ex1=(WORLD_W-ptx)/SX+W/2;
  g.fillStyle='#ffffff14';
@@ -5817,6 +6015,12 @@ function render(){
    ctx.fillStyle='#ffffff60';ctx.fillRect(8,-2,14,3);ctx.restore()}
   if(P.st){let i=0;for(const k in P.st){if(!P.st[k].length)continue;
    ctx.fillStyle=STATUS[k].c;ctx.fillRect(x-6+i*5,y-P.h/2-6,3,3);i++}}}
+ // the master glyph: six symbols over the slab, faint pulse. Deterministic (seedGlyph is pure).
+ {const gx=MG.tx*TILE-ox,gy=(MG.ty-2)*TILE-oy;
+  if(gx>-80&&gx<VW+80&&gy>-40&&gy<VH+40){
+   ctx.globalAlpha=0.55+0.25*Math.sin(perf*1.7);
+   ctx.fillStyle='#3fc9c1';ctx.font='10px monospace';ctx.textAlign='center';
+   ctx.fillText(seedGlyph(SEED),gx,gy);ctx.globalAlpha=1;ctx.textAlign='left'}}
  // the planted lodestone: a small static glyph, render-only (RRNG territory, zero sim state)
  if(P.lode&&perf<P.lode.until){const lx=P.lode.x-ox,ly=P.lode.y-oy;
   ctx.fillStyle='#9fd0ffb0';ctx.fillRect(lx-2,ly-2,4,4);ctx.fillStyle='#9fd0ff40';ctx.fillRect(lx-4,ly-4,8,8)}
@@ -5911,6 +6115,13 @@ function sim(dt){
   if(nearCamp()){P.hp=Math.min(P.maxhp,P.hp+12*dt);tipEv('camp')}}
  if(!P.dead)for(const sh of SHRINES){if(sh.used)continue;
   if(Math.hypot(sh.x-P.x,sh.y-P.y)<20){openShrine(sh);break}}
+ // the master glyph seat: offered at the slab, re-armed by leaving (shrine-style guard)
+ if(!P.dead&&canEscape()&&!(META.tips&&META.tips.wayout))
+  hint('wayout','The world is thin. The master glyph waits at the floor of the shaft, straight below the camp.');
+ if(!P.dead&&!paused){
+  const gd=Math.hypot(P.x-MG.tx*TILE,P.y-(MG.ty-3)*TILE);
+  if(gd<56&&!MGSEAT&&!EN.some(en=>en.type==='weft'&&en.hp>0)){MGSEAT=1;openGlyphSeat()}
+  else if(gd>120)MGSEAT=0}
  tickBuffs();
  if(GRAPPLE){GRAPPLE.t-=dt;if(GRAPPLE.t<=0)GRAPPLE=null}
  if(perf-lastSweep>2){lastSweep=perf;sweepChunks();
