@@ -1284,6 +1284,7 @@ function eliteFor(E){
   if(m.trail&&E.trail)return false;               // two trails is one trail and a frame cost
   if(m.sear&&!E.shoot)return false;               // a patch needs a shot to arrive on
   if(m.tremor&&E.trail)return false;              // two hazard sources is one hazard and a frame cost
+  if(m.tithe&&E.spd>=90)return false;             // theft on the least-punishable carrier is not a price, it is a mugging
   return true});
  return ok.length?ok[ri(0,ok.length-1)]:null}
 const BIOME_BOSS={caves:'warden',fungal:'sporemother',ruins:'sentinel',forge:'forgelord',abyss:'voidmaw'};
@@ -1928,7 +1929,7 @@ That should worry you more than it does.`},
 
 That is finished work, that piece. Nobody living finishes work like that. I will not put a
 chisel to it, and neither will anyone honest.`},
- {id:'anvil6',who:'anvil',gate:m=>!!(m.bosses||{}).warden,t:`The caves one first, was it. It
+ {id:'anvil6',who:'anvil',gate:m=>!!(m.bosses||{}).warden,t:`So the caves one is down. It
 held a door for nine hundred years. When a door has been held that long, opening it is not a
 victory. It is a decision.
 
@@ -2327,10 +2328,11 @@ const BOUNTIES=[
  {id:'fuser',  n:'Fuse a gem',                    pay:130, goal:1,  count:'fuse'},
  {id:'tempered',n:'Work the forge twice',         pay:120, goal:2,  count:'forge',
    ok:m=>Object.keys(m.bosses||{}).length>=1},
- {id:'outrun', n:'Reach 700m before the Weight stirs',pay:190,goal:1,test:s=>runDepth>=700&&!s.weighted},
- {id:'clean',  n:'Fell a Knot untouched',         pay:260, goal:1,  test:s=>!!s.bossclean},
+ {id:'outrun', n:'Reach 700m before the Weight stirs',pay:190,goal:1,test:s=>!!s.outrun,
+   ok:m=>['surface','caves'].indexOf(m.startBiome||'surface')>=0},
+ {id:'clean',  n:'Fell a Knot, untouched all run', pay:260, goal:1,  test:s=>!!s.bossclean},
  {id:'echoed', n:'Reach 1,500m in an echoed world',pay:250,goal:1,  test:s=>runDepth>=1500&&(META.echoLv|0)>=1,
-   ok:m=>(m.echoLv|0)>=1},
+   ok:m=>(m.echoLv|0)>=1&&['surface','caves','fungal'].indexOf(m.startBiome||'surface')>=0},
  {id:'loom',   n:'Fell what keeps the glyph',     pay:400, goal:1,  test:s=>!!s.weftdown,
    ok:m=>Object.keys(m.bosses||{}).length>=3},
  {id:'nohit',  n:'Reach 600m without a hit',  pay:220, goal:1,  test:s=>runDepth>=600&&!s.hurt},
@@ -2732,7 +2734,9 @@ function genChunk(cx,cy){
   // are progressively discouraged, and there is never more than one support unit to focus.
   // Everything here draws from the `spawn` strand ONLY — the Lattice depends on it.
   const depthM=Math.max(0,cy*CHUNK+CHUNK/2-SURFACE);
-  let budget=(3.0+depthM/900*2.8)*(threat().dens||1)*(ECHO.dens||1);
+  // the master arena stays BARE — this was the one generator missing the guard, and twelve of
+  // forty seeds seated abyss creatures (including healers) inside the sealed ending room
+  let budget=inMG?0:(3.0+depthM/900*2.8)*(threat().dens||1)*(ECHO.dens||1);
   const used={};let supports=0,placed=0,guard=0;
   while(budget>0.9&&placed<8&&guard++<40){
    const cand=[];
@@ -2968,6 +2972,9 @@ function loadMeta(){
  if(!META.dlg)META.dlg={};if(!META.firsts)META.firsts={};
  if(!META.tips)META.tips=Object.assign({},META.hints||{});
  if(!META.moves)META.moves={};
+ // itemUid resets each session but vaulted items keep their SAVED uids — a fresh run item
+ // could mint a duplicate and the Forge would chisel the wrong piece. Re-uid the vault.
+ for(const v of META.vault)if(v)v.uid=itemUid++;
  // Retroactive deeds, quiet: a veteran's bestDepth/bosses/maxEcho grant every gait already
  // earned the moment the save loads. bestDepth>=150 grants draught (tank 45+20=65 >= the old
  // 60), so no veteran is ever nerfed into the floor by the 45 baseline.
@@ -3264,8 +3271,12 @@ function computeAttack(slot){
  // Warding is a `more` penalty so it lands BEFORE ailment potency is derived from damage.
  if(auraHas('warding'))a.more*=0.9;
  const gems=it.sockets.filter(g=>gemOf(g));
+ // ONE support id applies ONCE per resolved attack, across weapon AND armor sockets — four
+ // copies of Concentrated multiplied to x5.7 alone, and the review measured x47 total `more`
+ // on a five-socket staff. Duplicates are dead sockets now, which the card can say honestly.
+ const supSeen={};
  for(const g of gems){const G=gemOf(g);if(G.t==='skill'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
- for(const g of gems){const G=gemOf(g);if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+ for(const g of gems){const G=gemOf(g);if(G.t==='sup'&&(G.for===kind||G.for==='any')&&!supSeen[G.n]){supSeen[G.n]=1;applyGem(G,a,gemTier(g))}}
  // modifier affixes run in the same seam as uniques — after the gems, before the additive pool.
  for(const k in it.mods){const M=MODA[k];if(M&&M.mod&&(!M.slot||M.slot===kind))M.mod(a)}
  {const u=it.unique&&uniqueDef(it.unique,it.alt);if(u&&u.mod)u.mod(a)}
@@ -3273,7 +3284,7 @@ function computeAttack(slot){
  // global-vs-local decision in the whole system (HANDOFF §3.3).
  if(slot!=='armor'&&EQ.armor){
   for(const g of EQ.armor.sockets){const G=gemOf(g);if(!G)continue;
-   if(G.t==='sup'&&(G.for===kind||G.for==='any'))applyGem(G,a,gemTier(g))}
+   if(G.t==='sup'&&(G.for===kind||G.for==='any')&&!supSeen[G.n]){supSeen[G.n]=1;applyGem(G,a,gemTier(g))}}
   // ...and so does a modifier affix rolled on armour. One rule for both, or players learn two.
   for(const k in EQ.armor.mods){const M=MODA[k];if(M&&M.mod&&(!M.slot||M.slot===kind))M.mod(a)}}
  applyRunMods(a);
@@ -3301,8 +3312,9 @@ function computeAbility(){
  const gid=gemId(slot),G=GEMS[gid],tier=gemTier(slot);
  const a={kind:'abil',id:gid,fx:G.fx,n:G.n,cd:G.cd,fc:G.fc||0,tier,dmg:40,col:'#ffe9a0',st:null,more:1,inc:0};
  if(tier>1){a.dmg*=1+0.30*(tier-1);a.cd*=1+0.10*(tier-1)}
+ const abSeen={};
  for(const g2 of it.sockets){if(g2===slot)continue;const S=gemOf(g2);if(!S)continue;
-  if(S.t==='sup')applyGem(S,a,gemTier(g2))} // armor supports empower the ability too
+  if(S.t==='sup'&&!abSeen[S.n]){abSeen[S.n]=1;applyGem(S,a,gemTier(g2))}} // armor supports empower the ability too — once each
  a.inc=(treeFx('meleeDmg')+treeFx('rangedDmg'))*0.5;
  applyRunMods(a);
  resolveDmg(a,'dmg');
@@ -3325,6 +3337,10 @@ function useAbility(){
  if(P.acd>0){sfx('deny');return}
  // Two gates, both real: the cooldown says "not yet", Focus says "not for free" (§3.2).
  if(!spendFocus(a.fc||0)){sfx('deny');return}
+ // armor supports empower the ability, so their PRICES bind here too — Overdraw and Blood
+ // Tithe were charging on weapons only, making armor sockets a free +more for abilities
+ if(a.focusCost&&!spendFocus(a.focusCost,true)){sfx('deny');return}
+ if(a.hpCost){if(P.hp<=a.hpCost){sfx('deny');return}P.hp-=a.hpCost}
  P.acd=a.cd;sfx('abil');
  const dm=depthMul(P.y);
  if(a.fx==='blink'){
@@ -3989,7 +4005,11 @@ function killEnemy(e){
    saveMeta()}
   if(D.end)glyphFelled()}   // the Weft: killing it opens the ending choice (field, never id)
  dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?(e.elite.loot||3):1)*rr(0.7,1.3)));
- if(e.tithed)dropShards(e.x,e.y,e.tithed);   // the tithing corpse refunds everything it took, on top of its loot
+ // the tithing corpse refunds RAW — dropShards would ride greed x depth x threat x echo and
+ // turn theft into the best shard farm in the game (measured ~11x at 2900m). Conservation:
+ // exactly what it took comes back, plus half again as flat interest.
+ if(e.tithed)for(let q=0,nq=e.tithed+Math.round(e.tithed*0.5);q<nq;q++)
+  PICK.push({x:e.x+rr(-10,10),y:e.y,vy:rr(-200,-100),vx:rr(-70,70),kind:'shard',t:24});
  if(e.elite){
   toast(e.elite.n+' '+e.type+' slain');
   if(e.elite.boom){ // Volatile: corpse detonates — hurts the player too
@@ -4207,7 +4227,10 @@ function sealFill(tx,ty,e){
   if(getTile(wx,wy)!==0)continue;
   if(Math.abs((wx+0.5)*TILE-P.x)<P.w/2+TILE/2&&Math.abs((wy+0.5)*TILE-P.y)<P.h/2+TILE/2)continue;
   if(Math.abs((wx+0.5)*TILE-e.x)<e.w/2+TILE/2&&Math.abs((wy+0.5)*TILE-e.y)<e.h/2+TILE/2)continue;
-  setTile(wx,wy,7)}}
+  // tile 10, not 7: the aimed pockets break to ANY weapon, so a weak build in a long fight
+  // is inconvenienced, never slowly entombed (~150 permanent tiles/min otherwise). The
+  // arena SHELL (sealShell) stays hard rock — structure heals hard, aim heals soft.
+  setTile(wx,wy,10)}}
 function sealShell(){
  for(let y=3148;y<=3171;y++)for(let x=778;x<=821;x++){
   const edge=(x<=779||x>=820||y<=3149||y>=3169);
@@ -4217,7 +4240,10 @@ function sealShell(){
   setTile(x,y,7)}}
 function bossSummon(e,n){
  const t=BIOMES.find(b=>b[1]===biomeName(Math.floor(e.y/TILE)));
- const types=(t&&t[4])||['crawler'];
+ let types=(t&&t[4])||['crawler'];
+ // an end boss must not draw a splitter: one cleft roll is ~2000 ehp of cascade in a sealed
+ // room, where the warden's identical pattern summons crawlers
+ if(ENEMIES[e.type]&&ENEMIES[e.type].end)types=types.filter(ty=>!ENEMIES[ty].split);
  const mh=depthHP(e.y),md=depthDmg(e.y);
  for(let k=0;k<n;k++){const ty=types[ri(0,types.length-1)],E2=ENEMIES[ty];
   // Through mkEnemy, or the boss's own reinforcements are the weakest things in the room at
@@ -4397,7 +4423,7 @@ function upEnemies(dt){
         const k=Math.min(8,Math.min(RUNSHARDS,2+Math.floor(RUNSHARDS*0.04)));
         // shards bank the instant they are picked up, so a knock-out must debit BOTH ledgers;
         // the scattered pickups re-credit on recovery. Steals only what this run has banked.
-        if(k>0){RUNSHARDS-=k;META.shards=Math.max(0,META.shards-k);e.tithed=(e.tithed||0)+k;
+        if(k>0){RUNSHARDS-=k;META.shards=Math.max(0,META.shards-k);e.tithed=Math.min(40,(e.tithed||0)+k);
          for(let q=0;q<k;q++)PICK.push({x:P.x+rr(-18,18),y:P.y-6,vy:rr(-220,-120),vx:rr(-90,90),kind:'shard',t:24});
          sfx('deny',P.x)}}
        if(auraHas('thorns'))hurtEnemy(e,12*depthDmg(P.y),Math.sign(-dx||1)*160,'#8fdc6a');
@@ -4472,7 +4498,7 @@ function upEnemies(dt){
      const k=Math.min(8,Math.min(RUNSHARDS,2+Math.floor(RUNSHARDS*0.04)));
      // shards bank the instant they are picked up, so a knock-out must debit BOTH ledgers;
      // the scattered pickups re-credit on recovery. Steals only what this run has banked.
-     if(k>0){RUNSHARDS-=k;META.shards=Math.max(0,META.shards-k);e.tithed=(e.tithed||0)+k;
+     if(k>0){RUNSHARDS-=k;META.shards=Math.max(0,META.shards-k);e.tithed=Math.min(40,(e.tithed||0)+k);
       for(let q=0;q<k;q++)PICK.push({x:P.x+rr(-18,18),y:P.y-6,vy:rr(-220,-120),vx:rr(-90,90),kind:'shard',t:24});
       sfx('deny',P.x)}}
     if(auraHas('thorns'))hurtEnemy(e,12*depthDmg(P.y),Math.sign(-dx||1)*160,'#8fdc6a')}}}}
@@ -4573,6 +4599,7 @@ function projStrike(e,p){
  if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT);
  if(CLASSES[META.cls].foc==='shock'&&hasSt(e,'shock'))gainFocus(FOCUS_HIT)}   // conductor — both paths
 function explode(x,y,r,dmg,col,st,src,skip){
+ if(src&&src.noSt)st=null;   // Sterile's lockout binds blasts too — the trade is total
  burst(x,y,col,14);addShake(5);
  if(dmg>0)for(const e of EN){if(e.hp<=0||e.invT>0||e===skip)continue;
   if(Math.hypot(e.x-x,e.y-y)<r+e.w/2){
@@ -4595,7 +4622,7 @@ function upSentry(dt){
     if(PROJ.length<200)PROJ.push({x:s.x,y:s.y,vx:vx*a.speed,vy:vy*a.speed,dmg:a.dmg*0.6,
      crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:0,st:a.st||null,
      vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,vsBleed:a.vsBleed||0,
-     chain:a.chain||0,cull:a.cull||0,vsFull:a.vsFull||0,
+     chain:a.chain||0,cull:a.cull||0,vsFull:a.vsFull||0,noSt:a.noSt||0,
      // `raise` is deliberately NOT copied: turrets must never raise turrets
      col:a.col,t:2,friendly:1,ox:s.x,oy:s.y})}}}}
 function upDecoy(dt){
@@ -4829,6 +4856,7 @@ function upPlayer(dt){
  P.noFall=Math.max(0,P.noFall-dt);
  runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
  if(runDepth>=MOVE_CK+25){MOVE_CK=runDepth;checkMoves()}   // depth deeds land mid-run, throttled
+ if(runDepth>=700&&!BSTATE.weighted)BSTATE.outrun=1;   // the race latches WON — a later linger must not un-win it
  const bn=biomeName(Math.floor(P.y/TILE));
  discover('biome',bn);
  BANDCTX.bn=bn;tipEv('band',BANDCTX);   // hoisted ctx — no per-frame allocation in the hot loop
@@ -5236,6 +5264,10 @@ function doEnding(kind){
  if(MGS<2)return;
  if(kind==='mend'&&!allKnots(META))return;                    // gates re-checked — never trust a button
  if(kind==='usurp'&&(META.echoLv|0)<6)return;
+ // Close the chooser FIRST (wakeWeft's pattern): openPanel QUEUES behind a modal, so without
+ // this the chooser stayed up, "nothing happened", and every further click re-banked the
+ // whole purse — escapes, threat and ~1000 shards a click, into the permanent save.
+ closePanel(true);
  // an ending must never forfeit finished bounties — that taxed the game's best moment
  const bp=bountyPayout();if(bp>0){META.shards+=bp;RUNSHARDS+=bp}
  META.escapes=(META.escapes||0)+1;
@@ -5656,7 +5688,8 @@ function openForgeItem(uid){
   const cost=op.cost(it);let no=null;
   if(op.id==='fup'&&!Object.keys(it.affixes).some(k=>(it.tiers[k]||1)<affTierCap(it.ilvl)))no='at what this depth allows';
   if(op.id==='frr'&&!Object.keys(it.affixes).length)no='nothing to recast';
-  if(op.id==='fsock'&&(it.cut||it.sockets.length>=GEAR[it.base].sockets+(it.rarity>=2?1:0)+1))no=it.cut?'already cut':'no room in it';
+  if(op.id==='fsock'&&GEAR[it.base].sockets>=3)no='nowhere left to cut';   // five sockets stays a unique's trade
+  else if(op.id==='fsock'&&(it.cut||it.sockets.length>=GEAR[it.base].sockets+(it.rarity>=2?1:0)+1))no=it.cut?'already cut':'no room in it';
   // OVERWORK waits on the forgelord: the Smith will not stop being careful until the forge
   // itself has answered for it (act structure — R11).
   if(op.id==='frisk'&&!(META.bosses||{}).forgelord)no='not until the forge answers';
@@ -5702,7 +5735,7 @@ function doForgeOp(uid,op,key){
   const a=pool[ri(0,pool.length-1)],t=affTierFor(it.ilvl),[lo,hi]=affTierRange(a,t);
   it.affixes[a[0]]=ri(lo,hi);it.tiers[a[0]]=t}
  else if(op==='fsock'){
-  if(it.cut||it.sockets.length>=GEAR[it.base].sockets+(it.rarity>=2?1:0)+1){sfx('deny');return}
+  if(GEAR[it.base].sockets>=3||it.cut||it.sockets.length>=GEAR[it.base].sockets+(it.rarity>=2?1:0)+1){sfx('deny');return}
   it.cut=1;const tend=GEAR[it.base].tend||'rgb';
   it.sockets.push(null);it.sc.push(tend[ri(0,tend.length-1)])}
  else if(op==='frisk'){
@@ -5710,7 +5743,10 @@ function doForgeOp(uid,op,key){
   it.owk=1;META.forge.owk++;
   const roll=RNG();
   const uncapped=Object.keys(it.affixes).filter(k=>(it.tiers[k]||1)<affTierCap(it.ilvl));
-  if(roll<0.40&&uncapped.length){const k=uncapped[ri(0,uncapped.length-1)];
+  // disjoint bands: a tier-capped item must NOT fall through into a 65% modaff chance —
+  // the advertised 40/25/20/15 gamble collapsed into an ordering trick otherwise
+  if(roll<0.40&&!uncapped.length){toast('the metal holds')}
+  else if(roll<0.40&&uncapped.length){const k=uncapped[ri(0,uncapped.length-1)];
    it.tiers[k]=(it.tiers[k]||1)+1;const [lo,hi]=affTierRange(AFF[k],it.tiers[k]);it.affixes[k]=ri(lo,hi);
    toast('THE METAL GIVES')}
   else if(roll<0.65&&!Object.keys(it.mods).length){

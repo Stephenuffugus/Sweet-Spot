@@ -379,5 +379,31 @@ console.log('\n-- the shop is honest --');
   A(dd.length === 0, 'no unlock is listed twice' + (dd.length ? ': ' + dd.join(',') : ''));
 }
 
+// ---------- THE SOUP CEILING (batched-review regression lock) ----------
+// The archetype rows are 3-gem builds; the review assembled a 5-socket staff with every
+// unconditional `more` support and measured 10.7x the intended spread — plus x47 with
+// duplicates, which were legal. One support id applies once now, and the worst honest
+// assembly must stay within reach of the archetype spread.
+console.log('\n-- the soup ceiling --');
+{
+  META.cls = 'marksman'; newRun(); OFF(1500);
+  META.tree = {}; RUNB = RUNB0(); RUNM = RUNM0();
+  EQ.ranged = fit(mkItem('staff', 1, 1500), ['lightning', 'conc', 'overload', 'sterile', 'bloodtithe']);
+  EQ.ranged.affixes = {}; EQ.ranged.tiers = {}; EQ.ranged.mods = {};
+  EQ.armor = fit(mkItem('shroud', 1, 1500), ['overdraw']);
+  EQ.armor.affixes = {}; EQ.armor.tiers = {}; EQ.armor.mods = {};
+  refreshAttacks();
+  const worst = effDps(ATK.ranged);
+  console.log('   five-socket everything-staff: ' + Math.round(worst) + ' eff dps');
+  A(isFinite(worst) && worst > 0, 'the everything-staff resolves');
+  A(ATK.ranged.more < 8.2, 'the stacked more-pool stays under 8.2x (' + ATK.ranged.more.toFixed(2) + 'x)');
+  // a DUPLICATE support is a dead socket, not a second multiplier
+  EQ.ranged = fit(mkItem('staff', 1, 1500), ['lightning', 'conc', 'conc', 'conc', 'conc']);
+  EQ.ranged.affixes = {}; EQ.ranged.tiers = {}; EQ.ranged.mods = {};
+  EQ.armor = mkItem('vest', 0, 1); EQ.armor.sockets = []; EQ.armor.sc = []; refreshAttacks();
+  const one = 1.55;
+  A(Math.abs(ATK.ranged.more - one) < 0.01, 'four Concentrateds pay once (' + ATK.ranged.more.toFixed(2) + 'x, not ' + Math.pow(1.55, 4).toFixed(1) + 'x)');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

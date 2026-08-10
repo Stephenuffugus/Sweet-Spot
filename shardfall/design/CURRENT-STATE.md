@@ -509,7 +509,7 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | Fuse a gem | 130◆ |
 | Work the forge twice | 120◆ |
 | Reach 700m before the Weight stirs | 190◆ |
-| Fell a Knot untouched | 260◆ |
+| Fell a Knot, untouched all run | 260◆ |
 | Reach 1,500m in an echoed world | 250◆ |
 | Fell what keeps the glyph | 400◆ |
 | Reach 600m without a hit | 220◆ |
