@@ -237,6 +237,7 @@ body.touchmode canvas{cursor:auto}
 // ============ CONSTANTS ============
 const TILE=16, CHUNK=48, WORLD_W=1600, WORLD_H=3200, SURFACE=60;
 const GRAV=1500, MOVE=170, JUMPV=430, DT=1/60;
+const MELEE_STEP=8;   // px folded into every committed melee swing — root motion, not the Lunge gem's dash
 // --- traversal tuning (Noita-flavored: everyone can fly a little, fuel is the limit) ---
 const FLY_THRUST=2100;   // upward accel while hovering (must EXCEED gravity or you only slow the fall)
 const FLY_DRAIN=42;      // fuel/sec while thrusting
@@ -759,8 +760,11 @@ const SOCKC=['r','g','b'];
 //   sc   = socket colors, one char per socket. Extra sockets from rarity roll from `tend`.
 //   tend = this base's color tendency, used when rarity grants bonus sockets.
 const GEAR={
- sword:{slot:'melee', n:'Sword', dmg:10, range:26, arc:100, cd:.38, kb:120, dig:0, sockets:1, sc:'r', tend:'rrg'},
- axe:  {slot:'melee', n:'Axe',   dmg:16, range:24, arc:80,  cd:.55, kb:180, dig:1, sockets:1, sc:'r', tend:'rrr', ilvl:80},
+ // Melee ranges sized so the punish window is CASHABLE (dodge-exit separation is 10-45px)
+ // while every envelope (range + step + grunt half-width) stays below the smallest
+ // band-defining engage distance — enemies still commit first; you still cannot trade toe-to-toe.
+ sword:{slot:'melee', n:'Sword', dmg:10, range:34, arc:100, cd:.38, kb:120, dig:0, sockets:1, sc:'r', tend:'rrg'},
+ axe:  {slot:'melee', n:'Axe',   dmg:16, range:32, arc:80,  cd:.55, kb:180, dig:1, sockets:1, sc:'r', tend:'rrr', ilvl:80},
  bow:  {slot:'ranged',n:'Bow',   dmg:8,  speed:420,cd:.5,  kb:60,  pierce:0, sockets:1, col:'#d8d0b0', sc:'g', tend:'ggr'},
  wand: {slot:'ranged',n:'Wand',  dmg:7,  speed:340,cd:.34, kb:40,  pierce:0, sockets:2, col:'#9fd0ff', sc:'bb', tend:'bbb'},
  vest: {slot:'armor', n:'Leather Vest', hp:20, arm:2, sockets:1, sc:'g', tend:'rgb'},
@@ -768,9 +772,9 @@ const GEAR={
  robe: {slot:'armor', n:'Runed Robe',   hp:12, arm:0, sockets:3, fuel:25, sc:'bbb', tend:'bbb', ilvl:260},
  harness:{slot:'armor',n:'Delver Harness',hp:22,arm:3,sockets:2, fuel:70, sc:'gb', tend:'gbr', ilvl:340},
  plate:{slot:'armor', n:'Plate',        hp:80, arm:12, sockets:1, sc:'r', tend:'rrr', ilvl:900},
- greataxe:{slot:'melee',n:'Greataxe', dmg:30, range:32, arc:120, cd:.85, kb:300, dig:2, sockets:2, sc:'rr', tend:'rrr', ilvl:900},
+ greataxe:{slot:'melee',n:'Greataxe', dmg:30, range:42, arc:120, cd:.85, kb:300, dig:2, sockets:2, sc:'rr', tend:'rrr', ilvl:900},
  crossbow:{slot:'ranged',n:'Crossbow',dmg:20, speed:560, cd:.9, kb:120, pierce:1, sockets:2, col:'#c9b48f', sc:'gg', tend:'ggb', ilvl:900},
- shield:{slot:'any',  n:'Shield', dmg:6, range:20, arc:70, cd:.5, kb:260, dig:0, sockets:1, shield:1, arm:4, sc:'r', tend:'rrb'},
+ shield:{slot:'any',  n:'Shield', dmg:6, range:26, arc:70, cd:.5, kb:260, dig:0, sockets:1, shield:1, arm:4, sc:'r', tend:'rrb'},
 };
 // UNIQUES — rarity 3. One per base. mod() runs AFTER all gems, so uniques break rules.
 // Damage changes go through `a.more`, same as supports (DESIGN-PLAN §1.1 — one Π pool).
@@ -2549,13 +2553,29 @@ function doMelee(){
  if(a.chan&&!spendFocus(a.chan*DT,true))return;   // channelled skills pay per tick
  P.mcd=a.cd*liveSpeedMul();
  if(a.lunge&&!P.block){P.vx=P.face*a.lunge;P.inv=Math.max(P.inv,0.12);burst(P.x,P.y,'#ffffff40',4)}
- const fang=P.face>0?0:Math.PI, half=a.arc*Math.PI/360;
+ // Aim resolves BEFORE the step so the step goes toward the thing you are about to hit.
+ // A shield bash keeps the shield's directional identity: plain facing, no aim, no step —
+ // the same contract as doMeleeAs, so one item behaves the same in either hand.
+ const bash=isShield('melee');
+ const fang=bash?(P.face>0?0:Math.PI):meleeAim(a), half=a.arc*Math.PI/360;
+ P.swingA=fang;   // render draws the slash along the RESOLVED swing, same law as the aim reticle
+ // Root-motion step-in: excluded for the Lunge gem (which stays the BIG dash), channelled
+ // skills (a step per Whirlwind tick is a free movement engine), a planted blocker, and
+ // input held AWAY from the facing (retreat stays retreat). collideMove respects walls, and
+ // a position step (not velocity) means this same swing's hit test benefits — the punish
+ // math needs that — while Momentum's |vx| read gets no free credit at a standstill.
+ if(!bash&&!a.lunge&&!a.chan&&!P.block&&(IN.x===0||Math.sign(IN.x)===P.face))collideMove(P,P.face*MELEE_STEP,0);
  let hit=false;
  for(const e of EN){if(e.hp<=0||(e.invT||0)>0)continue;   // an invulnerable target is not a hit
-  const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,dy);
+  // Distance to the BOX, not the center: a crawler standing on your floor has its center 21px
+  // below yours, which silently ate 6px of sword reach on every grounded fight. Vertical
+  // separation counts only past the stacked half-heights.
+  const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,Math.max(0,Math.abs(dy)-(P.h+e.h)/2));
   if(d>=a.range+e.w/2)continue;
   const ang=Math.atan2(dy,dx),diff=Math.abs(Math.atan2(Math.sin(ang-fang),Math.cos(ang-fang)));
-  if(diff<=half||d<12){
+  // Forgiveness, not reach: anything OVERLAPPING your body is hit by any swing regardless of
+  // arc (the old d<12 point-blank exemption missed a bat chewing your head from 15px up).
+  if(diff<=half||(Math.abs(dx)<(P.w+e.w)/2&&Math.abs(dy)<(P.h+e.h)/2)){
    strike(e,a,Math.sign(dx||P.face)*a.kb);hit=true;
    // Aftershock's blast used to be hard-coded to 0 damage, so the gem cost 15% less damage
    // and gave literally nothing back. `skip` keeps it from double-hitting the enemy already struck.
@@ -2605,6 +2625,29 @@ function aimVec(){
  const best=nearestEnemy(R);
  if(best){const d=Math.max(1,Math.hypot(best.x-P.x,best.y-P.y));return{x:(best.x-P.x)/d,y:(best.y-P.y)/d}}
  return{x:P.face,y:0}}
+// Swing-time aim. The cursor/right stick is intent and owns the swing; auto-aim only ever
+// bends when the hands are neutral, and never overrides a held direction (assist philosophy,
+// same as aimVec). This is also the keyboard+touchpad fix: the mouse aimed ranged but melee
+// pointed wherever you last WALKED — you could not point a swing at anything.
+function meleeAim(a){
+ // On pad, IN.manual lingers 1.5s after the right stick is released — and the thumb must
+ // LEAVE the stick to press melee, so a raw check swings at a stale aim against held
+ // movement. Pads only trust manual aim that is fresher than 0.2s; mouse aim is a live
+ // position and stays trusted for the full decay.
+ // Face writes are guarded by P.dodgeT: the roll recomputes vx from P.face every frame, so a
+ // mid-dodge face flip REVERSED the roll and exited you on top of the enemy as i-frames ended.
+ // The swing still aims (return value) — only the body keeps its committed direction.
+ if(IN.manual&&(INMODE!=='pad'||perf-(IN.manualT||0)<0.2)){
+  if(P.dodgeT<=0)P.face=IN.aimX<0?-1:1;return Math.atan2(IN.aimY,IN.aimX)}
+ if(!SET.aimassist)return P.face>0?0:Math.PI;
+ let best=null,bd=a.range+MELEE_STEP+12;
+ for(const e of EN){if(e.hp<=0||(e.invT||0)>0)continue;
+  const d=Math.hypot(e.x-P.x,e.y-P.y)-e.w/2;if(d<bd){bd=d;best=e}}
+ if(!best)return P.face>0?0:Math.PI;
+ const dx=best.x-P.x;
+ if(IN.x===0&&!P.block&&P.dodgeT<=0)P.face=dx<0?-1:1;           // neutral: face the bite — but a planted blocker (deflection is faced-side) and a committed roll keep their direction
+ if(Math.sign(dx||P.face)!==P.face)return P.face>0?0:Math.PI;   // held away: never override
+ return Math.atan2(best.y-P.y,dx)}                              // on-side: tilt for flyers
 function doRanged(){
  const a=ATK.ranged;if(!a||P.rcd>0)return;
  if(a.kind==='melee'){doMeleeAs(a);return} // shield in ranged slot => bash
@@ -3117,7 +3160,11 @@ function upEnemies(dt){
   let lunging=false;
   // THE THREE BEATS. wind (tell, no damage) -> act (live, lunging) -> rec (spent, punishable).
   // `endAct` is the one place act ends, so recovery can never be skipped by a code path.
-  const endAct=()=>{e.act=0;e.rec=(e.atk&&e.atk.rec)||0.24;e.vx*=0.35};
+  const endAct=()=>{e.act=0;e.rec=(e.atk&&e.atk.rec)||0.24;e.vx*=0.35;
+   // The moment the window OPENS must pop: 3 dust motes at the feet — "it stumbled".
+   burst(e.x,e.y+e.h/2-2,'#9a938a',3);
+   // never teach during a boss fight — grunts re-trigger this within seconds of any descent
+   if(!e.boss&&Math.hypot(e.x-P.x,e.y-P.y)<240)hint('punish','It is SPENT — the amber bar is your window. Strike now for extra damage')};
   if(e.atk){e.acd=Math.max(0,e.acd-dt*frenzy);
    if(e.act>0){e.act-=dt;lunging=true;
     const tw=onDecoy?12:P.w, th=onDecoy?20:P.h;
@@ -3126,6 +3173,7 @@ function upEnemies(dt){
      else{
       const before=P.inv;hurtPlayer(e.dmg,false,e.x);
       if(P.inv>before){
+       if(!e.boss)hint('dodge',`${pr('dodge')} dodges THROUGH an attack — you are untouchable for a beat`);
        P.vx+=Math.sign(-dx||1)*-(e.atk.kb||150);
        if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
        if(e.elite&&e.elite.hex)applyStatus(P,e.elite.hex,true);
@@ -3141,14 +3189,28 @@ function upEnemies(dt){
     if(e.wind<=0){e.act=e.atk.act;e.slammed=0;e.vx=e.dir*(e.atk.lunge||160)}}
    else if((e.rec||0)>0){e.rec-=dt;e.vx*=0.86}   // spent: cannot act, cannot turn, takes more
    else if(e.acd<=0&&d<atkReach(e.atk)*0.85+e.w/2&&e.invT<=0){e.wind=e.atk.wind;e.acd=e.atk.cd;
-    e.dir=Math.sign(dx)||e.dir}}
+    e.dir=Math.sign(dx)||e.dir;
+    if(!e.boss&&d<240)hint('fight',`Strike ${pr('mel')} · shoot ${pr('rng')} · dodge ${pr('dodge')}`)}}
   const winding=e.wind>0, recovering=(e.rec||0)>0;
   // Rule 15 applies hardest to the units with the most going on: a spent boss must not open a
   // bolt ring or lock a beam into the window you just earned. Continuing states still tick.
   if(e.boss&&e.pats&&e.invT<=0&&(e.rec||0)<=0&&e.wind<=0)bossOngoing(e,dt,dx,dy,d);
   if(e.ai==='walk'){
    if(d<320&&Math.abs(dy)<80&&!winding&&!recovering)e.dir=Math.sign(dx)||e.dir;
-   if(!winding&&!lunging&&!recovering)e.vx+=(e.dir*e.spd*cm-e.vx)*Math.min(1,dt*6);
+   // HOLD-AT-RANGE: while its swing is on cooldown, an armed enemy closes to ~70% of its
+   // reach and WAITS — visibly coiled, honestly outside your static reach, one step-in away
+   // from your envelope and one acd tick from its own committed windup. Enemies with an atk
+   // block do no contact damage outside `act`, so standing off costs nothing mechanically and
+   // buys everything legibly: neutral is where a dance happens. Bosses stay relentless.
+   // Ambushers (windup <= 0.3s: stalker, ember, delvemite, voidling) never hold — their
+   // identity is the rush, and holding at 0.7x reach let a plain backpedal outrun their
+   // re-commit forever (0.3x reach overshoot vs 44px covered during the windup floor).
+   if(!winding&&!lunging&&!recovering){
+    // No hold with a wall ahead: the ledge-hop supplies vy but needs this horizontal carry,
+    // and a holder at a 1-tile step pogoed in place forever — a permanent melee-cheese spot.
+    const hold=e.atk&&!e.boss&&e.atk.wind>0.3&&e.acd>0&&d<atkReach(e.atk)*0.7+e.w/2&&Math.abs(dy)<60
+     &&!solidAt(e.x+e.dir*(e.w/2+3),e.y);
+    e.vx+=((hold?0:e.dir*e.spd*cm)-e.vx)*Math.min(1,dt*6)}
    e.vy+=GRAV*dt;
    // hop small ledges / turn at walls
    const ahead=solidAt(e.x+e.dir*(e.w/2+3),e.y);
@@ -3157,7 +3219,16 @@ function upEnemies(dt){
    collideMove(e,e.vx*dt,Math.min(e.vy*dt,14));
   }else{ // fly
    if(winding||recovering){e.vx*=0.8;e.vy*=0.8}
-   else if(d<380&&d>0.001){e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}
+   else if(d<380&&d>0.001){
+    // Same hold-at-range as walkers. Wraiths (phase) and burrowers keep closing — "the wall
+    // is not a plan" is their identity, and suite-11 asserts the burrower CLOSES distance.
+    // !lunging: acd>0 during the act frames, and damping a committed lunge violates rule 15.
+    // The vertical gate keeps an off-level flyer SEEKING — a bat frozen 30px above the player
+    // lunged horizontally past its own connect box forever.
+    const hold=e.atk&&!e.boss&&e.atk.wind>0.3&&!lunging&&!ED.phase&&!ED.burrows&&e.acd>0
+     &&d<atkReach(e.atk)*0.7+e.w/2&&Math.abs(dy)<(e.h+P.h)/2+6;
+    if(hold){e.vx*=0.95;e.vy*=0.95}
+    else{e.vx+=(dx/d*e.spd*cm-e.vx)*dt*3;e.vy+=(dy/d*e.spd*cm-e.vy)*dt*3}}
    else{e.vx+=Math.sin(perf*2+e.x)*10*dt;e.vy+=Math.cos(perf*1.7+e.y)*10*dt}
    // Wraiths ignore terrain entirely — there is no wall to put between you and the abyss.
    if(ED.phase){e.x+=e.vx*dt;e.y+=e.vy*dt;e.onG=false;
@@ -3410,7 +3481,9 @@ function upPlayer(dt){
  if(P.hpDrain>0){const d=P.hpDrain;P.hpDrain=0;P.hp-=d;
   if(P.hp<=0&&!secondWind()){die();return}}
  const ms=moveSpd();
- if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*2.4;P.vy=Math.min(P.vy,0)}
+ if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*2.4;P.vy=Math.min(P.vy,0);
+  // afterimage streak — ~13 particles per roll, guarded well under the PART 350 cap
+  if(PART.length<330)PART.push({x:P.x,y:P.y-2,vx:0,vy:0,t:0.16,col:'#9fd0ff90'})}
  else{
   const ax=IN.x; if(ax)P.face=Math.sign(ax);
   P.vx+=((ax*ms)-P.vx)*Math.min(1,dt*14);
@@ -3832,7 +3905,8 @@ function openMap(){
  // Separate x and y steps: the world is 1600 tiles wide and 3200 deep, so one step for both
  // wastes half the map on empty space past the world edge. This shows the whole shaft.
  const W=280,H=340,SX=6,SY=10;
- const ptx=Math.floor(P.x/TILE),pty=Math.floor(P.y/TILE);
+ // World-aligned sampling lattice — see drawMinimap for why (ore dots swam as you moved).
+ const ptx=Math.floor(P.x/TILE/SX)*SX,pty=Math.floor(P.y/TILE/SY)*SY;
  const c=document.createElement('canvas');c.width=W;c.height=H;
  const g=c.getContext('2d');
  g.fillStyle='#07070c';g.fillRect(0,0,W,H);
@@ -3857,7 +3931,7 @@ function openMap(){
  g.fillStyle='#ffffff14';
  if(ex0>0&&ex0<W)g.fillRect(ex0,0,1,H);
  if(ex1>0&&ex1<W)g.fillRect(ex1,0,1,H);
- g.fillStyle='#fff';g.fillRect(W/2-1,H/2-1,3,3);
+ mark(P.x,P.y,'#fff',3);
  // depth ruler down the side, so "how far down am I" has an answer on the map itself
  g.font='7px monospace';g.textAlign='left';
  for(let d=0;d<=WORLD_H;d+=400){const my=(d-pty)/SY+H/2;
@@ -4388,7 +4462,9 @@ function menuInput(){
 // The same action is SPACE, A or ✕ depending on what you last touched. Every label in the UI
 // goes through pr() so nothing ever tells a controller player to press E.
 const GLYPH={
- kb:   {jump:'SPACE',mel:'LMB',rng:'RMB',dodge:'SHIFT',abil:'F',bag:'E',camp:'C',map:'M',pause:'ESC',confirm:'ENTER',cancel:'ESC',move:'WASD',aim:'MOUSE'},
+ // mel/rng carry the key alternates: a touchpad has no comfortable RMB and no MMB at all,
+ // and nothing else ever tells that player the keys exist.
+ kb:   {jump:'SPACE',mel:'LMB/J',rng:'RMB/K',dodge:'SHIFT',abil:'F',bag:'E',camp:'C',map:'M',pause:'ESC',confirm:'ENTER',cancel:'ESC',move:'WASD',aim:'MOUSE'},
  xbox: {jump:'A',mel:'X',rng:'RT',dodge:'B',abil:'LT',bag:'BACK',camp:'R3',map:'L3',pause:'START',confirm:'A',cancel:'B',move:'L-STICK',aim:'R-STICK'},
  ps:   {jump:'✕',mel:'□',rng:'R2',dodge:'○',abil:'L2',bag:'SHARE',camp:'R3',map:'L3',pause:'OPTIONS',confirm:'✕',cancel:'○',move:'L-STICK',aim:'R-STICK'},
  touch:{jump:'JUMP',mel:'MEL',rng:'RNG',dodge:'DODGE',abil:'ABIL',bag:'BAG',camp:'CAMP',map:'MAP',pause:'❚❚',confirm:'TAP',cancel:'BACK',move:'STICK',aim:'AUTO'},
@@ -4537,7 +4613,10 @@ function drawMinimap(){
  if(!MM){MM=document.createElement('canvas');MM.width=MMW;MM.height=MMH}
  const g=MM.getContext('2d');
  g.fillStyle='#0a0a0fdd';g.fillRect(0,0,MMW,MMH);
- const ptx=Math.floor(P.x/TILE),pty=Math.floor(P.y/TILE);
+ // Sample on a WORLD-aligned lattice, not a player-aligned one. Anchoring the grid to the
+ // player meant every step shifted which tiles got sampled, so thin ore veins blinked in and
+ // out as you moved — the map looked alive when it was just aliasing.
+ const ptx=Math.floor(P.x/TILE/MMSTEP)*MMSTEP,pty=Math.floor(P.y/TILE/MMSTEP)*MMSTEP;
  const pros=auraHas('prospector');   // Prospector reveals ore and secrets through rock
  for(let my=0;my<MMH;my++)for(let mx=0;mx<MMW;mx++){
   const tx=ptx+(mx-MMW/2)*MMSTEP,ty=pty+(my-MMH/2)*MMSTEP;
@@ -4558,7 +4637,7 @@ function drawMinimap(){
  for(const sh of SHRINES)if(!sh.used)mark(sh.x,sh.y,'#ffe9a0',2);
  for(const e of EN)if(e.boss)mark(e.x,e.y,'#e05555',3);
  if(ANCHOR)mark(ANCHOR.x,ANCHOR.y,'#3fc9c1',3);
- g.fillStyle='#fff';g.fillRect(MMW/2-1,MMH/2-1,2,2);
+ mark(P.x,P.y,'#fff',2);   // true position on the quantized lattice, not a hard-coded center
  g.strokeStyle='#44444488';g.strokeRect(.5,.5,MMW-1,MMH-1)}
 // ---- per-biome sky + parallax. Depth has to LOOK like depth. ----
 const SKY=[['#28344a','#3d4d63'],['#101018','#191924'],['#131020','#1e1830'],
@@ -4711,8 +4790,14 @@ function render(){
   // put a small pale tick over the head for the whole of it.
   else if(spent)col='#5a5550';
   else if(charging)col=(Math.floor(perf*18)&1)?'#ffffff':e.c;
+  // The tick is a CLOCK now — same grammar as the windup marker: a bar that drains is a
+  // window you can read. Amber is the game's opportunity color (interrupt burst, cull flash).
+  // Deliberately NOT hidden by ECHO.nomark: Silent removes windup markers (the threat), not
+  // the spent tell (your earned reward).
   if(spent){h=e.h*0.9;
-   ctx.fillStyle='#ffe9a0d0';ctx.fillRect(x-3,y-e.h/2-6,6,2)}
+   const rmax=(e.atk&&e.atk.rec)||0.24,rt=Math.max(0,Math.min(1,e.rec/rmax));
+   ctx.fillStyle='#ffe9a030';ctx.fillRect(x-7,y-e.h/2-7,14,3);
+   ctx.fillStyle='#ffe9a0d0';ctx.fillRect(x-7,y-e.h/2-7,14*rt,3)}
   // Windup swells the sprite; the flash and status tint are masked copies so the silhouette
   // survives instead of being replaced by a coloured rectangle.
   const anim=(e.act>0)?2:(winding?1:((perf*4+e.x)|0));
@@ -4774,8 +4859,12 @@ function render(){
     ctx.fillStyle='#000';ctx.fillRect(x+P.face*2,y-P.h/2+2,2,2)}
    if(drew&&P.inv>0.45)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#ffffff',0.5)}
   if(P.block){ctx.fillStyle='#9fd0ff';ctx.fillRect(x+P.face*7,y-P.h/2,3,P.h)}
-  if(ATK.melee&&P.mcd>ATK.melee.cd*0.7){ctx.fillStyle='#ffffff60';
-   ctx.fillRect(x+P.face*8,y-8,P.face*14,3)}
+  if(ATK.melee&&P.mcd>ATK.melee.cd*0.7){
+   // Along the RESOLVED swing angle — the slash must show where the swing actually went,
+   // same law as the aim reticle ("what you see is exactly where the shot goes").
+   const sa=P.swingA===undefined?(P.face>0?0:Math.PI):P.swingA;
+   ctx.save();ctx.translate(x,y-4);ctx.rotate(sa);
+   ctx.fillStyle='#ffffff60';ctx.fillRect(8,-2,14,3);ctx.restore()}
   if(P.st){let i=0;for(const k in P.st){if(!P.st[k].length)continue;
    ctx.fillStyle=STATUS[k].c;ctx.fillRect(x-6+i*5,y-P.h/2-6,3,3);i++}}}
  if(GRAPPLE){ctx.strokeStyle='#d8a53f';ctx.lineWidth=1;ctx.beginPath();

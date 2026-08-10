@@ -74,8 +74,8 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 
 | base | slot | dmg | cd | dps | range/speed | sockets | colors | armor | hp | fuel | dig |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Sword | melee | 10 | 0.38 | 26.3 | 26 | 1 | r | 0 | 0 | 0 | 0 |
-| Axe | melee | 16 | 0.55 | 29.1 | 24 | 1 | r | 0 | 0 | 0 | 1 |
+| Sword | melee | 10 | 0.38 | 26.3 | 34 | 1 | r | 0 | 0 | 0 | 0 |
+| Axe | melee | 16 | 0.55 | 29.1 | 32 | 1 | r | 0 | 0 | 0 | 1 |
 | Bow | ranged | 8 | 0.5 | 16.0 | 420 | 1 | g | 0 | 0 | 0 | — |
 | Wand | ranged | 7 | 0.34 | 20.6 | 340 | 2 | bb | 0 | 0 | 0 | — |
 | Leather Vest | armor | — | — | — | — | 1 | g | 2 | 20 | 0 | — |
@@ -83,9 +83,9 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | Runed Robe | armor | — | — | — | — | 3 | bbb | 0 | 12 | 25 | — |
 | Delver Harness | armor | — | — | — | — | 2 | gb | 3 | 22 | 70 | — |
 | Plate | armor | — | — | — | — | 1 | r | 12 | 80 | 0 | — |
-| Greataxe | melee | 30 | 0.85 | 35.3 | 32 | 2 | rr | 0 | 0 | 0 | 2 |
+| Greataxe | melee | 30 | 0.85 | 35.3 | 42 | 2 | rr | 0 | 0 | 0 | 2 |
 | Crossbow | ranged | 20 | 0.9 | 22.2 | 560 | 2 | gg | 0 | 0 | 0 | — |
-| Shield | any (shield) | 6 | 0.5 | 12.0 | 20 | 1 | r | 4 | 0 | 0 | 0 |
+| Shield | any (shield) | 6 | 0.5 | 12.0 | 26 | 1 | r | 4 | 0 | 0 | 0 |
 
 ## Gems by type
 

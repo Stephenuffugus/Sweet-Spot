@@ -334,7 +334,10 @@ console.log('\n-- regressions --');
   bossSummon(b2, 1); flushSpawns();
   const hard = EN.find(o => o.spawnedBy === 'warden');
   A(plain && hard, 'a boss summons adds');
-  A(hard.hp > plain.hp, 'and its reinforcements obey the Echo ladder too');
+  // bossSummon rolls the species with an RNG draw, so the two summons can be different
+  // creatures — compare the ECHO multiplier (hp relative to the species base), not raw hp.
+  A(hard.hp / ENEMIES[hard.type].hp > plain.hp / ENEMIES[plain.type].hp,
+    'and its reinforcements obey the Echo ladder too');
   META.echoLv = 0; refreshEcho();
 }
 { // interrupt is a tool, not an off switch

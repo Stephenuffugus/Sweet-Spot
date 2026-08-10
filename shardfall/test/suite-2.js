@@ -13,11 +13,17 @@ try{
  P.hp=P.maxhp;EN.length=0;
  EQ.melee=mkItem('sword',0);refreshAttacks(); // strip class signature gem for a clean arc test
  EQ.melee=mkItem('sword',0);refreshAttacks(); // clear class signature gem for a clean arc test
- // enemy at ~65° off facing axis: inside cleave's 75° half-arc, outside sword's 50°
+ // enemy at ~65° off facing axis: inside cleave's 75° half-arc, outside sword's 50°.
+ // Swing-time aim (suite 16) tilts the cone toward a nearby bite on neutral input, which is
+ // designed — so the ARC test runs with assist off, where old behavior is preserved exactly.
+ // ...and with input held away from the facing so the step-in (suite 16) does not walk the
+ // swing origin past the enemy — a retreating swing has no step, which is the pure-arc case.
+ SET.aimassist=0;IN.x=-1;
  EN.push({x:P.x+9,y:P.y-19,vx:0,vy:0,w:14,h:12,type:'crawler',ai:'walk',c:'#fff',hp:999,dmg:0,spd:0,onG:false,flash:0,dir:1});
  P.face=1;doMelee();assert(EN[0].hp===999,'sword 100° arc misses steep diagonal');
  EQ.melee.sockets[0]='cleave';refreshAttacks();P.mcd=0;doMelee();
  assert(EN[0].hp<999,'cleave 150° arc hits steep diagonal');
+ SET.aimassist=55;IN.x=0;
  EN.length=0;
  // shield: equip melee slot, tap=bash, hold=block
  EQ.melee=mkItem('shield',0);refreshAttacks();
