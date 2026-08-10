@@ -1,6 +1,10 @@
 # SHARDFALL — the long plan
 
-**Status: session 10 executed Sprints 0, 3, 4, 5, 6, 7, 8 and most of 9, plus a long-tail system
+**Status: session 11 (2026-08-10) played the game for the first time (two rounds) and executed
+the full ten-wave content universe from `design/wave/master-plan.md` — combat feel, movement
+progression, two classes, world depth, twelve enemies, gear + the Forge, THE WEFT and three
+endings, the camp characters, and the long tail. What remains is tuning from play, and art
+for props (wave-10 art extension). Previous status: session 10 executed Sprints 0, 3, 4, 5, 6, 7, 8 and most of 9, plus a long-tail system
 that was not in this plan (§9 below).** What remains is play, not build. The numbered sprints
 below are kept for their reasoning; each one now carries what actually shipped.
 
