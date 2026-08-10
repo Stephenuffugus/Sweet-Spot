@@ -216,22 +216,22 @@ A(GLYPH.kb.mel.indexOf('J') >= 0, 'keyboard melee label carries the key alternat
 A(GLYPH.kb.rng.indexOf('K') >= 0, 'keyboard ranged label carries the key alternative (RMB/K)');
 A(KEYMAP.mel.includes('KeyJ') && KEYMAP.rng.includes('KeyK'), 'the keys the labels promise exist');
 { // the three combat tips fire once each, at the teachable moment
-  OFF(); META.hints = {}; SET.hints = 1; P.inv = 999; IN.x = 0;
+  OFF(); META.tips = {}; SET.hints = 1; P.inv = 999; IN.x = 0;
   const e = mkE({ atk: mkAtk(ENEMIES.crawler.atk), acd: 0, dmg: 5, spd: 0, x: P.x + 40, y: P.y });
   EN.push(e); upEnemies(DT);
-  A(META.hints.fight === 1, 'first windup within 240px teaches the buttons');
+  A(META.tips.fight === 1, 'first windup within 240px teaches the buttons (in META.tips, the v3 store)');
   for (let i = 0; i < 400 && !(e.rec > 0); i++) upEnemies(DT);
-  A(META.hints.punish === 1, 'first spent enemy within 240px teaches the window');
+  A(META.tips.punish === 1, 'first spent enemy within 240px teaches the window');
   OFF(); P.inv = 0; P.hp = P.maxhp;
   const m = mkE({ atk: mkAtk(ENEMIES.crawler.atk), act: 0.1, dmg: 5, x: P.x + 2, y: P.y });
   EN.push(m); upEnemies(DT);
-  A(META.hints.dodge === 1, 'first hit taken teaches the dodge');
+  A(META.tips.dodge === 1, 'first hit taken teaches the dodge');
   // once ever: a second trigger leaves the flags untouched
-  META.hints.fight = 1; OFF(); P.inv = 999;
+  META.tips.fight = 1; OFF(); P.inv = 999;
   const e2 = mkE({ atk: mkAtk(ENEMIES.crawler.atk), acd: 0, dmg: 5, spd: 0, x: P.x + 40, y: P.y });
   EN.push(e2); upEnemies(DT);
-  A(META.hints.fight === 1, 'tips fire once per save, ever');
-  META.hints = {};
+  A(META.tips.fight === 1, 'tips fire once per save, ever');
+  META.tips = {};
 }
 // restore knobs other suites assume
 SET.aimassist = 55; IN.manual = false; IN.x = 0; EN.length = 0; PART.length = 0;

@@ -97,7 +97,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   const kept2 = await page.evaluate(() => ({ vol: SET.vol, seen: !!META.seen.en.brute }));
   ok(kept2.vol === 70, 'settings survive a reload');
   ok(kept2.seen, 'codex discoveries survive a reload');
-  ok(kept.ver === 2, `save is at version 2 (${kept.ver})`);
+  ok(kept.ver === 3, `save is at version 3 (${kept.ver})`);
 
   // ---- a v1 save must migrate rather than being discarded ----
   await page.evaluate(() => {
@@ -111,13 +111,18 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   await page.waitForTimeout(400);
   const mig = await page.evaluate(() => ({
     shards: META.shards, ver: META.ver, cls: META.cls, wand: !!META.unlocks.wand,
-    m1: !!META.tree.m1, depth: META.bestDepth, vault: Array.isArray(META.vault), anchor: META.startBiome
+    m1: !!META.tree.m1, depth: META.bestDepth, vault: Array.isArray(META.vault), anchor: META.startBiome,
+    // every v3 field must exist after a v1 blob migrates, and the unlocked wand must seed
+    // the gem collection (v3 seeds seen.gem from DEFAULT_GEM_POOL + unlocked gem ids)
+    v3: ['endings', 'forge', 'dlg', 'firsts', 'tips', 'moves'].every(k => META[k] && typeof META[k] === 'object')
+      && !!META.seen.gem && !!META.seen.uni,
   }));
   ok(mig.shards === 777, 'v1 save keeps its shards through migration');
   ok(mig.wand && mig.m1, 'v1 unlocks and tree nodes survive');
   ok(mig.cls === 'delver' && mig.anchor === 'caves', 'v1 class and anchor survive');
   ok(mig.depth === 412, 'v1 best depth survives');
-  ok(mig.ver === 2 && mig.vault, 'v1 save is upgraded to v2 with a vault');
+  ok(mig.ver === 3 && mig.vault, 'v1 save is upgraded to v3 with a vault');
+  ok(mig.v3, 'all eight v3 fields exist after migration');
 
   await browser.close(); srv.close();
   console.log('');

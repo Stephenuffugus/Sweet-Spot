@@ -1925,7 +1925,7 @@ function sweepChunks(){ // evict offscreen chunk canvases (~2.3MB each) — tile
 // ============ META / SAVE ============
 // SAVE ver 2: sockets became {id,tier} and the Vault arrived. v1 blobs migrate in place
 // rather than being thrown away — a save is someone's twenty runs.
-const SAVE_VER=2;
+const SAVE_VER=3;
 let META={ver:SAVE_VER,shards:0,unlocks:{},tree:{},cls:'vanguard',classes:{vanguard:1},
  loadout:{melee:'sword',ranged:'bow',armor:'vest'},anchors:{surface:1},startBiome:'surface',
  vault:[],bosses:{},runs:0,bestDepth:0,audio:1,threat:0,maxThreat:0,
@@ -1933,12 +1933,26 @@ let META={ver:SAVE_VER,shards:0,unlocks:{},tree:{},cls:'vanguard',classes:{vangu
  echoLv:0,maxEcho:0,
  // Codex discovery. Pages exist from the start but stay sealed until you earn them, so the
  // lore is a reward for playing rather than a wall of text on the title screen.
- seen:{en:{},item:{},biome:{},frag:{},cls:{},sigil:{},diss:{}},set:null,
- echoes:{},escapes:0};
+ seen:{en:{},item:{},biome:{},frag:{},cls:{},sigil:{},diss:{},gem:{},uni:{}},set:null,
+ echoes:{},escapes:0,
+ // v3: the endings seen, the Forge's ledger, camp dialogue heard, first-time flags, one-shot
+ // tips shown (hints renamed), the movement track earned.
+ endings:{},forge:{n:0,owk:0},dlg:{},firsts:{},tips:{},moves:{}};
 function saveMeta(){try{localStorage.setItem('shardfall',JSON.stringify(META))}catch(e){}}
 function migrate(m){
  if(!m.ver||m.ver<2){ // v1 -> v2: bare-string sockets become {id,tier:1}; vault starts empty
   m.vault=[];m.bosses=m.bosses||{};m.ver=2}
+ if(m.ver<3){ // v2 -> v3: endings, the Forge, camp dialogue, tips (hints renamed), movement, collection
+  m.endings=m.endings||{};
+  m.forge=m.forge||{n:0,owk:0};
+  m.dlg=m.dlg||{};m.firsts=m.firsts||{};
+  m.tips=Object.assign({},m.hints||{});          // shown-once history survives; hints retired
+  m.moves={};
+  m.seen=m.seen||{};m.seen.gem=m.seen.gem||{};m.seen.uni=m.seen.uni||{};
+  for(const k in (m.seen.item||{}))if(k.indexOf('#')>0)m.seen.uni[k]=1;   // alt uniques recoverable
+  for(const g of DEFAULT_GEM_POOL)m.seen.gem[g]=1;
+  for(const k in (m.unlocks||{}))if(GEMS[k])m.seen.gem[k]=1;
+  m.ver=3}
  return m}
 function loadMeta(){
  try{const raw=localStorage.getItem('shardfall');
@@ -1953,8 +1967,14 @@ function loadMeta(){
  // the tiers. Idempotent, so a correct maxThreat is left alone.
  META.maxThreat=Math.max(META.maxThreat|0,Math.min(THREATS.length-1,Object.keys(META.bosses).length));
  if(!META.seen)META.seen={};
- for(const k of ['en','item','biome','frag','cls','sigil','diss'])if(!META.seen[k])META.seen[k]={};
+ for(const k of ['en','item','biome','frag','cls','sigil','diss','gem','uni'])if(!META.seen[k])META.seen[k]={};
  if(!META.echoes)META.echoes={};
+ // v3 belt-and-braces: every new field survives a hand-edited or partial blob.
+ if(!META.endings)META.endings={};
+ if(!META.forge)META.forge={n:0,owk:0};
+ if(!META.dlg)META.dlg={};if(!META.firsts)META.firsts={};
+ if(!META.tips)META.tips=Object.assign({},META.hints||{});
+ if(!META.moves)META.moves={};
  META.ver=SAVE_VER;
  AUDIO_ON=META.audio!==0;
  if(!META.startBiome||!META.anchors[META.startBiome])META.startBiome='surface'}
@@ -3971,9 +3991,9 @@ function startRun(){
 // Teaching by interruption is worse than teaching by timing.
 function hint(id,text){
  if(!SET.hints)return;
- META.hints=META.hints||{};
- if(META.hints[id])return;
- META.hints[id]=1;saveMeta();
+ META.tips=META.tips||{};   // v3: tips is the one store; META.hints is retired (migrated)
+ if(META.tips[id])return;
+ META.tips[id]=1;saveMeta();
  toast(text)}
 
 // -------- codex --------

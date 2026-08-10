@@ -267,11 +267,11 @@ console.log('\n-- codex --');
   A(nextFrag(0) === null || nextFrag(0).depth <= 0, 'depth gates which fragments can appear');
   for (const f of LORE.frag) discover('frag', f.id, true);
   A(nextFrag(9999) === null, 'once every fragment is found there are no more');
-  // hints fire once
-  META.hints = {}; SET.hints = 1;
-  hint('t1', 'x'); A(!!META.hints.t1, 'a hint records itself');
-  const n = Object.keys(META.hints).length;
-  hint('t1', 'x'); A(Object.keys(META.hints).length === n, 'and does not fire twice');
+  // hints fire once — v3 stores them in META.tips (META.hints is retired, migrated)
+  META.tips = {}; SET.hints = 1;
+  hint('t1', 'x'); A(!!META.tips.t1, 'a hint records itself');
+  const n = Object.keys(META.tips).length;
+  hint('t1', 'x'); A(Object.keys(META.tips).length === n, 'and does not fire twice');
 }
 
 // ---------- 6b. REGRESSIONS ----------
