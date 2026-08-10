@@ -201,7 +201,7 @@ function build(cls, band) {
   META.cls = cls; META.threat = 0; newRun();
   OFF(band.m);
   META.tree = {};
-  const br = cls === 'marksman' ? 's' : cls === 'pyromancer' ? 's' : cls === 'delver' ? 'c' : 'm';
+  const br = (cls === 'marksman' || cls === 'pyromancer' || cls === 'conductor') ? 's' : cls === 'delver' ? 'c' : 'm';
   for (let i = 1; i <= band.tree; i++) META.tree[br + i] = 1;
   RUNB = RUNB0();
   RUNB.dmg = 0.15 * Math.floor(band.lvl / 2) + 0.25 * band.boons;   // attunements + Wrath-class boons
@@ -209,7 +209,7 @@ function build(cls, band) {
   RUNB.cdr = 0.12 * Math.floor(band.lvl / 4);
   RUNB.crit = 0.06 * Math.floor(band.lvl / 5);
   RUNB.critMult = 0.35 * Math.floor(band.lvl / 6);
-  const wslot = (cls === 'marksman' || cls === 'pyromancer') ? 'ranged' : 'melee';
+  const wslot = (cls === 'marksman' || cls === 'pyromancer' || cls === 'conductor') ? 'ranged' : 'melee';
   // gear keeps pace: magic by the ruins, rare by the forge
   const baseId = EQ[wslot] ? EQ[wslot].base : (wslot === 'melee' ? 'sword' : 'bow');
   EQ[wslot] = mkItem(baseId, band.tree >= 4 ? 2 : band.tree >= 2 ? 1 : 0);
@@ -244,7 +244,7 @@ function hitsToDie(type, m) {
   return Math.ceil(P.maxhp / Math.max(1, applyArmor(dmg, P.armor || 0)));
 }
 let ttkFails = 0, ttdFails = 0;
-for (const cls of ['vanguard', 'marksman', 'pyromancer', 'delver']) {
+for (const cls of ['vanguard', 'marksman', 'pyromancer', 'delver', 'conductor', 'bloodletter']) {
   console.log('   ' + cls.toUpperCase());
   for (const band of BANDS) {
     const a = build(cls, band);

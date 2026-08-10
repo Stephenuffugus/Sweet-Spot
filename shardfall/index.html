@@ -756,6 +756,64 @@ const GEMS={
    mod:a=>{a.dmg*=0.85;a.count=3;a.speed*=0.7;a.grav=1;a.bounce=1;a.explode=32;a.cd*=1.15;a.life=2.2;a.col='#8fdc6a'}},
  rend:     {t:'skill',for:'melee',n:'Rend', col:'r', d:'slow, huge, always interrupts',
    mod:a=>{a.dmg*=2.3;a.cd*=1.9;a.interrupt=1;a.stagger=(a.stagger||0)+0.35;a.arc=Math.max(a.arc,120);a.kb*=1.5;a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.35)}},
+ // ---- WAVE 4: STORM AND BLOOD — skills ----
+ impale:   {t:'skill',for:'melee',n:'Impale', col:'r', d:'long thrust, narrow, staggers',
+   mod:a=>{a.dmg*=1.4;a.cd*=1.3;a.range*=2.1;a.arc=Math.min(a.arc,32);a.kb*=1.4;a.stagger=(a.stagger||0)+0.2}},
+ dragline: {t:'skill',for:'melee',n:'Dragline', col:'g', d:'long reach, hauls them to you',
+   mod:a=>{a.dmg*=0.9;a.cd*=1.2;a.range*=2.4;a.arc=Math.min(a.arc,28);a.kb*=-1.6;a.stagger=(a.stagger||0)+0.15}},
+ whipsaw:  {t:'skill',for:'ranged',n:'Whipsaw', col:'r', d:'heavy blade, comes back',
+   mod:a=>{a.dmg*=1.9;a.speed*=0.55;a.cd*=1.4;a.pierce+=2;a.ret=190;a.kb*=1.5;a.col='#c9c9c9'}},
+ cairn:    {t:'skill',for:'ranged',n:'Cairn', col:'g', d:'kills raise a turret from the corpse',
+   mod:a=>{a.dmg*=0.85;a.cd*=1.1;a.raise=6;a.col='#9adcc8'}},
+ mine:     {t:'skill',for:'ranged',n:'Shard Mine', col:'r', d:'plant it, walk away',
+   mod:a=>{a.dmg*=2.2;a.speed*=0.5;a.grav=1;a.mine=1;a.explode=Math.max(a.explode||0,64);a.life=12;a.cd*=1.6;a.col='#e0c04a'}},
+ stormlash:{t:'skill',for:'ranged',n:'Stormlash', col:'b', d:'fast bolt, shocks and chains',
+   mod:a=>{a.dmg*=0.9;a.cd*=0.85;a.speed*=1.3;a.chain=(a.chain||0)+2;a.st=a.st||{};a.st.shock=Math.max(a.st.shock||0,1.3);a.col='#e6d34a'}},
+ bloodlet: {t:'skill',for:'melee',n:'Bloodlet', col:'r', d:'costs blood, bleeds hard, feeds you',
+   mod:a=>{a.dmg*=1.6;a.hpCost=(a.hpCost||0)+3;a.leech=(a.leech||0)+0.10;a.kb*=1.2;a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.5)}},
+ deadweight:{t:'skill',for:'melee',n:'Deadweight', col:'r', d:'hits harder the faster you fall',
+   mod:a=>{a.dmg*=1.5;a.cd*=1.35;a.slam=(a.slam||0)+1.1;a.explode=Math.max(a.explode||0,40);a.kb*=1.6;a.dig=Math.max(a.dig||0,1)}},
+ longshot: {t:'skill',for:'ranged',n:'Longshot', col:'g', d:'flies far, hurts far',
+   mod:a=>{a.dmg*=1.3;a.cd*=1.2;a.speed*=1.4;a.farshot=(a.farshot||0)+0.9;a.critAdd=(a.critAdd||0)+0.10;a.life=Math.max(a.life||2,2.5)}},
+ flurry:   {t:'skill',for:'melee',n:'Flurry', col:'g', d:'many small cuts, very fast',
+   mod:a=>{a.dmg*=0.55;a.cd*=0.45;a.range*=0.85;a.kb*=0.5;a.stagger=(a.stagger||0)+0.08}},
+ arcblade: {t:'skill',for:'melee',n:'Arcblade', col:'b', d:'hits shock, and jump once',
+   mod:a=>{a.dmg*=1.05;a.cd*=0.95;a.chain=(a.chain||0)+1;a.st=a.st||{};a.st.shock=Math.max(a.st.shock||0,1.25);a.col='#e6d34a'}},
+ // ---- WAVE 4 — supports (the pure-multiplier budget is FULL; every one changes the contract) ----
+ sterile:  {t:'sup',for:'any', n:'Sterile', col:'b', d:'+35% more damage, hits carry nothing',
+   mod:a=>{a.more*=1.35;a.noSt=1}},
+ firstblow:{t:'sup',for:'any', n:'First Blow', col:'g', d:'+70% more to an unhurt enemy',
+   mod:a=>{a.vsFull=(a.vsFull||0)+0.7;a.more*=0.9}},
+ bloodtithe:{t:'sup',for:'any',n:'Blood Tithe', col:'r', d:'+45% more damage, each attack costs blood',
+   mod:a=>{a.more*=1.45;a.hpCost=(a.hpCost||0)+2}},
+ // overdraw pays REAL focus per attack (focusCost), not a chan trickle — chan charges per
+ // swing at chan*DT ≈ 0.13, which regen outruns; the review that caught it is in design/wave.
+ overdraw: {t:'sup',for:'any', n:'Overdraw', col:'b', d:'+50% more damage, attacks cost focus',
+   mod:a=>{a.more*=1.5;a.focusCost=(a.focusCost||0)+7}},
+ seeker:   {t:'sup',for:'ranged',n:'Seeker', col:'g', d:'projectiles steer toward prey',
+   mod:a=>{a.homing=(a.homing||0)+1.6;a.speed*=0.75;a.more*=0.85}},
+ stormcall:{t:'sup',for:'any', n:'Stormcall', col:'b', d:'three kills charge a thunderbolt',
+   mod:a=>{a.stormcall=1;a.more*=0.9}},
+ longhaft: {t:'sup',for:'melee',n:'Long Haft', col:'r', d:'half again the reach, narrower swing',
+   mod:a=>{a.range*=1.5;a.arc=Math.min(a.arc,50);a.more*=0.95}},
+ ricochet: {t:'sup',for:'ranged',n:'Ricochet', col:'g', d:'projectiles bounce off the rock',
+   mod:a=>{a.bounce=(a.bounce||0)+2;a.life=(a.life||2)*1.3;a.more*=0.88}},
+ vantage:  {t:'sup',for:'any', n:'Vantage', col:'g', d:'+40% more while airborne',
+   mod:a=>{a.aloft=(a.aloft||0)+0.4;a.more*=0.92}},
+ rasp:     {t:'sup',for:'any', n:'Rasp', col:'r', d:'hits file away armor',
+   mod:a=>{a.sunder=(a.sunder||0)+2;a.more*=0.92}},
+ // ---- WAVE 4 — auras ----
+ galvanic: {t:'aura',for:'armor',n:'Galvanic', col:'b', d:'shocks last longer and arc further'},
+ surfeit:  {t:'aura',for:'armor',n:'Surfeit', col:'r', d:'leech past full becomes an overshield'},
+ foreman:  {t:'aura',for:'armor',n:'Foreman', col:'g', d:'your constructs work harder and last longer'},
+ slipstream:{t:'aura',for:'armor',n:'Slipstream', col:'g', d:'dodging reloads both weapons'},
+ plumbline:{t:'aura',for:'armor',n:'Plumbline', col:'r', d:'a hard landing is a weapon'},
+ // ---- WAVE 4 — abilities ----
+ bastion:  {t:'abil',for:'armor',n:'Bastion', col:'r', cd:12, fc:40, fx:'bastion', d:'stand and be stone — 3s of heavy armor'},
+ effigy:   {t:'abil',for:'armor',n:'Effigy', col:'g', cd:14, fc:45, fx:'effigy', d:'a decoy with thorns — it bites back'},
+ lodestone:{t:'abil',for:'armor',n:'Lodestone', col:'b', cd:9, fc:15, fx:'lode', d:'plant it; strike again to snap back'},
+ tempest:  {t:'abil',for:'armor',n:'Tempest', col:'b', cd:15, fc:55, fx:'tempest', d:'a standing storm — everything under it arcs'},
+ transfuse:{t:'abil',for:'armor',n:'Transfuse', col:'r', cd:14, fc:45, fx:'transfuse', d:'rip the bleeds out of the room and drink them'},
 };
 const SOCK={r:{n:'Might',c:'#e05555'},g:{n:'Finesse',c:'#6ad07a'},b:{n:'Focus',c:'#6f8fe0'}};
 const SOCKC=['r','g','b'];
@@ -1061,7 +1119,8 @@ const BOONS=[
  {id:'unbroken',  n:'Unbroken',  d:'survive one fatal hit',                  m:{secondWind:1}},
 ];
 // CLASSES — pick at camp. Each is a starting kit + a permanent passive + a free signature gem.
-// fx keys read by classFx(): hp, meleeDmg, rangedDmg, abilCdr, ms, greed, pierce, blockDR, digBonus
+// fx keys read by classFx(): hp, meleeDmg, rangedDmg, abilCdr, ms, greed, pierce, blockDR,
+// digBonus, shockBonus, bloodRise
 // `foc` names where this class earns Focus beyond the baseline — this is where class identity
 // lives now that abilities cost a resource (DESIGN-PLAN §3.2).
 const CLASSES={
@@ -1077,6 +1136,12 @@ const CLASSES={
  delver:{n:'Delver',    cost:75, d:'Axe and greed. Digs through the world. Earns focus by carving.',
    kit:{melee:'axe',ranged:'bow',armor:'vest'}, gem:{slot:'armor',id:'swiftness'},
    foc:'dig', fx:{ms:.15,greed:.35,digBonus:1,meleeDmg:.10,fuel:40}},
+ conductor:{n:'Conductor',cost:110,d:'Wand and wire. Everything arcs. Earns focus from shocked prey.',
+   kit:{melee:'sword',ranged:'wand',armor:'robe'}, gem:{slot:'ranged',id:'conduit'},
+   foc:'shock', fx:{rangedDmg:.10,cdr:.12,ms:.05,hpMul:-.10,shockBonus:.4}},
+ bloodletter:{n:'Bloodletter',cost:125,d:'Edge and vein. Bleeds everything, itself included. Earns focus while they bleed.',
+   kit:{melee:'sword',ranged:'bow',armor:'vest'}, gem:{slot:'melee',id:'serration'},
+   foc:'ailment', fx:{meleeDmg:.12,leech:.03,ms:.05,bloodRise:.25}},
 };
 // ============ LORE ============
 // The fiction, in one table. Entries unlock by playing: a bestiary page on first kill, an item
@@ -1366,6 +1431,16 @@ being told to.
 
 Digs through the level design. Finds the vault, takes the shards, and has an opinion about
 where the shaft actually goes.`},
+  conductor:{n:'Conductor',d:`The guild kept losing wire-runners to the shard-charge, so it
+started hiring the ones who liked it. A conductor is what you call a delver who has stopped
+insulating.
+
+They do not carry a lamp. They are one.`},
+  bloodletter:{n:'Bloodletter',d:`An old rank, from before the guild had physicians. The kit has
+not changed: something sharp, something to catch the red, and the professional opinion that
+everything down here has too much of it.
+
+They count what they lose and charge it to the deep.`},
  },
 };
 // ============ THE LATTICE — SIGILS, DISSONANCE, ESCAPE ============
@@ -1657,6 +1732,38 @@ const UNLOCKS=[
  {id:'tether',    n:'Tether gem (ability)',    cost:135},
  {id:'hail',      n:'Hail gem',                cost:105},
  {id:'rend',      n:'Rend gem',                cost:120},
+ // ---- content wave 4: storm and blood, and the shapes between. ----
+ {id:'impale',    n:'Impale gem',              cost:95},
+ {id:'dragline',  n:'Dragline gem',            cost:110},
+ {id:'whipsaw',   n:'Whipsaw gem',             cost:100},
+ {id:'cairn',     n:'Cairn gem (minion)',      cost:125},
+ {id:'mine',      n:'Shard Mine gem (trap)',   cost:115},
+ {id:'stormlash', n:'Stormlash gem',           cost:105},
+ {id:'bloodlet',  n:'Bloodlet gem',            cost:110},
+ {id:'deadweight',n:'Deadweight gem',          cost:115},
+ {id:'longshot',  n:'Longshot gem',            cost:95},
+ {id:'flurry',    n:'Flurry gem',              cost:90},
+ {id:'arcblade',  n:'Arcblade gem',            cost:100},
+ {id:'sterile',   n:'Sterile support',         cost:120},
+ {id:'firstblow', n:'First Blow support',      cost:115},
+ {id:'bloodtithe',n:'Blood Tithe support',     cost:110},
+ {id:'overdraw',  n:'Overdraw support',        cost:105},
+ {id:'seeker',    n:'Seeker support',          cost:100},
+ {id:'stormcall', n:'Stormcall support',       cost:130},
+ {id:'longhaft',  n:'Long Haft support',       cost:90},
+ {id:'ricochet',  n:'Ricochet support',        cost:95},
+ {id:'vantage',   n:'Vantage support',         cost:110},
+ {id:'rasp',      n:'Rasp support',            cost:95},
+ {id:'galvanic',  n:'Galvanic aura',           cost:100},
+ {id:'surfeit',   n:'Surfeit aura',            cost:105},
+ {id:'foreman',   n:'Foreman aura',            cost:95},
+ {id:'slipstream',n:'Slipstream aura',         cost:110},
+ {id:'plumbline', n:'Plumbline aura',          cost:90},
+ {id:'bastion',   n:'Bastion gem (ability)',   cost:100},
+ {id:'effigy',    n:'Effigy gem (ability)',    cost:115},
+ {id:'lodestone', n:'Lodestone gem (ability)', cost:105},
+ {id:'tempest',   n:'Tempest gem (ability)',   cost:125},
+ {id:'transfuse', n:'Transfuse gem (ability)', cost:120},
 ];
 // ============ MOVEMENT — GAITS ============
 // Permanent movement, earned by deeds, never sold — the Dead Cells rune model. They live in
@@ -2317,6 +2424,8 @@ function resolveDmg(a,dkey){
  if(a.stR){a.st=a.st||{};for(const k in a.stR)a.st[k]=Math.max(a.st[k]||0,a.dmg*a.stR[k]*ailmentMul()*(a.ailMore||1))}
  else if(a.ailMore&&a.st){for(const k in a.st)if(k!=='chill'&&k!=='shock')a.st[k]*=a.ailMore}
  if(a.st&&a.st.burn)a.st.burn*=1+classFx('burnBonus');
+ // shock potency is a >=1 damage-taken multiplier: scale the EXCESS, never the base
+ if(a.st&&a.st.shock&&classFx('shockBonus'))a.st.shock=1+(a.st.shock-1)*(1+classFx('shockBonus'));
  return a}
 // GEM TIERS (DESIGN-PLAN §3.3). One uniform rule instead of per-gem tier tables: a tier lifts
 // the gem's characteristic number, and abilities pay for it in cooldown so tiering isn't free.
@@ -2439,10 +2548,10 @@ function useAbility(){
   P.shield=Math.round(30+(P.armor||0)*3.2+a.dmg*0.4);P.shieldT=perf+12;
   burst(P.x,P.y,'#9fd0ff',22);toast('Bulwark — '+P.shield+' shield')}
  else if(a.fx==='sentry'){ // a turret that fires YOUR ranged attack — the ability IS the build
-  SENTRY.push({x:P.x,y:P.y,t:perf+8,cd:0});
-  burst(P.x,P.y,'#d8a53f',16);toast('Shard Sentry — 8s')}
+  SENTRY.push({x:P.x,y:P.y,t:perf+(auraHas('foreman')?11:8),cd:0});
+  burst(P.x,P.y,'#d8a53f',16);toast('Shard Sentry')}
  else if(a.fx==='decoy'){ // taunt dummy: the panic button for fragile builds
-  DECOY={x:P.x+P.face*30,y:P.y,t:perf+6,hp:40+a.dmg};
+  DECOY={x:P.x+P.face*30,y:P.y,t:perf+(auraHas('foreman')?9:6),hp:40+a.dmg};
   burst(DECOY.x,DECOY.y,'#e8e2d0',14);toast('Decoy')}
  else if(a.fx==='rupture'){ // consume every ailment nearby for burst — the DoT finisher
   let total=0,n=0;
@@ -2492,7 +2601,31 @@ function useAbility(){
   addShake(14);hitStop(0.09,0.10,0.02);
   explode(P.x,P.y,120,a.dmg*1.4*dm,'#b0a070',{bleed:a.dmg*0.25});
   carve(P.x,P.y+TILE*1.5,TILE*4.5,Math.max(1,digPower()));
-  toast('Quake')}}
+  toast('Quake')}
+ // ---- wave 4 ----
+ else if(a.fx==='bastion'){ // defensive stand. Pure BUFFS contract — tickBuffs reverses both.
+  RUNB.arm+=25;BUFFS.push({k:'arm',v:25,until:perf+3});
+  RUNB.sres+=0.25;BUFFS.push({k:'sres',v:0.25,until:perf+3});
+  refreshAttacks();burst(P.x,P.y,'#b0a070',12);toast('Bastion — 3s of stone')}
+ else if(a.fx==='effigy'){ // a decoy with thorns. Output derives from the OWNER (a.dmg is player-resolved).
+  DECOY={x:P.x+P.face*30,y:P.y,t:perf+(auraHas('foreman')?11:8),hp:60+a.dmg*1.5,spikes:a.dmg*0.4*dm};
+  burst(P.x+P.face*30,P.y,'#7f9455',14);toast('Effigy')}
+ else if(a.fx==='lode'){ // tap: plant. tap again: snap back. One button on every device.
+  if(P.lode&&perf<P.lode.until){P.x=P.lode.x;P.y=P.lode.y;P.vx=0;P.vy=0;P.inv=Math.max(P.inv,0.3);
+   P.noFall=Math.max(P.noFall,1);P.lode=null;burst(P.x,P.y,'#9fd0ff',16);toast('Lodestone — return')}
+  // P.acd directly, never a.cd — `a` IS the cached ATK.abil; writing its cd corrupted every
+  // future cast until the next refreshAttacks (found in the pre-implementation review).
+  else{P.lode={x:P.x,y:P.y,until:perf+8};P.acd=0.8;burst(P.x,P.y,'#9fd0ff',8);toast('Lodestone — planted')}}
+ else if(a.fx==='tempest'){ // the storm anchor. Area denial is a HAZ, never a projectile (rule 19).
+  addHaz(P.x,P.y-10,130,5,a.dmg*0.30,{shock:1.35},'#e6d34a',1,'shock');
+  flash(0.15);burst(P.x,P.y-10,'#e6d34a',20);toast('Tempest')}
+ else if(a.fx==='transfuse'){ // drink the room's bleeds. rule 8: e.st.bleed is always an array.
+  let heal=0;
+  for(const e of EN){if(Math.hypot(e.x-P.x,e.y-P.y)>160)continue;
+   const b=stSum(e,'bleed');if(b>0){heal+=b*1.2;if(e.st&&e.st.bleed)e.st.bleed=[];burst(e.x,e.y,'#e05555',8)}}
+  heal=Math.min(heal,P.maxhp*0.4);
+  P.hp=Math.min(P.maxhp,P.hp+heal);
+  toast(heal>0?'Transfuse — '+Math.round(heal):'Transfuse — nothing bleeds')}}
 // The grapple ray march, shared by the Grapple GEM and the longarm GAIT. Enemies occlude the
 // line for both; the caller decides what an enemy hit means.
 function grapLine(aim,skipE){
@@ -2607,7 +2740,8 @@ let HURT=null,SRCX=null;
 function applyStatus(o,st,isPlayer){if(!st)return;o.st=o.st||{};
  const resist=isPlayer?(P.sres||0):0;
  for(const k in st){if(!STATUS[k])continue;
-  const pot=st[k],dur=STATUS[k].dur*(1-resist);
+  // Galvanic: shocks the PLAYER inflicts last half again as long (never shocks taken)
+  const pot=st[k],dur=STATUS[k].dur*(1-resist)*(!isPlayer&&k==='shock'&&auraHas('galvanic')?1.5:1);
   if(dur<=0.05)continue;
   const arr=o.st[k]||(o.st[k]=[]);
   if(STATUS[k].stack){
@@ -2639,12 +2773,13 @@ function statusCombo(o,k,isPlayer){
 }
 // SHOCK CHAIN: a shocked target passes a bolt to one nearby enemy on every hit it takes.
 function shockChain(from,dmg,col){
- let best=null,bd=110;
+ const galv=auraHas('galvanic');   // the storm anchor: further arcs, harder arcs
+ let best=null,bd=galv?170:110;
  for(const e of EN){if(e===from||e.hp<=0)continue;const d=Math.hypot(e.x-from.x,e.y-from.y);
   if(d<bd){bd=d;best=e}}
  if(!best)return;
  arc(from.x,from.y,best.x,best.y,'#e6d34a');
- hurtEnemy(best,dmg*0.45,0,'#e6d34a',null,true)}
+ hurtEnemy(best,dmg*(galv?0.60:0.45),0,'#e6d34a',null,true)}
 function tickStatus(o,dt,isPlayer){
  if(!o.st)return;
  for(const k in o.st){const arr=o.st[k];
@@ -2698,6 +2833,8 @@ function doMelee(){
  // active button instead of a passive damage reduction stat.
  if(a.riposte&&perf>(P.blockedT||-9)+1.2){if(!P.riposteWarned){P.riposteWarned=perf;toast('Riposte — block first')}return}
  if(a.chan&&!spendFocus(a.chan*DT,true))return;   // channelled skills pay per tick
+ if(a.focusCost&&!spendFocus(a.focusCost,true))return;   // Overdraw: a real per-swing price
+ if(a.hpCost){if(P.hp<=a.hpCost)return;P.hp-=a.hpCost}   // blood pays ONCE per attack, refuses at lethal
  P.mcd=a.cd*liveSpeedMul();
  if(a.lunge&&!P.block){P.vx=P.face*a.lunge;P.inv=Math.max(P.inv,0.12);burst(P.x,P.y,'#ffffff40',4)}
  // Aim resolves BEFORE the step so the step goes toward the thing you are about to hit.
@@ -2806,6 +2943,8 @@ function doRanged(){
  const a=ATK.ranged;if(!a||P.rcd>0)return;
  if(a.kind==='melee'){doMeleeAs(a);return} // shield in ranged slot => bash
  if(a.chan&&!spendFocus(a.chan*DT,true))return;
+ if(a.focusCost&&!spendFocus(a.focusCost,true))return;   // Overdraw pays per volley, not per projectile
+ if(a.hpCost){if(P.hp<=a.hpCost)return;P.hp-=a.hpCost}   // blood too — once per attack
  P.rcd=a.cd*liveSpeedMul();const v=aimVec();
  const n=a.count||1,spread=0.18;
  for(let i=0;i<n;i++){if(PROJ.length>200)break;const off=(i-(n-1)/2)*spread;
@@ -2813,11 +2952,13 @@ function doRanged(){
   PROJ.push({x:P.x,y:P.y-4,vx:(v.x*c-v.y*s)*a.speed,vy:(v.x*s+v.y*c)*a.speed,
    dmg:a.dmg,crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:a.leech||0,st:a.st||null,
    digR:a.digR||0,dig:a.dig,digCost:a.digCost||0,grav:a.grav||0,homing:a.homing||0,fork:a.fork||0,ret:a.ret||0,
-   bounce:a.bounce||0,
+   bounce:a.bounce||0,mine:a.mine||0,armed:0,
    // Conditional gems ride along on the projectile — they resolve at impact, not at fire time.
    // Without this, Momentum/Culling/Chain/Reap/Sunder are pure `more` penalties when ranged.
    momentum:a.momentum||0,cull:a.cull||0,chain:a.chain||0,reap:a.reap||0,sunder:a.sunder||0,
    vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,
+   slam:a.slam||0,aloft:a.aloft||0,vsFull:a.vsFull||0,farshot:a.farshot||0,
+   stormcall:a.stormcall||0,raise:a.raise||0,noSt:a.noSt||0,
    interrupt:a.interrupt||0,stagger:a.stagger||0,splinter:a.splinter||0,contagion:a.contagion||0,
    ox:P.x,oy:P.y,col:a.col,t:a.life||2,friendly:1})}
  sfx('shoot')}
@@ -2845,6 +2986,13 @@ function condMul(a,e){
  if(a.vsChill&&hasSt(e,'chill'))m*=1+a.vsChill;
  if(a.vsSpent&&(e.rec||0)>0)m*=1+a.vsSpent;
  if(a.vsLow&&e.maxhp&&e.hp<e.maxhp*0.5)m*=1+a.vsLow;
+ // ---- wave 4 conditionals. Same law: both damage paths pay. ----
+ if(a.slam)m*=1+Math.min(1.5,Math.max(0,P.vy)/FALL_SAFE)*a.slam;              // deadweight: fall speed is damage
+ if(a.aloft&&!P.onG)m*=1+a.aloft;                                             // vantage: airborne
+ if(a.vsFull&&e.maxhp&&e.hp>=e.maxhp*0.99)m*=1+a.vsFull;                      // first blow: unhurt prey
+ // farshot reads projectile travel (ox only exists on projectiles — lawfully ranged-only)
+ if(a.farshot&&a.ox!==undefined)m*=1+Math.min(1,Math.hypot(a.x-a.ox,a.y-a.oy)/420)*a.farshot;
+ if(classFx('bloodRise')&&P.hp<P.maxhp*0.5)m*=1+classFx('bloodRise');         // bloodletter below half
  if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))m*=1.3;
  if(auraHas('vigil')&&perf-(P.lastHurt||-9)>3)m*=1.25;
  if(auraHas('reaper')&&e.maxhp&&e.hp<e.maxhp*0.5)m*=1.2;
@@ -2863,10 +3011,19 @@ function onHit(a,e,dmg){
   burst(e.x,e.y-e.h/2,'#ffe9a0',8);dmgNum(e.x,e.y-e.h-6,0,'#ffe9a0');toastQ('INTERRUPT')}
  // Stagger lengthens an existing punish window but never creates one, so it cannot chain-lock.
  if(a.stagger&&(e.rec||0)>0)e.rec=Math.min((e.rec||0)+a.stagger,1.2);
- if(a.sunder)e.arm=Math.max(0,(e.arm||0)-a.sunder)}
+ if(a.sunder)e.arm=Math.max(0,(e.arm||0)-a.sunder);
+ // Stormcall: three kills bank a thunderbolt; the next hit spends it. chained=true so the
+ // bolt can never re-chain; kills are the rate limit, not time.
+ if(a.stormcall&&(P.stormN||0)>=3){P.stormN=0;
+  arc(P.x,P.y-40,e.x,e.y,'#e6d34a');
+  hurtEnemy(e,dmg*1.5,0,'#e6d34a',{shock:1.35},true);sfx('crit')}}
 // Riders that fire when this attack was the killing blow. Kept out of killEnemy so a gem cannot
 // accidentally apply to a death it had nothing to do with (an ailment tick, a hazard, a fall).
 function onKill(a,e){
+ // Cairn: the corpse is a turret. Cap 3; upSentry's copy-list must NEVER carry `raise`, or
+ // turrets raise turrets. Foreman stretches the lifetime.
+ if(a.raise&&SENTRY.length<3)SENTRY.push({x:e.x,y:e.y-6,t:perf+a.raise*(auraHas('foreman')?1.5:1),cd:0});
+ if(a.stormcall)P.stormN=Math.min(3,(P.stormN||0)+1);
  // Splinter: the corpse is a weapon. Turns single-target skills into crowd clear on a delay.
  if(a.splinter)for(let k=0;k<3&&PROJ.length<200;k++){const ang=k/3*6.283+RNG();
   PROJ.push({x:e.x,y:e.y,vx:Math.cos(ang)*300,vy:Math.sin(ang)*300-60,dmg:a.dmg*0.35,
@@ -2881,12 +3038,12 @@ function strike(e,a,kb,isSecond){
  const crit=rollCrit(a);
  let dmg=a.dmg*(crit?a.critMult:1)*condMul(a,e);
  if(isSecond)dmg*=0.6;
- let st=a.st;
+ let st=a.noSt?null:a.st;                         // Sterile: the hit carries nothing
  if(crit&&st){st={};for(const k in a.st)st[k]=a.st[k]*(k==='chill'?1:CRIT_ST)} // crits deepen ailments
  onHit(a,e,dmg);                                  // interrupt / stagger / sunder, before it lands
  const alive=e.hp;
  hurtEnemy(e,dmg,kb,crit?'#d8a53f':a.col,st,false,crit);
- if(a.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*a.leech);
+ if(a.leech)leechHeal(dmg*a.leech);
  // Culling: anything left under the threshold dies outright. Feels incredible on trash.
  if(a.cull&&e.hp>0&&e.maxhp&&e.hp<e.maxhp*a.cull){
   dmgNum(e.x,e.y-e.h,e.hp,'#ffe9a0',true);e.hp=0;burst(e.x,e.y,'#ffe9a0',12);killEnemy(e)}
@@ -2895,8 +3052,15 @@ function strike(e,a,kb,isSecond){
  if(a.chain&&!isSecond)chainFrom(e,dmg*0.6,a.col,a.chain);
  gainFocus(FOCUS_HIT);
  if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT);
+ if(CLASSES[META.cls].foc==='shock'&&hasSt(e,'shock'))gainFocus(FOCUS_HIT);   // conductor
  // Twin Strike: a second, weaker hit. Doubles every on-hit effect, so it's the ailment engine.
  if(a.twin&&!isSecond)strike(e,a,kb*0.4,true)}
+// Leech routes through one door so Surfeit can catch the spill: leech past full HP becomes a
+// short overshield (Bulwark's P.shield machinery), capped at 30% of max.
+function leechHeal(n){if(n<=0)return;
+ const ov=P.hp+n-P.maxhp;P.hp=Math.min(P.maxhp,P.hp+n);
+ if(ov>0&&auraHas('surfeit')){P.shield=Math.min(P.maxhp*0.3,(P.shield||0)+ov);
+  P.shieldT=Math.max(P.shieldT||0,perf+4)}}
 function chainFrom(from,dmg,col,jumps){
  let src=from;const hit=[from];
  for(let j=0;j<jumps;j++){
@@ -3337,7 +3501,10 @@ function upEnemies(dt){
    if(e.act>0){e.act-=dt;lunging=true;
     const tw=onDecoy?12:P.w, th=onDecoy?20:P.h;
     if(Math.abs(dx)<(e.w+tw)/2+6&&Math.abs(dy)<(e.h+th)/2+6){
-     if(onDecoy){DECOY.hp-=e.dmg;burst(DECOY.x,DECOY.y,'#e8e2d0',5);endAct()}
+     if(onDecoy){DECOY.hp-=e.dmg;burst(DECOY.x,DECOY.y,'#e8e2d0',5);
+      // Effigy's thorns: a landed SWING pays (the per-frame grind site does not — no tick damage)
+      if(DECOY&&DECOY.spikes)hurtEnemy(e,DECOY.spikes,120,'#7f9455',null,true);
+      endAct()}
      else{
       const before=P.inv;hurtPlayer(e.dmg,false,e.x);   // the dodge tip now rides hurtPlayer's 'hurt' hook
       if(P.inv>before){
@@ -3415,6 +3582,16 @@ function upEnemies(dt){
     if(auraHas('thorns'))hurtEnemy(e,12*depthDmg(P.y),Math.sign(-dx||1)*160,'#8fdc6a')}}}}
 function upProj(dt){
  for(let i=PROJ.length-1;i>=0;i--){const p=PROJ[i];p.t-=dt;
+  // A PLANTED Shard Mine: no physics, watch for prey. projStrike fires FIRST so leech, Focus
+  // and every conditional rider pay (the exploding-projectile lesson, learned once already).
+  // Life expiry is a quiet fizzle — a trap that outlives its patience does not detonate.
+  if(p.mine&&p.armed){
+   if(p.t<=0){burst(p.x,p.y,p.col,3);PROJ.splice(i,1);continue}
+   let tgt=null,td=1e9;
+   for(const e of EN){if(e.hp<=0||e.invT>0)continue;
+    const dd=Math.hypot(e.x-p.x,e.y-p.y);if(dd<p.explode*0.75+e.w/2&&dd<td){td=dd;tgt=e}}
+   if(tgt){projStrike(tgt,p);explode(p.x,p.y,p.explode,p.dmg,p.col,p.st,p,tgt);PROJ.splice(i,1)}
+   continue}
   if(p.grav)p.vy+=GRAV*0.55*dt;               // Grenade-class skills are the only ones that arc
   if(p.homing&&p.friendly){                    // Homing Wisp: slow seeker, fire-and-forget
    let best=null,bd=260;
@@ -3443,6 +3620,9 @@ function upProj(dt){
     p.bounce--;
     if(solidAt(p.x,p.y-p.vy*dt))p.vx*=-0.6;else p.vy*=-0.55;
     p.x-=p.vx*dt;p.y-=p.vy*dt;burst(p.x,p.y,p.col,2)}
+   else if(p.mine&&p.friendly){ // a mine that meets the rock PLANTS instead of dying
+    p.x-=p.vx*dt;p.y-=p.vy*dt;p.vx=0;p.vy=0;p.grav=0;p.armed=1;
+    burst(p.x,p.y,p.col,4);sfx('dig',p.x)}
    else{dead=true;
     // explode() only damages ENEMIES, so an enemy shell bursting on rock would friendly-fire
     // its own side. A hostile blast checks the player instead.
@@ -3480,18 +3660,19 @@ function upProj(dt){
 function projStrike(e,p){
  const crit=p.crit>0&&chance(p.crit);
  let dmg=p.dmg*(crit?(p.critMult||CRIT_MULT):1)*condMul(p,e);
- let st=p.st;
+ let st=p.noSt?null:p.st;                         // Sterile pays on the ranged path too
  if(crit&&st){st={};for(const k in p.st)st[k]=p.st[k]*(k==='chill'?1:CRIT_ST)}
  onHit(p,e,dmg);
  const alive=e.hp;
  hurtEnemy(e,dmg,Math.sign(p.vx)*60,crit?'#d8a53f':p.col,st,false,crit);
- if(p.leech)P.hp=Math.min(P.maxhp,P.hp+dmg*p.leech);
+ if(p.leech)leechHeal(dmg*p.leech);
  if(p.cull&&e.hp>0&&e.maxhp&&e.hp<e.maxhp*p.cull){
   dmgNum(e.x,e.y-e.h,e.hp,'#ffe9a0',true);e.hp=0;burst(e.x,e.y,'#ffe9a0',12);killEnemy(e)}
  if(alive>0&&e.hp<=0)onKill(p,e);
  if(p.chain)chainFrom(e,dmg*0.6,p.col,p.chain);
  gainFocus(FOCUS_HIT*0.6);
- if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT)}
+ if(crit&&CLASSES[META.cls].foc==='crit')gainFocus(FOCUS_HIT);
+ if(CLASSES[META.cls].foc==='shock'&&hasSt(e,'shock'))gainFocus(FOCUS_HIT)}   // conductor — both paths
 function explode(x,y,r,dmg,col,st,src,skip){
  burst(x,y,col,14);addShake(5);
  if(dmg>0)for(const e of EN){if(e.hp<=0||e.invT>0||e===skip)continue;
@@ -3510,12 +3691,13 @@ function upSentry(dt){
   if(s.cd<=0&&a&&a.kind==='ranged'){
    let best=null,bd=300;
    for(const e of EN){if(e.hp<=0)continue;const d=Math.hypot(e.x-s.x,e.y-s.y);if(d<bd){bd=d;best=e}}
-   if(best){s.cd=a.cd*1.4;
+   if(best){s.cd=a.cd*(auraHas('foreman')?1.1:1.4);   // Foreman: constructs work harder
     const d=Math.max(1,bd),vx=(best.x-s.x)/d,vy=(best.y-s.y)/d;
     if(PROJ.length<200)PROJ.push({x:s.x,y:s.y,vx:vx*a.speed,vy:vy*a.speed,dmg:a.dmg*0.6,
      crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:0,st:a.st||null,
      vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,
-     chain:a.chain||0,cull:a.cull||0,
+     chain:a.chain||0,cull:a.cull||0,vsFull:a.vsFull||0,
+     // `raise` is deliberately NOT copied: turrets must never raise turrets
      col:a.col,t:2,friendly:1,ox:s.x,oy:s.y})}}}}
 function upDecoy(dt){
  if(!DECOY)return;
@@ -3724,7 +3906,11 @@ function upPlayer(dt){
  if(wasAir&&P.onG&&vyPrev>FALL_SAFE&&P.noFall<=0&&!P.fallImmune&&!P.dead){
   let dmg=(vyPrev-FALL_SAFE)*FALL_DMG*(auraHas('featherfall')?0:1);
   dmg=Math.min(dmg,P.maxhp*0.55); // never a one-shot from full HP
-  if(dmg>=1){hurtPlayer(dmg);addShake(6);burst(P.x,P.y+P.h/2,'#8a8578',10)}}
+  if(dmg>=1){hurtPlayer(dmg);addShake(6);burst(P.x,P.y+P.h/2,'#8a8578',10)}
+  // Plumbline: a hard landing is a weapon. Player-side damage rides depthDmg (the thorns
+  // precedent) or it silently dies at depth. Featherfall prevents the trigger — the two
+  // auras are exclusive by design. No extra shake: the fall already shakes 6.
+  if(dmg>=1&&auraHas('plumbline'))explode(P.x,P.y+P.h/2,60,14*depthDmg(P.y),'#b0a070',null,{crit:0,critMult:1.5,dig:0})}
  P.noFall=Math.max(0,P.noFall-dt);
  runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
  if(runDepth>=MOVE_CK+25){MOVE_CK=runDepth;checkMoves()}   // depth deeds land mid-run, throttled
@@ -3751,6 +3937,7 @@ function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
  // roll-cancel: dodging forgives weapon recovery beyond one roll-length. 0.22, NOT lower —
  // the slipstream aura (full zero) must stay meaningfully better (R8).
  P.mcd=Math.min(P.mcd,0.22);P.rcd=Math.min(P.rcd,0.22);
+ if(auraHas('slipstream')){P.mcd=0;P.rcd=0}   // the aura is the full reload the clamp is not
  burst(P.x,P.y,'#ffffff50',5);sfx('dash');
  if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthDmg(P.y),'#ffcf8a',{burn:8*depthDmg(P.y)})}}
 let DYING=false;
@@ -3831,6 +4018,7 @@ function newRun(){
  P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
  P.pd=0;P.airDash=1;P.dodgeAir=0;P.grapCd=0;P.thunkT=0;P.lastDodge=-9;
+ P.stormN=0;P.lode=null;P.kickW=0;   // wave-4 run state: stormcall charge, lodestone anchor
  MOVE_CK=0;tipDismiss();TIPQ.length=0;   // dismiss, not null — a held tip toast must not haunt the death screen
  shake=0;HS={t:0,dur:0,frac:1,pre:0};TSCALE=1;FLASH=0;CALLOUT=null;HURT=null;
  UIROOT=null;MODAL=false;PANEL_FN=null;PANEL_Q.length=0;
@@ -5167,6 +5355,9 @@ function render(){
    ctx.fillStyle='#ffffff60';ctx.fillRect(8,-2,14,3);ctx.restore()}
   if(P.st){let i=0;for(const k in P.st){if(!P.st[k].length)continue;
    ctx.fillStyle=STATUS[k].c;ctx.fillRect(x-6+i*5,y-P.h/2-6,3,3);i++}}}
+ // the planted lodestone: a small static glyph, render-only (RRNG territory, zero sim state)
+ if(P.lode&&perf<P.lode.until){const lx=P.lode.x-ox,ly=P.lode.y-oy;
+  ctx.fillStyle='#9fd0ffb0';ctx.fillRect(lx-2,ly-2,4,4);ctx.fillStyle='#9fd0ff40';ctx.fillRect(lx-4,ly-4,8,8)}
  if(GRAPPLE){ctx.strokeStyle='#d8a53f';ctx.lineWidth=1;ctx.beginPath();
   ctx.moveTo(P.x-ox,P.y-oy);ctx.lineTo(GRAPPLE.x-ox,GRAPPLE.y-oy);ctx.stroke()}
  // Aim reticle. Drawn from the RESOLVED aim vector, assist included, so what you see is

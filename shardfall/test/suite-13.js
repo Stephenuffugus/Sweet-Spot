@@ -48,6 +48,11 @@ const ARCH = [
   { n: 'Chain Storm',       cls: 'marksman',   slot: 'ranged', base: 'wand',     gems: ['lightning', 'chainbolt', 'conduit'],    armor: ['staticfield'] },
   { n: 'Grenadier',         cls: 'delver',     slot: 'ranged', base: 'crossbow', gems: ['grenade', 'aftershock', 'conc'],        armor: ['featherfall'] },
   { n: 'Splinter Volley',   cls: 'marksman',   slot: 'ranged', base: 'bow',      gems: ['hail', 'splinter', 'fasteratk'],        armor: ['tempo'] },
+  // wave 4: the storm and blood archetypes, the trap, and the vertical build
+  { n: 'Storm Conduit',     cls: 'conductor',  slot: 'ranged', base: 'wand',     gems: ['stormlash', 'chainbolt', 'overdraw'],   armor: ['galvanic'] },
+  { n: 'Blood Price',       cls: 'bloodletter',slot: 'melee',  base: 'sword',    gems: ['bloodlet', 'bloodtithe', 'hunger'],     armor: ['surfeit'] },
+  { n: 'Minelayer',         cls: 'delver',     slot: 'ranged', base: 'crossbow', gems: ['mine', 'firstblow', 'conc'],            armor: ['vigil'] },
+  { n: 'Skyfall',           cls: 'vanguard',   slot: 'melee',  base: 'greataxe', gems: ['deadweight', 'vantage', 'heavyimpact'], armor: ['plumbline'] },
 ];
 
 function assemble(a, depthM, lvl) {
@@ -74,6 +79,11 @@ function effDps(at) {
   if (at.vsChill && at.st && at.st.chill) m *= 1 + at.vsChill;
   if (at.vsLow) m *= 1 + at.vsLow * 0.5;
   if (at.vsSpent) m *= 1 + at.vsSpent * 0.35;
+  // wave-4 conditionals, credited at the fraction a sustained fight satisfies them
+  if (at.vsFull) m *= 1 + at.vsFull * 0.15;
+  if (at.slam) m *= 1 + at.slam * 0.25;
+  if (at.aloft) m *= 1 + at.aloft * 0.35;
+  if (at.farshot) m *= 1 + at.farshot * 0.5;
   // dpsOf() cannot see an execute or a missing-health scalar, and an execution build is nothing
   // but those two things — scoring it without them rates the archetype at a third of its real
   // throughput and then blames the archetype. Averaged over a full health bar: reap is worth half
@@ -127,7 +137,8 @@ console.log('\n-- no dead gems --');
   const FIELDS = ['dmg', 'cd', 'more', 'count', 'pierce', 'chain', 'cull', 'explode', 'arc', 'range', 'kb',
     'crit', 'critMult', 'leech', 'momentum', 'reap', 'sunder', 'twin', 'fork', 'ret', 'homing', 'grav',
     'bounce', 'dig', 'speed', 'life', 'vsBurn', 'vsChill', 'vsSpent', 'vsLow', 'interrupt', 'stagger',
-    'splinter', 'contagion', 'ailMore', 'critAdd', 'critMultAdd', 'chan', 'lunge', 'riposte'];
+    'splinter', 'contagion', 'ailMore', 'critAdd', 'critMultAdd', 'chan', 'lunge', 'riposte',
+    'slam', 'aloft', 'vsFull', 'farshot', 'raise', 'stormcall', 'noSt', 'hpCost', 'focusCost', 'mine'];
   function snap(at) {
     const o = {};
     for (const f of FIELDS) o[f] = at[f];
@@ -172,6 +183,10 @@ console.log('\n-- melee and ranged are the same contract --');
     { f: 'vsChill', set: e => { applyStatus(e, { chill: 0.6 }, false) } },
     { f: 'momentum', set: () => { P.vx = MOVE } },
     { f: 'reap', set: e => { e.hp = e.maxhp * 0.2 } },
+    // wave 4 — farshot is deliberately absent (ox-guarded, lawfully ranged-only: riposte precedent)
+    { f: 'slam', set: () => { P.vy = 520 } },
+    { f: 'aloft', set: () => { P.onG = false } },
+    { f: 'vsFull', set: null },
   ];
   function hitFor(fields, setup, ranged) {
     EN.length = 0;
