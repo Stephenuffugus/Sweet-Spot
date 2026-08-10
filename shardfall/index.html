@@ -1193,23 +1193,23 @@ const ENEMIES={
  // Each `ph` entry ADDS its pattern permanently (see bossPhase -> e.pats). Phase 1 is the base
  // fight, phase 2 is base+first, phase 3 is base+both — three recognisably different fights, and
  // the pattern colours ONGOING behaviour rather than firing once and being forgotten.
- warden:  {hp:420, dmg:22,spd:46,w:28,h:30,ai:'walk',c:'#a05a3a',shards:40,boss:1,arm:4,
+ warden:  {hp:420, dmg:22,spd:46,w:28,h:30,ai:'walk',c:'#a05a3a',shards:40,boss:1,frag:'knot1',arm:4,
    atk:{cd:2.2,range:44,wind:.50,act:.22,rec:.34,kb:320,lunge:260},
    shoot:{cd:2.4,dmg:12,speed:230,count:3,spread:.30,col:'#e0a03f',range:380,wind:.45},
    ph:[{at:.66,pat:'slam'},{at:.33,pat:'summon'}]},
- sporemother:{hp:520,dmg:23,spd:58,w:30,h:26,ai:'fly',c:'#8f5ac0',shards:55,boss:1,
+ sporemother:{hp:520,dmg:23,spd:58,w:30,h:26,ai:'fly',c:'#8f5ac0',shards:55,boss:1,frag:'knot2',
    atk:{cd:2.4,range:38,wind:.42,act:.18,rec:.30,kb:200,lunge:280},
    shoot:{cd:1.7,dmg:10,speed:180,count:5,spread:.55,col:'#c98fe0',range:420,wind:.40},
    ph:[{at:.66,pat:'spores'},{at:.33,pat:'summon'}]},
- sentinel:{hp:700, dmg:25,spd:40,w:26,h:32,ai:'walk',c:'#b0a070',shards:75,boss:1,arm:10,
+ sentinel:{hp:700, dmg:25,spd:40,w:26,h:32,ai:'walk',c:'#b0a070',shards:75,boss:1,frag:'knot3',arm:10,
    atk:{cd:2.0,range:42,wind:.44,act:.20,rec:.32,kb:300,lunge:240},
    shoot:{cd:1.4,dmg:14,speed:330,count:2,spread:.12,col:'#ffe9a0',range:460,wind:.38},
    ph:[{at:.66,pat:'volley'},{at:.33,pat:'beam'}]},
- forgelord:{hp:900,dmg:30,spd:44,w:32,h:34,ai:'walk',c:'#d05a30',shards:100,boss:1,arm:8,
+ forgelord:{hp:900,dmg:30,spd:44,w:32,h:34,ai:'walk',c:'#d05a30',shards:100,boss:1,frag:'knot4',arm:8,
    atk:{cd:2.0,range:46,wind:.46,act:.22,rec:.34,kb:340,lunge:250},
    shoot:{cd:2.0,dmg:16,speed:250,count:3,spread:.35,col:'#ff8a3f',range:420,explode:40,stR:{burn:.5},wind:.42},
    ph:[{at:.66,pat:'firewall'},{at:.33,pat:'slam'}]},
- voidmaw: {hp:1200,dmg:26,spd:76,w:34,h:30,ai:'fly',c:'#6a4fd0',shards:140,boss:1,arm:6,
+ voidmaw: {hp:1200,dmg:26,spd:76,w:34,h:30,ai:'fly',c:'#6a4fd0',shards:140,boss:1,frag:'knot5',arm:6,
    atk:{cd:1.8,range:40,wind:.36,act:.18,rec:.26,kb:260,lunge:300},
    shoot:{cd:1.2,dmg:16,speed:300,count:4,spread:.7,col:'#a08fff',range:480,st:{chill:0.6},wind:.34},
    ph:[{at:.66,pat:'volley'},{at:.33,pat:'devour'}]},
@@ -1574,49 +1574,129 @@ report being read — not watched, read — and the guild has stopped correcting
   {id:'f1',depth:0,   n:'Guild Notice, posted at the rim',d:`SHARD PRICES ARE FIXED BY WEIGHT AND
 NOT BY GLOW. Delvers presenting unusually bright material will be paid standard rate and asked
 where they found it. Answering is not optional.`},
+  {id:'g1',depth:60, n:'Price board at the rim, chalked',d:`Guild rates, posted daily. Rope:
+two shards the fathom. Lamp-oil: one. Maps: free.
+
+(Beneath, chalked and rubbed out and chalked again: maps are free because they are wrong.)`},
   {id:'f2',depth:120, n:"Delver's tally, scratched into stone",d:`Forty-one down. Forty-one back.
 Wife says stop at fifty. Fifty is a stupid number to stop at, it's just round.
 
 (Beneath, in a different hand: he stopped at forty-nine.)`},
+  {id:'g2',depth:200, n:'Forge receipt, unsigned',d:`One axe, reworked. The metal took the new
+edge without argument, which the smith says is rare, and did not charge for, which is rarer.
+
+(A second line, added later, in the smith's hand: it took the edge because it wanted one.)`},
   {id:'f3',depth:300, n:'Torn survey page',d:`— and the readings do not decay with distance from
 the shaft, which is the part I cannot get anyone at the guild to look at. A buried object gets
 fainter as you walk away from it. This does not. Either the source is far larger than the
 impact site, or the source is not an object.`},
+  {id:'g3',depth:340, n:'Guild circular, singed',d:`Wire-runners are reminded that shard-charge
+follows attention. Do not think about the wire while holding the wire.
+
+Three of last month's four incidents were men who had just been told this.`},
+  {id:'g4',depth:430, n:'Page from an old rank-book',d:`Bloodletter: retired rank. Duties:
+opening what the deep closes, closing what the deep opens.
+
+The rank was retired when the guild acquired physicians. It was revived when the physicians
+declined to go down.`},
   {id:'f4',depth:520, n:'Spore-eaten letter',d:`Tell them the Bloom is not a hazard, it is a
 census. It grows toward sound. Every chamber it fills, it fills evenly — like something checking
 how much room there is.
 
 I am well. Do not come down.`},
+  {id:'g5',depth:600, n:"Delver's report, filed under noise",d:`There is singing under the
+Bloom. Not words. More like counting.
+
+The guild's position is that fungus does not sing. The guild's position on most things is
+fine from the rim.`},
+  {id:'g6',depth:700, n:'Lift-rig licence, torn corner',d:`Rig privileges are earned by deed
+and revoked by widow. Depth attested, knots attested, no exceptions and no purchase.
+
+The guild has sold many things. It has never sold air.`},
   {id:'f5',depth:760, n:'Brick fragment, pre-fall',d:`The mark is a maker's stamp. We have four
 of them now, all identical, all from strata that the fall should have destroyed.
 
 Someone built down here before there was a down here to build in.`},
+  {id:'g7',depth:840, n:'Rubbing of a door-lintel',d:`The stamp again, and under it a line of
+the old marks. The scholar we paid rendered it three ways and would only stand behind one of
+them.
+
+KEEP IT WEAVING.`},
+  {id:'g8',depth:950, n:'Survey annotation, initialled twice',d:`Every door faces inward. We
+wrote that in the first report and meant it as description.
+
+We repeat it in this one as a finding. The builders were not keeping the deep out of their
+halls. They built their halls around something, and the doors were for staying with it.`},
   {id:'f6',depth:1000,n:'Sentinel maintenance log',d:`ROTATION 4,112. NO BREACH. NO ENTRY.
 NO EGRESS. HOLDING.
 
 (The rotation count continues on the reverse for eleven more pages. The final entry is the same
 as the first.)`},
+  {id:'g9',depth:1100, n:'Old marks, translated on commission',d:`The choir does not fight. The
+choir mends. Where the weave thins, a mender is sent, and it sings the thread back to the
+figure.
+
+The scholar notes the tense. Not sang. Sings.`},
+  {id:'g10',depth:1200, n:'Margin of a returned map',d:`Third descent on this sheet. The long
+gallery is forty paces shorter and the stair I inked is not there, and I have stopped assuming
+I am the one who is wrong.
+
+Somebody is redrawing faster than I am.`},
   {id:'f7',depth:1300,n:'Expedition roster, water-damaged',d:`Eleven names. Six struck through.
 Four annotated "RETURNED". The eleventh is annotated "RETURNED", struck through, and annotated
 "RETURNED" again in the same hand.`},
+  {id:'g11',depth:1400, n:'Survey abstract, unpublished',d:`Five sites where the readings
+snarl. Not peaks — knots. The instrument does not spike at them, it catches, the way thread
+catches.
+
+The guild declined to fund site six. The abstract does not say there is a site six. The
+refusal of funding does.`},
+  {id:'g12',depth:1500, n:'Watch report, the rim, night',d:`One of the menders came up. It
+stood at the rope-head until morning and did not sing and did not mend anything.
+
+It is still here. Nobody remembers deciding to let it stay, which is the part I was asked not
+to write down.`},
   {id:'f8',depth:1650,n:'Name plate, riveted',d:`It reads like a person's name.
 
 You have seen this plate before. It was on something that swung a hammer at you.`},
+  {id:'g13',depth:1750, n:'Letter, kept folded small',d:`You asked after the plate. I stamped
+it myself, the year he made journeyman, before he took the deep contract.
+
+If you get as far as the hot country and a thing there wears it, do not read me the name. I
+stamped it. I know the name.`},
   {id:'f9',depth:1900,n:'Heat survey, abandoned mid-sentence',d:`No magma. No vent. No exothermic
 reaction of any kind that we can identify. The rock is simply seven hundred degrees and has been
 for as long as anyone has measured it.
 
 The most parsimonious explanation is that something down here is still`},
+  {id:'g14',depth:2000, n:'Note pinned to the heat survey',d:`Seven hundred degrees, steady, no
+source. Add this to the file: a loom-shed is warm in winter. Not from a fire.
+
+From the work.`},
+  {id:'g15',depth:2100, n:'Guild memo, restricted',d:`The pressure delvers report is not
+pressure. Instruments read nothing. Men read attention.
+
+Recommended phrasing for the notice board: keep moving. Rejected phrasing: it checks whatever
+stands still long enough to be a fact.`},
   {id:'f10',depth:2200,n:'Charcoal drawing on a wall',d:`A figure, drawn very small, at the top.
 Below it, taking up the rest of the wall, a shape with no clear edges.
 
 The small figure is drawn facing down.`},
+  {id:'g16',depth:2300, n:'Field note, edge of the compacted dark',d:`The dark here is not the
+absence of the lamp. It is a material, and it is load-bearing.
+
+We are not under the world anymore. We are inside the wall of something.`},
   {id:'f11',depth:2500,n:'Delver testimony, transcribed',d:`It's not that it noticed me. It's
 that I could tell exactly when it started. There's a weight to it. You feel it come on and you
 know you've been standing still too long, and the only thing that makes it stop is going
 further in.
 
 That's the joke, isn't it. The only cure for its attention is to get closer.`},
+  {id:'g17',depth:2600, n:'Testimony, taken at the rim',d:`Left to right across the gallery,
+once, level, unhurried. Where it passed, the breach we had cut that morning was not there
+anymore.
+
+It did not look at me. I have never been anywhere it needed to fix.`},
   {id:'f12',depth:2800,n:'Unsigned note, recent',d:`We have had this backwards for nine hundred
 years.
 
@@ -1629,6 +1709,10 @@ that is the word the surveyors used, and the surveyors used it because a seed is
 that a large thing grows out of.
 
 Nobody stopped to notice that a seed is also the part you plant.`},
+  {id:'g18',depth:2950, n:'Old marks, the deepest set found',d:`The last line of the choir's
+figure, rendered as well as anyone can render it: WHEN THE SONG STOPS, HOLD THE NOTE.
+
+They are still holding it. That is what the singing is. Nine hundred years of one note.`},
   {id:'f12b',depth:3000,n:'Written on the wall, recently, badly',d:`IT IS NOT DEEP
 IT IS LONG
 YOU ARE NOT GOING DOWN
@@ -1700,6 +1784,45 @@ wait.
 The world re-forms harder. You would not have it any other way.
 
 Descend again.`},
+  {id:'knot1',depth:-1,n:'What the warden held',d:`It stood in one room for nine hundred years
+because the room is a knot, and the knot needed holding, and everything else that could hold
+it was busy falling.
+
+You have cut it loose. The caves feel wider. That is not a feeling.`},
+  {id:'knot2',depth:-1,n:'What the mother grew around',d:`The colony did not choose the noise.
+Something snarled under the Bloom the day the sky came down, and the Bloom grew around the
+snarl the way a tree grows around wire.
+
+She was never the knot. She was the scar over it. The singing is quieter now, and further
+down.`},
+  {id:'knot3',depth:-1,n:'What the rotation guarded',d:`ROTATION 4,113. BREACH.
+
+(That is the whole entry. Eleven pages of holding, and then you. Somewhere a corridor that no
+longer exists has finally been entered, and the thing that walked it is finally off its
+round.)`},
+  {id:'knot4',depth:-1,n:'What the plate was riveted to',d:`The name is yours now, to read or
+not.
+
+He dug too close to a working strand and the weave closed over him the way water closes, and
+the heat kept him, and the work kept him moving. The smith at the rim stopped asking years
+ago. You get to decide whether that was mercy.`},
+  {id:'knot5',depth:-1,n:'What the maw was a symptom of',d:`Not a guardian. A pressure sore.
+
+The dark presses against the thing itself, and where it presses hardest, the dark opens a
+mouth. You have closed the mouth. The pressure is still there. You have felt it choosing a
+new place to open.`},
+  {id:'rites',depth:-1,n:'What the camp does with the dead',d:`There is no graveyard at the
+rim. There is a board, and a knife, and the name goes into the wood, and the rope-fee is
+struck through.
+
+Nobody says lost. The word is kept. The deep keeps them the way a ledger keeps a figure, and
+the camp goes on being owed.`},
+  {id:'annealed',depth:-1,n:'What the smith stopped saying',d:`Careful is a covenant between
+the metal and the hand. He sets it aside the way you set aside a rule you have kept long
+enough to know its price, and the metal notices. Everything down here notices.
+
+The work that comes back is better or worse and never neither. He says the deep does the same
+thing with delvers.`},
  ],
  // The sigils address the player directly. Not sneering at the seed-scummer — complicit with
  // them. The game's position is that wanting a better world is exactly how all of this started.
@@ -1768,6 +1891,227 @@ everything down here has too much of it.
 They count what they lose and charge it to the deep.`},
  },
 };
+// ============ THE CAMP: WHO IS AT THE RIM ============
+// Dialogue is a table. A node is one short exchange; gates read META and nothing else.
+// Seen-state lives in META.dlg (one save-scoped dict). Text renders through loreHTML.
+// Names are roles, not proper nouns — the corpus never names a person, so the camp does not.
+const CAST=[
+ {id:'anvil',n:'THE SMITH',       sub:'the forge',            show:m=>true},
+ {id:'carto',n:'THE CARTOGRAPHER',sub:'bounties and the map', show:m=>true},
+ {id:'verse',n:'THE CHANTER',     sub:'it does not sing',     show:m=>(m.runs|0)>=1},
+];
+const DIALOG=[
+ // ---- THE SMITH — the forge, the plate, the name ----
+ {id:'anvil1',who:'anvil',gate:m=>true,t:`You are the new rope, then. Bring me metal that has
+been down and I will tell you what it learned. Cold iron for now — the forge is not lit for
+strangers.`},
+ {id:'anvil2',who:'anvil',gate:m=>(m.runs|0)>=1,t:`Back. Good. The board takes names faster
+than I can stamp them, and I am tired of striking through rope-fees.
+
+Keep being back.`},
+ {id:'anvil3',who:'anvil',gate:m=>Object.keys(m.bosses||{}).length>=1,t:`So one of the deep
+things is dead. The draught from the shaft changed direction — even up here. The forge is lit.
+
+Bring me your gear. Careful work, fair rates.`},
+ {id:'anvil4',who:'anvil',gate:m=>((m.forge||{}).n|0)>=1,t:`See how it takes the work? Metal
+that has been down wants to be more than it was.
+
+That should worry you more than it does.`},
+ {id:'anvil5',who:'anvil',gate:m=>!!(m.firsts||{}).uniq,t:`Where did you — no. Do not tell me.
+
+That is finished work, that piece. Nobody living finishes work like that. I will not put a
+chisel to it, and neither will anyone honest.`},
+ {id:'anvil6',who:'anvil',gate:m=>!!(m.bosses||{}).warden,t:`The caves one first, was it. It
+held a door for nine hundred years. When a door has been held that long, opening it is not a
+victory. It is a decision.
+
+I hope it was yours to make.`},
+ {id:'anvil7',who:'anvil',gate:m=>!!(m.bosses||{}).forgelord,t:`The hot country. You felled
+the thing in the hot country.
+
+Was there a plate on it. Do not read it to me. Just tell me whether the rivets held. I set
+those rivets.`},
+ {id:'anvil8',who:'anvil',gate:m=>((m.forge||{}).owk|0)>=1,t:`You let me stop being careful.
+Remember that it was you who asked.
+
+The metal remembers. It is the only thing down here with a clean ledger.`},
+ {id:'anvil9',who:'anvil',gate:m=>Object.keys(m.bosses||{}).length>=3,t:`Three knots cut. The
+rope-men say the shaft hangs straighter now.
+
+My hammer says the opposite. Everything I work wants to be a blade lately. Something below is
+choosing sides.`},
+ {id:'anvil10',who:'anvil',gate:m=>allKnots(m),t:`All five. Then there is nothing holding the
+weave taut but the thing at the bottom, and its patience.
+
+Whatever you write down there — write it like you mean to be read for nine hundred years.`},
+ {id:'anvil11',who:'anvil',gate:m=>!!(m.endings||{}).escape,t:`The shaft is the wrong depth.
+Forty fathoms of rope say so, and rope does not lie.
+
+You did something at the bottom and did not finish it. I know unfinished work when I am
+standing inside it.`},
+ {id:'anvil12',who:'anvil',gate:m=>!!(m.endings||{}).mend,t:`There is a colour up there. My
+grandmother had a word for it, and her grandmother had the thing itself.
+
+I left the forge cold this morning. It lit anyway. The metal is glad. I did not know it could
+be.`},
+ {id:'anvil13',who:'anvil',gate:m=>!!(m.endings||{}).usurp,t:`Rates are on the board. I will
+work your metal the same as anyone's.
+
+I would rather you did not watch, is all. The hammer keeps agreeing with you before I swing
+it.`},
+ {id:'anvil14',who:'anvil',gate:m=>!!(m.bosses||{}).weft,t:`Something at the bottom put down
+its work. I know because mine got heavier.
+
+Whatever kept the world mended has stopped, and the mending has to live somewhere. It moved
+into every anvil on the rim. Fine. I have the arms.`},
+ // ---- THE CARTOGRAPHER — bounties, the map, the axis called you ----
+ {id:'carto1',who:'carto',gate:m=>true,t:`Bounties are posted, rates are fair, and the map is
+free. The map is free because it is provisional.
+
+Everything down there is provisional except the direction. Down holds.`},
+ {id:'carto2',who:'carto',gate:m=>(m.runs|0)>=1,t:`Your route died with you. The ink did not.
+Every descent improves the sheet, whatever else it does.
+
+That is the kindest sentence in guild cartography, and I have just spent it on you.`},
+ {id:'carto3',who:'carto',gate:m=>(m.bestDepth|0)>=340,t:`Past the picked-clean and into the
+Bloom. Note the chambers — it fills them evenly.
+
+Something down there is measuring the room. My professional objection is that measuring is my
+job.`},
+ {id:'carto4',who:'carto',gate:m=>(m.bestDepth|0)>=840,t:`Brickwork. You have seen it now.
+Older than the fall, which is not possible, which is confirmed.
+
+I keep two maps of the ruins: what is there, and what was built. They disagree about the
+number of rooms.`},
+ {id:'carto5',who:'carto',gate:m=>Object.keys((m.seen||{}).sigil||{}).length>0,t:`So you have
+held one. A piece of the thing that decides what is under the rock.
+
+You are carrying the reason my maps are wrong, and I would be grateful if you would stop
+breaking them.`},
+ {id:'carto6',who:'carto',gate:m=>!!((m.seen||{}).sigil||{}).lock,t:`Binding. Now that one I
+endorse. Bind a strand and my ink stops lying about it.
+
+If you are taking requests: the terrain. It is always the terrain.`},
+ {id:'carto7',who:'carto',gate:m=>!!(m.bosses||{}).sporemother,t:`The Bloom holds still since
+you cut the mother out of it. My sheet of the fungal country has now been accurate for nine
+days.
+
+Nine. I framed it.`},
+ {id:'carto8',who:'carto',gate:m=>!!(m.bosses||{}).sentinel,t:`The rotation has stopped. All
+those years of a thing walking a corridor that is not there, and now my ruins sheet has one
+less moving part.
+
+I have recorded the service. The guild will misfile it.`},
+ {id:'carto9',who:'carto',gate:m=>(m.maxEcho|0)>=1,t:`The depth is wrong. Do not argue — I
+have measured the shaft against itself, and it is out by some hundreds of metres in a
+direction I have no axis for.
+
+I have started a new sheet. I have labelled the axis you.`},
+ {id:'carto10',who:'carto',gate:m=>(m.echoLv|0)>=6,t:`You descend into worlds you have
+deliberately made worse, and then you ask me for maps of them.
+
+I make the maps. I want it noted somewhere that is not my own ledger: I make them under
+protest.`},
+ {id:'carto11',who:'carto',gate:m=>!!(m.bosses||{}).voidmaw,t:`You felled the thing at the
+bottom of my blankest sheet. I chart the abyss as an inset, at reduced scale, because at full
+scale the paper takes the dark badly.
+
+There is no guild language for the paper flinching. I have looked.`},
+ {id:'carto12',who:'carto',gate:m=>!!(m.endings||{}).mend,t:`There is sky on my charts again.
+Do you understand what that does to a projection. Every map since the fall assumes a ceiling
+of nothing.
+
+Now I must draw a lid on the world. I have never been happier to redraft.`},
+ {id:'carto13',who:'carto',gate:m=>!!(m.endings||{}).usurp,t:`I redrew the master sheet last
+night. My hand did it well. Better than I draw.
+
+I am filing that observation as a survey finding and not thinking about it further, and I
+advise you to extend me the same courtesy.`},
+ {id:'carto14',who:'carto',gate:m=>!!(m.bosses||{}).witness,t:`There was a sixth site. Never
+funded, never filed, never drawn.
+
+You felled something at a place that is on no sheet of mine. Either my maps are incomplete or
+the world produced a place out of process. Both keep me up.`},
+ // ---- THE CHANTER — the one that stopped singing ----
+ {id:'verse1',who:'verse',gate:m=>true,t:`You went down and came up. That is a rhythm. I kept
+a rhythm once.
+
+(It does not say more. The camp does not remember it arriving.)`},
+ {id:'verse2',who:'verse',gate:m=>Object.keys((m.seen||{}).sigil||{}).length>0,t:`You hold a
+torn note. When you break it, somewhere a measure is sung again, differently.
+
+We were not allowed. You are not not allowed. That is the entire difference between us.`},
+ {id:'verse3',who:'verse',gate:m=>Object.keys((m.seen||{}).diss||{}).length>=2,t:`The world is
+off its pitch where you have been. I can hear it from here.
+
+Do not apologise. Some of us waited nine hundred years for anyone to sing a wrong note on
+purpose.`},
+ {id:'verse4',who:'verse',gate:m=>!!(m.bosses||{}).warden,t:`The door in the caves is open.
+I came up through it, before, when it was still a thing that could be persuaded.
+
+It could not be persuaded. I came up anyway. It let me. Think about that.`},
+ {id:'verse5',who:'verse',gate:m=>!!(m.bosses||{}).sentinel,t:`The walker is off its round. I
+sang beside it once. It was not guarding the rooms.
+
+It was guarding the number of rooms. Ask your mapmaker whether the number has changed. Do not
+tell them why.`},
+ {id:'verse6',who:'verse',gate:m=>allKnots(m),t:`Five knots, cut. The weave hangs slack from
+the one glyph now.
+
+Slack cloth can be smoothed, or pulled to a new shape, or worn. You are going to choose one,
+and I am going to listen very hard.`},
+ {id:'verse7',who:'verse',gate:m=>(m.escapes|0)>=1,t:`You wrote a way out and you are still
+inside. Yes. That is what writing does. Every singer learns it — the song does not leave the
+throat.
+
+Descend again. I will be here, not singing.`},
+ {id:'verse8',who:'verse',gate:m=>!!(m.endings||{}).mend,t:`(For the first time, it is
+singing. Very quietly. One note, and then a second note.)
+
+The held note has resolved. Eight hundred years of my choir holding, and it took a digger
+with borrowed glyphs. I do not mind. Resolution never comes from inside the chord.`},
+ {id:'verse9',who:'verse',gate:m=>!!(m.endings||{}).usurp,t:`I can hear your name now. It is
+in everything — the rock, the rope, the rain that is not falling.
+
+A signature is a note held forever. I held one. Ask me sometime what it costs.`},
+ {id:'verse10',who:'verse',gate:m=>!!(m.bosses||{}).weft,t:`The shuttle is still. I felt it
+stop the way you feel a heartbeat stop. Mine, I mean.
+
+It was my whole purpose once, and its purpose was the figure. The figure is bare now, and
+everything below is listening to you.`},
+ {id:'verse11',who:'verse',gate:m=>(m.maxThreat|0)>=5,t:`Buried, they call the fifth watch.
+The dark reaching further. It is not reaching.
+
+It is leaning in. Attention is the only thing down there that was never rationed.`},
+ {id:'verse12',who:'verse',gate:m=>(m.echoLv|0)>=8,t:`In the worlds you remake, what dies
+leaves a wound in the air. You ask if that is new. It is not new.
+
+In this world the wounds were mended before you saw them. You have met the mender.`},
+ {id:'verse13',who:'verse',gate:m=>!!(m.bosses||{}).witness,t:`So it still checks. Even now,
+even slack. The one that reads.
+
+We sang to the figure. It read against the figure. Of everything below, it is the only thing
+I was instructed to avoid, and I am a thing they built to be brave.`},
+];
+function talkNew(who){let n=0;for(const d of DIALOG)if(d.who===who&&d.gate(META)&&!META.dlg[d.id])n++;return n}
+function openTalk(who){const c=CAST.find(x=>x.id===who);
+ const un=DIALOG.filter(d=>d.who===who&&d.gate(META));
+ let d=un.find(x=>!META.dlg[x.id])||un[un.length-1];if(!d)return;
+ if(!META.dlg[d.id]){META.dlg[d.id]=1;saveMeta()}
+ let h='<h2>'+c.n+'</h2><div class="lore">'+loreHTML(d.t)+'</div>';
+ if(un.some(x=>!META.dlg[x.id]))h+='<button onclick="openTalk(\''+who+'\')">. . .</button>';
+ h+='<button onclick="openCamp()">BACK</button>';
+ openPanel(h,false,()=>openTalk(who))}
+// The camp notices. First match wins; endings outrank knots; silence is the default.
+const CAMP_LINES=[
+ {gate:m=>!!(m.endings||{}).usurp, t:'The camp is quiet around you. Everything here knows who it agrees with now.'},
+ {gate:m=>!!(m.endings||{}).mend,  t:'There is a colour in the sky over the camp. Nobody talks about it. Everybody looks.'},
+ {gate:m=>!!(m.endings||{}).escape,t:'The shaft is the wrong depth, and the camp pretends not to measure it.'},
+ {gate:m=>allKnots(m),                        t:'The camp is quiet in a listening way. Everything hangs from one thread now, and everything here knows it.'},
+ {gate:m=>Object.keys(m.bosses||{}).length>=3,t:'Rope-men say the shaft hangs straighter. Nobody has lowered a lamp to check.'},
+ {gate:m=>Object.keys(m.bosses||{}).length>=1,t:'The draught from the shaft has changed direction. The smith lit the forge without being asked.'},
+];
+function campLine(){for(const c of CAMP_LINES)if(c.gate(META))return c.t;return ''}
 // ============ THE LATTICE — SIGILS, DISSONANCE, ESCAPE ============
 // The mechanic this whole game is pointed at.
 //
@@ -3588,6 +3932,9 @@ function killEnemy(e){
    if(n>(META.maxThreat||0)&&n<THREATS.length){META.maxThreat=n;
     UNLOCK_MSG.push('THREAT '+THREATS[n].n);toastQ('THREAT UNLOCKED')}
    checkMoves();   // boss deeds (wallkick, longarm) land the moment the knot falls
+   // the knot comes loose: a first fell writes its fragment — quiet, no modal mid-kill;
+   // the death screen's UNLOCK_MSG line says so even if you never make it home
+   if(D.frag&&discover('frag',D.frag,true))UNLOCK_MSG.push('The knot comes loose. A fragment is written.');
    saveMeta()}
   if(D.end)glyphFelled()}   // the Weft: killing it opens the ending choice (field, never id)
  dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?(e.elite.loot||3):1)*rr(0.7,1.3)));
@@ -4275,7 +4622,8 @@ function upPickups(dt){
     // Uniques record under base+'#'+(alt+1) so a found unique is distinguishable from a seen
     // base, and a third alt table slots in without a keying change (R12).
     if(k.item.unique){discover('uni',k.item.base+'#'+((k.item.alt||0)+1),true);tipEv('unique')}
-    discover('item',k.item.unique?k.item.base+(k.item.alt?'#'+(k.item.alt+1):''):k.item.base,true)}   // alt 2 opens the #3 page
+    discover('item',k.item.unique?k.item.base+(k.item.alt?'#'+(k.item.alt+1):''):k.item.base,true);
+    if(k.item.rarity===3&&!META.firsts.uniq){META.firsts.uniq=1;saveMeta()}}   // the Smith notices finished work
    PICK.splice(i,1);continue}
   if(k.t<=0)PICK.splice(i,1)}}
 // ============ PLAYER UPDATE ============
@@ -4456,6 +4804,7 @@ function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
  if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthDmg(P.y),'#ffcf8a',{burn:8*depthDmg(P.y)})}}
 let DYING=false;
 function die(){if(P.dead)return;
+ discover('frag','rites',true);   // the camp's custom for the dead — written once, at the first death
  // A queued fragment or level-up must not resurface over — or after — the death screen.
  P.dead=true;DYING=true;PANEL_Q.length=0;paused=true;P.hp=0;sfx('die');flash(0.5);
  META.bestDepth=Math.max(META.bestDepth||0,runDepth);
@@ -4925,6 +5274,7 @@ function openTitle(){
   <button onclick="startRun()">${first?'DESCEND':'DESCEND AGAIN'} <span class="sub">${pr('confirm')}</span></button>
   ${first?'':'<button onclick="openCamp()">CAMP <span class="sub">spend shards, pick a class</span></button>'}
   <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
+  ${CAST.filter(c=>c.show(META)).map(c=>`<button onclick="openTalk('${c.id}')">${c.n}${talkNew(c.id)?' <span class="r3">— '+talkNew(c.id)+' new</span>':''} <span class="sub">${c.sub}</span></button>`).join('')}
   <button onclick="openControls()">CONTROLS</button>
   <button onclick="openSettings()">SETTINGS</button>`,true,openTitle)}
 function startRun(){
@@ -5091,6 +5441,7 @@ function openBounties(){
 function openCamp(){
  tipEv('shop');   // the unlock-pool tour line — shows (non-modally) once the panel closes
  let h=`<h2>CAMP</h2><div class="sub">Shards: ${META.shards}</div>
+ ${campLine()?`<div class="sub">${campLine()}</div>`:''}
  <button onclick="openClasses()">CLASS — ${(CLASSES[META.cls]||CLASSES.vanguard).n}</button>
  <button onclick="openAnchors()">DESCEND FROM — ${(META.startBiome||'surface').toUpperCase()}</button>
  <button onclick="openLoadout()">STARTING LOADOUT — ${['melee','ranged','armor'].map(s=>META.loadout[s]?GEAR[META.loadout[s]].n:'—').join(' / ')}</button>

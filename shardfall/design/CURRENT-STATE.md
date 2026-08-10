@@ -502,7 +502,7 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | boons | 21 |
 | attunements | 29 |
 | threat tiers | 6 |
-| lore fragments | 19 |
+| lore fragments | 44 |
 | modifier affixes | 17 |
 | elite modifiers | 11 |
 | room templates | 15 |
