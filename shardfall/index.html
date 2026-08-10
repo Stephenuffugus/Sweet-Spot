@@ -6321,19 +6321,47 @@ function render(){
    ctx.fillStyle='#fff';ctx.fillRect(x-1,y-1,2,2)}
   else if(k.kind==='gem'){const G=GEMS[k.id];ctx.fillStyle=G?SOCK[G.col||'r'].c:'#e6d34a';
    ctx.fillRect(x-3,y-3,6,6);ctx.fillStyle='#fff';ctx.fillRect(x-1,y-1,2,2)}
-  else{ctx.fillStyle=['#e8e2d0','#6f8fe0','#e6d34a','#d8a53f'][k.item.rarity];ctx.fillRect(x-4,y-4,8,8);
-   ctx.fillStyle='#00000050';ctx.fillRect(x-4,y+2,8,2)}}
- // shrines
+  else{const rc=['#e8e2d0','#6f8fe0','#e6d34a','#d8a53f'][k.item.rarity],sl=GEAR[k.item.base].slot;
+   ctx.fillStyle='#00000050';ctx.fillRect(x-5,y+3,10,2);                  // ground shadow
+   if(k.item.rarity>=2){ctx.globalAlpha=0.25;ctx.fillStyle=rc;ctx.fillRect(x-6,y-6,12,11);ctx.globalAlpha=1}
+   if(sl==='melee'){                                                     // a blade at rest
+    ctx.fillStyle='#c9c9c9';ctx.fillRect(x-1,y-5,2,7);ctx.fillRect(x-2,y-4,4,1);
+    ctx.fillStyle=rc;ctx.fillRect(x-2,y+2,4,2)}                          // rarity in the grip
+   else if(sl==='ranged'){                                               // a stave and string
+    ctx.fillStyle='#8a6743';ctx.fillRect(x-3,y-5,2,9);
+    ctx.fillStyle='#e8e2d0';ctx.fillRect(x-1,y-5,3,1);ctx.fillRect(x-1,y+3,3,1);
+    ctx.fillStyle=rc;ctx.fillRect(x-3,y-1,2,2)}
+   else{                                                                 // armor: a shell
+    ctx.fillStyle=rc;ctx.fillRect(x-4,y-4,8,7);
+    ctx.fillStyle='#00000040';ctx.fillRect(x-4,y-1,8,4);
+    ctx.fillStyle=rc;ctx.fillRect(x-2,y-1,4,4)}}}
+ // shrines — a carved stone over a kneeling slab; the carving goes dark when it is spent
  for(const sh of SHRINES){const x=sh.x-ox,y=sh.y-oy;
   if(x<-20||x>VW+20||y<-20||y>VH+20)continue;
-  ctx.fillStyle=sh.used?'#4a4a55':'#d8a53f';ctx.fillRect(x-5,y-2,10,7);
-  ctx.fillStyle=sh.used?'#3a3a44':'#ffe9a0';ctx.fillRect(x-2,y-12,4,10);
+  ctx.fillStyle='#14141c';ctx.fillRect(x-7,y+3,14,3);                     // slab shadow
+  ctx.fillStyle=sh.used?'#3d3d47':'#55555f';ctx.fillRect(x-6,y+2,12,3);   // the kneeling slab
+  ctx.fillStyle='#14141c';ctx.fillRect(x-4,y-14,8,17);                    // stone outline
+  ctx.fillStyle=sh.used?'#44444e':'#6a6a76';ctx.fillRect(x-3,y-13,6,15);  // the standing stone
+  ctx.fillStyle=sh.used?'#55555f':'#8a8a96';ctx.fillRect(x-3,y-13,2,15);  // lit edge
+  ctx.fillStyle=sh.used?'#3a3a44':'#ffe9a0';                              // the carving
+  ctx.fillRect(x-1,y-11,2,7);ctx.fillRect(x-2,y-9,4,1);ctx.fillRect(x-2,y-6,4,1);
   if(!sh.used){const p=1+Math.sin(perf*3)*0.5;ctx.fillStyle='#ffe9a055';ctx.fillRect(x-3-p,y-15-p,6+p*2,4+p*2)}}
- // chests
+ // chests — a chest reads as a PROMISE, so it gets a lid, a band, and a lock
  for(const ch of CHESTS){const x=ch.x-ox,y=ch.y-oy;
   if(x<-20||x>VW+20||y<-20||y>VH+20)continue;
-  ctx.fillStyle=ch.opened?'#5a5347':'#d8a53f';ctx.fillRect(x-7,y-5,14,10);
-  ctx.fillStyle='#00000040';ctx.fillRect(x-7,y-1,14,2)}
+  ctx.fillStyle='#14141c';ctx.fillRect(x-8,y-6,16,12);                    // outline
+  if(ch.opened){
+   ctx.fillStyle='#5a5347';ctx.fillRect(x-7,y-2,14,7);                    // body, sagging
+   ctx.fillStyle='#241f16';ctx.fillRect(x-6,y-1,12,3);                    // the emptied mouth
+   ctx.fillStyle='#4a4438';ctx.fillRect(x-8,y-7,16,3)}                    // lid thrown back
+  else{
+   ctx.fillStyle='#8a6a2e';ctx.fillRect(x-7,y-5,14,10);                   // body
+   ctx.fillStyle='#d8a53f';ctx.fillRect(x-7,y-5,14,4);                    // lid catches the light
+   ctx.fillStyle='#5c451c';ctx.fillRect(x-7,y-1,14,1);                    // lid seam
+   ctx.fillStyle='#3a2f14';ctx.fillRect(x-2,y-6,4,11);                    // the band
+   ctx.fillStyle='#ffe9a0';ctx.fillRect(x-1,y-2,2,3);                     // the lock, bright — the eye finds it
+   const p=(Math.sin(perf*2.2+ch.x)+1)*0.5;
+   ctx.globalAlpha=0.10+p*0.12;ctx.fillStyle='#ffe9a0';ctx.fillRect(x-9,y-8,18,15);ctx.globalAlpha=1}}
  // sentry + decoy
  for(const s of SENTRY){const x=s.x-ox,y=s.y-oy;
   ctx.fillStyle='#d8a53f';ctx.fillRect(x-4,y-2,8,8);
@@ -6462,6 +6490,15 @@ function render(){
     ctx.fillStyle='#000';ctx.fillRect(x+P.face*2,y-P.h/2+2,2,2)}
    if(drew&&P.dodgeT>0)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#9fd0ff',0.5);
    else if(drew&&P.inv>0.45)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#ffffff',0.5)}
+  // the held weapon reads IN-HAND: length by base, axes get a head, the spear gets a point.
+  // Render-only; the swing itself is the rotated slash above.
+  if(EQ.melee&&!P.block&&P.dodgeT<=0){const hb=EQ.melee.base,
+   hl={sword:6,axe:5,dagger:4,spear:9,greataxe:7,shield:0}[hb]||0;
+   if(hl){ctx.fillStyle='#c9ced6';ctx.fillRect(x+P.face*4,y-1,P.face*hl,1);
+    if(hb==='axe'||hb==='greataxe'){ctx.fillStyle='#9aa3b0';ctx.fillRect(x+P.face*(2+hl),y-3,P.face*2,4)}
+    if(hb==='spear'){ctx.fillStyle='#e8e2d0';ctx.fillRect(x+P.face*(4+hl),y-1,P.face*2,1)}
+    if(hb==='dagger'){ctx.fillStyle='#e8e2d0';ctx.fillRect(x+P.face*(3+hl),y-1,P.face*1,1)}}
+   else if(hb==='shield'){ctx.fillStyle='#8a8f9a';ctx.fillRect(x+P.face*5,y-4,2,8)}}
   if(P.block){ctx.fillStyle='#9fd0ff';ctx.fillRect(x+P.face*7,y-P.h/2,3,P.h)}
   if(ATK.melee&&P.mcd>ATK.melee.cd*0.7){
    // Along the RESOLVED swing angle — the slash must show where the swing actually went,
