@@ -1337,6 +1337,13 @@ const BOONS=[
  {id:'whetstone', n:'Whetstone', d:'your hits strip 3 armour',               m:{sunder:3}},
  {id:'harvest',   n:'Harvest',   d:'kills heal you for 3%',                  m:{feast:.03}},
  {id:'unbroken',  n:'Unbroken',  d:'survive one fatal hit',                  m:{secondWind:1}},
+ // ---- the long tail: storm, blood, crew, and the air ----
+ {id:'redheart',n:'Redheart', d:'your hits bleed, and bleeding hurts more', m:{hitBleed:.26,vsBleed:.20}},
+ {id:'skyborne',n:'Skyborne', d:'+25% damage while airborne',               m:{aloft:.25}},
+ {id:'cohort',  n:'Cohort',   d:'your constructs stand longer',             m:{construct:4}},
+ {id:'stormfed',n:'Stormfed', d:'shocked kills hasten your ability',        m:{stormEcho:1.5}},
+ {id:'gale',    n:'Gale',     d:'+40 fuel, +10% move speed',                fx:{fuel:40,ms:.10}},
+ {id:'redprice',n:'Red Price',d:'+40% damage, every swing costs blood',     fx:{dmg:.40}, m:{hpCost:2}},
 ];
 // CLASSES — pick at camp. Each is a starting kit + a permanent passive + a free signature gem.
 // fx keys read by classFx(): hp, meleeDmg, rangedDmg, abilCdr, ms, greed, pierce, blockDR,
@@ -2233,6 +2240,14 @@ const ATTUNE=[
  {id:'linked',  n:'Linked',      d:'your hits chain to one more enemy',      m:{chain:1}},
  {id:'finisher',n:'Finisher',    d:'+30% damage below half health',          m:{vsLow:.30}},
  {id:'lastlight',n:'Last Light', d:'below a third health, take 25% less',    m:{lastLight:.25}},
+ // ---- the long tail: the missing elements, and the body ----
+ {id:'jolt',  n:'Jolted',       d:'your hits shock',                     m:{hitShock:1.3}},
+ {id:'gash',  n:'Opened',       d:'your hits bleed',                     m:{hitBleed:.28}},
+ {id:'buoy',  n:'Buoyant',      d:'+35 fuel',                            fx:{fuel:35}},
+ {id:'slick', n:'Slick',        d:'longer dodge i-frames',               fx:{iframes:.35}},
+ {id:'wake',  n:'In the Wake',  d:'+30% damage just after a dodge',      m:{dodgeRush:.3}},
+ {id:'shift', n:'Second Shift', d:'one more construct may stand',        m:{crewcap:1}},
+ {id:'span',  n:'Long-Armed',   d:'+15% melee reach',                    fx:{reach:.15}},
 ];
 // Threat tiers. Each one is a named world rule, not a difficulty slider — you should be able to
 // say what tier 3 does without looking it up.
@@ -2264,6 +2279,12 @@ const ECHOES=[
  {n:'Hollow', d:'What dies here leaves a wound behind.', wound:1},
  {n:'Silent', d:'No ground markers. Read the creature.', nomark:1},
  {n:'Rich',   d:'And it is worth far more.',             shard:1.35, rare:1.25},
+ // ---- the ladder past the first lap: structure, not inflation (rungs 11+) ----
+ {n:'Crowned',d:'The dark has more captains.',           elite:1.5},
+ {n:'Seeping',d:'The floor remembers how to hurt.',      vent:1.6},
+ {n:'Charged',d:'What dies here still argues.',          spark:1},
+ {n:'Thin',   d:'The air gives you less to burn.',       pfuel:0.85},
+ {n:'Braced', d:'The dark recovers sooner.',             rec:0.9},
 ];
 // The active rule set is simply the first N entries, wrapping. Multiplicative keys multiply,
 // additive keys add, flags stay flags — one loop, no per-echo branching.
@@ -2272,7 +2293,7 @@ function echoes(){
  for(let i=0;i<n;i++){const E=ECHOES[i%ECHOES.length];
   for(const k in E){if(k==='n'||k==='d')continue;
    if(k==='arm')o.arm=(o.arm||0)+E.arm;
-   else if(k==='wound'||k==='nomark')o[k]=1;
+   else if(k==='wound'||k==='nomark'||k==='spark')o[k]=1;
    else o[k]=(o[k]||1)*E[k]}}
  return o}
 let ECHO={};
@@ -2295,6 +2316,23 @@ const BOUNTIES=[
  {id:'chests', n:'Open 6 sealed places',      pay:100, goal:6,  count:'chest'},
  {id:'burn',   n:'Kill 25 while they burn',   pay:110, goal:25, count:'burn'},
  {id:'punish', n:'Land 20 hits on spent foes',pay:130, goal:20, count:'punish'},
+ // ---- the long tail: verbs for the new archetypes, the forge, the ladder, and the floor ----
+ {id:'carver', n:'Carve 250 stones',              pay:100, goal:250,count:'dig'},
+ {id:'plunge', n:'Survive 3 hard landings',       pay:90,  goal:3,  count:'fall'},
+ {id:'ghost',  n:'Slip through 12 attacks',       pay:140, goal:12, count:'ghost'},
+ {id:'sparks', n:'Kill 20 while they spark',      pay:120, goal:20, count:'shock'},
+ {id:'letting',n:'Kill 25 while they bleed',      pay:110, goal:25, count:'bleed'},
+ {id:'crew',   n:'Raise 6 constructs',            pay:130, goal:6,  count:'raise',
+   ok:m=>!!(m.unlocks.sentry||m.unlocks.cairn||m.unlocks.effigy||m.unlocks.decoy)},
+ {id:'fuser',  n:'Fuse a gem',                    pay:130, goal:1,  count:'fuse'},
+ {id:'tempered',n:'Work the forge twice',         pay:120, goal:2,  count:'forge',
+   ok:m=>Object.keys(m.bosses||{}).length>=1},
+ {id:'outrun', n:'Reach 700m before the Weight stirs',pay:190,goal:1,test:s=>runDepth>=700&&!s.weighted},
+ {id:'clean',  n:'Fell a Knot untouched',         pay:260, goal:1,  test:s=>!!s.bossclean},
+ {id:'echoed', n:'Reach 1,500m in an echoed world',pay:250,goal:1,  test:s=>runDepth>=1500&&(META.echoLv|0)>=1,
+   ok:m=>(m.echoLv|0)>=1},
+ {id:'loom',   n:'Fell what keeps the glyph',     pay:400, goal:1,  test:s=>!!s.weftdown,
+   ok:m=>Object.keys(m.bosses||{}).length>=3},
  {id:'nohit',  n:'Reach 600m without a hit',  pay:220, goal:1,  test:s=>runDepth>=600&&!s.hurt},
  {id:'swarm',  n:'Kill 60 of anything',       pay:90,  goal:60, count:'kill'},
  {id:'sigil',  n:'Rewrite a strand',          pay:150, goal:1,  count:'weave'},
@@ -2303,7 +2341,7 @@ const BOUNTIES=[
 ];
 let BOUNTY=[],BSTATE={};
 function rollBounties(){
- const pool=BOUNTIES.slice(),pick=[];
+ const pool=BOUNTIES.filter(b=>!b.ok||b.ok(META)),pick=[];
  for(let i=0;i<3&&pool.length;i++)pick.push(pool.splice(ri(0,pool.length-1),1)[0]);
  BOUNTY=pick;BSTATE={hurt:0,shrine:0};
  for(const b of pick)BSTATE[b.id]=0}
@@ -2683,7 +2721,7 @@ function genChunk(cx,cy){
       if(ch==='#'||ch==='=')t[idx]=B0[2];else if(ch==='.')t[idx]=0}}}}
   // ---- VENTS ---- a fixed feature of the band that makes the FLOOR the thing you read.
   // Structural, so it comes from the terrain strand and survives a cache reroll.
-  if(!inMG&&SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<(SH.ventP||0.42)){
+  if(!inMG&&SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<Math.min(0.9,(SH.ventP||0.42)*(ECHO.vent||1))){
    for(let tr=0;tr<12;tr++){const lx=rS('terrain',2,CHUNK-3),ly=rS('terrain',2,CHUNK-3);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'vent',vent:SH.vent});break}}}
@@ -3101,7 +3139,7 @@ let SPAWNQ=[];
 function queueEnemy(e){if(EN.length+SPAWNQ.length<120)SPAWNQ.push(e)}
 function flushSpawns(){if(SPAWNQ.length){for(const e of SPAWNQ)EN.push(e);SPAWNQ.length=0}}
 let RUNB={dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0};
-const RUNB0=()=>({dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0});
+const RUNB0=()=>({reach:0,dmg:0,cdr:0,ms:0,hp:0,greed:0,pierce:0,crit:0,critMult:0,arm:0,sres:0,focus:0,ailment:0,leech:0,iframes:0,kb:0,fuel:0});
 // SCREENSHAKE. It was 16px on a 272px-wide view — 5.9% of the screen, where Hades uses 0.4%
 // and shakes the screen for only 3 of its 207 enemy deaths. Three changes: a hard 8px ceiling,
 // a squared response so small events barely register and big ones still land, and distance
@@ -3150,7 +3188,8 @@ function auraHas(id){return !!(EQ.armor&&EQ.armor.sockets.some(g=>gemId(g)===id)
 function isShield(slot){const it=EQ[slot];return !!(it&&GEAR[it.base].shield)}
 // Baseline tank 45 (was 60): the modest start the movement track grows from — draught's +20
 // lands at 150m and puts every veteran at 65 >= the old 60. Updraft/harness ride on top.
-function maxFuel(){let f=45+moveFx('fuel')+inc('fuel');if(auraHas('updraft'))f+=70;return f}
+function maxFuel(){let f=45+moveFx('fuel')+inc('fuel');if(auraHas('updraft'))f+=70;
+ return Math.max(30,Math.round(f*(ECHO.pfuel||1)))}   // Thin taxes the air; the gait track is the counter — never zeroed
 function digPower(){ // best dig stat across equipped weapons — used by abilities/traversal
  let d=0;for(const k of ['melee','ranged']){const a=ATK[k];if(a&&a.dig!==undefined)d=Math.max(d,a.dig)}
  // computeAttack has ALREADY folded classFx('digBonus') into a.dig. Adding it again here gave
@@ -3204,6 +3243,9 @@ function baseAttack(b,kind){
 function applyRunMods(a){
  if(RUNM.hitBurn){a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,RUNM.hitBurn)}
  if(RUNM.hitBleed){a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,RUNM.hitBleed)}
+ if(RUNM.vsBleed)a.vsBleed=(a.vsBleed||0)+RUNM.vsBleed;
+ if(RUNM.aloft)a.aloft=(a.aloft||0)+RUNM.aloft;
+ if(RUNM.hpCost)a.hpCost=(a.hpCost||0)+RUNM.hpCost;
  if(RUNM.hitChill){a.st=a.st||{};a.st.chill=Math.min(a.st.chill||9,RUNM.hitChill)}
  if(RUNM.hitShock){a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,RUNM.hitShock)}
  if(RUNM.vsBurn)a.vsBurn=(a.vsBurn||0)+RUNM.vsBurn;
@@ -3308,10 +3350,10 @@ function useAbility(){
   P.shield=Math.round(30+(P.armor||0)*3.2+a.dmg*0.4);P.shieldT=perf+12;
   burst(P.x,P.y,'#9fd0ff',22);toast('Bulwark — '+P.shield+' shield')}
  else if(a.fx==='sentry'){ // a turret that fires YOUR ranged attack — the ability IS the build
-  SENTRY.push({x:P.x,y:P.y,t:perf+(auraHas('foreman')?11:8),cd:0});
+  SENTRY.push({x:P.x,y:P.y,t:perf+(auraHas('foreman')?11:8)+(RUNM.construct||0),cd:0});bTick('raise');
   burst(P.x,P.y,'#d8a53f',16);toast('Shard Sentry')}
  else if(a.fx==='decoy'){ // taunt dummy: the panic button for fragile builds
-  DECOY={x:P.x+P.face*30,y:P.y,t:perf+(auraHas('foreman')?9:6),hp:40+a.dmg};
+  DECOY={x:P.x+P.face*30,y:P.y,t:perf+(auraHas('foreman')?9:6)+(RUNM.construct||0),hp:40+a.dmg};bTick('raise');
   burst(DECOY.x,DECOY.y,'#e8e2d0',14);toast('Decoy')}
  else if(a.fx==='rupture'){ // consume every ailment nearby for burst — the DoT finisher
   let total=0,n=0;
@@ -3340,6 +3382,7 @@ function useAbility(){
   const md=Math.max(1,digPower());let cut=0;
   for(let d=0;d<26;d++){cut+=carve(P.x,P.y+d*TILE,TILE*1.4,md);
    if(getTile(Math.floor(P.x/TILE),Math.floor((P.y+d*TILE)/TILE))===3)break}
+  if(cut)bTick('dig',cut);
   addShake(10);burst(P.x,P.y+30,'#d8a53f',20);
   toast('Shaft — '+cut+' tiles');P.noFall=Math.max(P.noFall,3)}
  else if(a.fx==='crucible'){ // the player's own area denial — the other side of the fungal band
@@ -3368,7 +3411,7 @@ function useAbility(){
   RUNB.sres+=0.25;BUFFS.push({k:'sres',v:0.25,until:perf+3});
   refreshAttacks();burst(P.x,P.y,'#b0a070',12);toast('Bastion — 3s of stone')}
  else if(a.fx==='effigy'){ // a decoy with thorns. Output derives from the OWNER (a.dmg is player-resolved).
-  DECOY={x:P.x+P.face*30,y:P.y,t:perf+(auraHas('foreman')?11:8),hp:60+a.dmg*1.5,spikes:a.dmg*0.4*dm};
+  DECOY={x:P.x+P.face*30,y:P.y,t:perf+(auraHas('foreman')?11:8)+(RUNM.construct||0),hp:60+a.dmg*1.5,spikes:a.dmg*0.4*dm};bTick('raise');
   burst(P.x+P.face*30,P.y,'#7f9455',14);toast('Effigy')}
  else if(a.fx==='lode'){ // tap: plant. tap again: snap back. One button on every device.
   if(P.lode&&perf<P.lode.until){P.x=P.lode.x;P.y=P.lode.y;P.vx=0;P.vy=0;P.inv=Math.max(P.inv,0.3);
@@ -3632,7 +3675,7 @@ function doMelee(){
  for(const ch of CHESTS){if(!ch.opened&&Math.hypot(ch.x-P.x,ch.y-P.y)<a.range+10){openChest(ch);break}}
  // dig soft tiles in front
  const cut=carve(P.x+P.face*a.range*0.8,P.y,a.digR||TILE*1.5,a.dig>=0?a.dig:-1);
- if(cut&&CLASSES[META.cls].foc==='dig')gainFocus(cut*1.5);
+ if(cut){bTick('dig',cut);if(CLASSES[META.cls].foc==='dig')gainFocus(cut*1.5)}
  // Refused by the rock: a dull thunk + spark at the site — "I tried to dig and was refused",
  // not combat noise (!hit = the swing struck no enemy). CARVE_* is per-call scratch, read on
  // the line after our own carve. Bedrock sparks but never tips — no tool exists, the tip
@@ -3757,6 +3800,7 @@ function condMul(a,e){
  // farshot reads projectile travel (ox only exists on projectiles — lawfully ranged-only)
  if(a.farshot&&a.ox!==undefined)m*=1+Math.min(1,Math.hypot(a.x-a.ox,a.y-a.oy)/420)*a.farshot;
  if(classFx('bloodRise')&&P.hp<P.maxhp*0.5)m*=1+classFx('bloodRise');         // bloodletter below half
+ if(RUNM.dodgeRush&&perf-(P.lastDodge||-9)<1.5)m*=1+RUNM.dodgeRush;           // In the Wake: a window, not a state
  if(auraHas('bloodscent')&&(hasSt(e,'bleed')||hasSt(e,'burn')))m*=1.3;
  if(auraHas('vigil')&&perf-(P.lastHurt||-9)>3)m*=1.25;
  if(auraHas('reaper')&&e.maxhp&&e.hp<e.maxhp*0.5)m*=1.2;
@@ -3786,7 +3830,8 @@ function onHit(a,e,dmg){
 function onKill(a,e){
  // Cairn: the corpse is a turret. Cap 3; upSentry's copy-list must NEVER carry `raise`, or
  // turrets raise turrets. Foreman stretches the lifetime.
- if(a.raise&&SENTRY.length<3)SENTRY.push({x:e.x,y:e.y-6,t:perf+a.raise*(auraHas('foreman')?1.5:1),cd:0});
+ if(a.raise&&SENTRY.length<3+(RUNM.crewcap||0)){
+  SENTRY.push({x:e.x,y:e.y-6,t:perf+a.raise*(auraHas('foreman')?1.5:1)+(RUNM.construct||0),cd:0});bTick('raise')}
  if(a.stormcall)P.stormN=Math.min(3,(P.stormN||0)+1);
  // Splinter: the corpse is a weapon. Turns single-target skills into crowd clear on a delay.
  if(a.splinter)for(let k=0;k<3&&PROJ.length<200;k++){const ang=k/3*6.283+RNG();
@@ -3896,12 +3941,18 @@ function killEnemy(e){
  P.kills++;gainFocus(FOCUS_KILL);sfx(e.boss?'bosskill':'kill',e.x);
  bTick('kill');if(e.elite)bTick('elite');if(e.boss)bTick('boss');
  if(hasSt(e,'burn'))bTick('burn');
+ if(hasSt(e,'shock'))bTick('shock');
+ if(hasSt(e,'bleed'))bTick('bleed');
+ if(e.boss&&!BSTATE.hurt)BSTATE.bossclean=1;
+ // Charged (echo 13): every corpse briefly argues — melee-range kills cost positioning
+ if(ECHO.spark)addHaz(e.x,e.y-4,30,1.1,e.dmg*0.35,{shock:1.2},'#e6d34a',0,'shock');
  if(auraHas('tempo')){P.tempo=Math.min(5,(P.tempo||0)+1);P.tempoT=perf+4}
  discover('en',e.type);
  gainXP(Math.max(1,Math.round((ENEMIES[e.type].shards||2)*(e.boss?6:e.elite?2.5:1))));
  if(ECHO.wound)addHaz(e.x,e.y,26,4.5,e.dmg*0.22,{bleed:e.dmg*0.3},'#c04a70',0,'gas');
  if(RUNM.feast)P.hp=Math.min(P.maxhp,P.hp+P.maxhp*RUNM.feast);
  if(RUNM.echo)P.acd=Math.max(0,P.acd-RUNM.echo);
+ if(RUNM.stormEcho&&hasSt(e,'shock'))P.acd=Math.max(0,P.acd-RUNM.stormEcho);   // Stormfed
  if(e.boss)rumble(0.9,0.7,400);else rumble(0.25,0.15,70);
  const D=ENEMIES[e.type]||{};
  // Sporeling / Ember: the corpse is the attack. Area denial you have to walk around.
@@ -3988,6 +4039,7 @@ function hurtPlayer(dmg,noArmor,srcX){
   // (replay's wave adds bTick('ghost') at the top of this block — keep it the one seam.)
   // srcX!==undefined: only an ATTACK can be perfect-dodged — fall damage passes no source,
   // and paying focus for rolling into the ground was a free engine.
+  if(P.dodgeT>0&&!P.dead&&dmg>0)bTick('ghost');   // finesse credit: a LIVE roll only, never post-hit inv
   if(P.dodgeT>0&&!P.dead&&dmg>0&&srcX!==undefined&&!P.pd){P.pd=1;gainFocus(8);
    burst(P.x,P.y,'#9fd0ff',8);sfx('block',P.x);hitStop(0.05,0.35,0.012)}
   return}
@@ -4049,7 +4101,7 @@ function spawnFromChunks(){
     if(EN.length>=(boss?124:120)&&!evictFar())if(!boss)continue;
     // elite chance ramps with depth: ~2% shallow -> 22% deep. Bosses never roll elite.
     const T=threat();
-    const eliteP=Math.min(0.55,(0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55)*(T.elite||1));
+    const eliteP=Math.min(0.55,(0.02+(s.y/TILE-SURFACE)/WORLD_H*0.55)*(T.elite||1)*(ECHO.elite||1));
     // BLEEDING (dissonance >= 45): creatures surface from bands they do not belong to. The
     // substitution happens BEFORE E is resolved, so the intruder brings its own stats with it.
     let stype=s.type;
@@ -4083,7 +4135,7 @@ function mkAtk(atk,T){
  if(!atk)return null;
  T=T||threat();
  const wind=Math.max(WINDUP_FLOOR,atk.wind*(T.wind||1));
- const rec=Math.max(0.10,(atk.rec!==undefined?atk.rec:Math.max(0.22,atk.wind*0.75))*(T.rec||1));
+ const rec=Math.max(0.10,(atk.rec!==undefined?atk.rec:Math.max(0.22,atk.wind*0.75))*(T.rec||1)*(ECHO.rec||1));
  return Object.assign({},atk,{wind,rec})}
 // Real reach of a telegraphed melee: the enemy lunges for the whole active window, so the ground
 // marker has to show range + lunge*act or it is teaching the player a lie (PLAN §2.3).
@@ -4454,6 +4506,7 @@ function upProj(dt){
   let tunneled=false;
   if(p.digR&&p.friendly){
    const cut=carve(p.x,p.y,p.digR,p.dig!==undefined?p.dig:0);
+   if(cut)bTick('dig',cut);
    if(cut>0&&p.digCost)p.t-=p.digCost*cut;
    tunneled=true}
   // A tunneling projectile is not stopped by terrain — but it must STILL be able to hit
@@ -4677,8 +4730,8 @@ function applyWeight(dt){
  P.weightT+=dt;
  const T=threat(),wm=T.weight||1;
  const target=Math.max(0,Math.min(WEIGHT_MAX,Math.floor((P.weightT*wm*(ECHO.weight||1)-WEIGHT_GRACE)/WEIGHT_EVERY)+1));
- if(target>P.weight){P.weight=target;
-  toast('THE WEIGHT ×'+P.weight+' — descend');flash(0.12);sfx('deny')}}
+ if(target>P.weight){BSTATE.weighted=1;P.weight=target;
+  toast('THE WEIGHT ×'+P.weight+((META.endings||{}).usurp?' — it attends':' — descend'));flash(0.12);sfx('deny')}}
 function upPlayer(dt){
  if(P.dead)return;
  P.mcd=Math.max(0,P.mcd-dt);P.rcd=Math.max(0,P.rcd-dt);
@@ -4768,7 +4821,7 @@ function upPlayer(dt){
  if(wasAir&&P.onG&&vyPrev>FALL_SAFE&&P.noFall<=0&&!P.fallImmune&&!P.dead){
   let dmg=(vyPrev-FALL_SAFE)*FALL_DMG*(auraHas('featherfall')?0:1);
   dmg=Math.min(dmg,P.maxhp*0.55); // never a one-shot from full HP
-  if(dmg>=1){hurtPlayer(dmg);addShake(6);burst(P.x,P.y+P.h/2,'#8a8578',10)}
+  if(dmg>=1){hurtPlayer(dmg);addShake(6);burst(P.x,P.y+P.h/2,'#8a8578',10);if(!P.dead)bTick('fall')}
   // Plumbline: a hard landing is a weapon. Player-side damage rides depthDmg (the thorns
   // precedent) or it silently dies at depth. Featherfall prevents the trigger — the two
   // auras are exclusive by design. No extra shake: the fall already shakes 6.
@@ -4816,7 +4869,7 @@ function die(){if(P.dead)return;
  <table class="sum">
   <tr><td>Depth</td><td>${runDepth}m <span class="sub">(best ${META.bestDepth}m)</span></td></tr>
   <tr><td>Level</td><td>${P.level}</td></tr>
-  <tr><td>Threat</td><td>${threat().n}</td></tr>
+  <tr><td>Threat</td><td>${threat().n}</td></tr>${(META.echoLv|0)?'<tr><td>Echo</td><td>&#215;'+(META.echoLv|0)+'</td></tr>':''}
   <tr><td>Kills</td><td>${P.kills}</td></tr>
   <tr><td>Best hit</td><td>${Math.round(P.bestHit)}</td></tr>
   <tr><td>Best find</td><td>${BESTITEM?`<span class="r${BESTITEM.rarity}">${itemName(BESTITEM)}</span> <span class="sub">i${BESTITEM.ilvl||1}</span>`:'<span class="sub">nothing worth naming</span>'}</td></tr>
@@ -5053,7 +5106,7 @@ function fuseGem(id,tier){
  for(let i=BAG.length-1;i>=0&&removed<3;i--){const x=BAG[i];
   if(x.kind==='gem'&&x.id===id&&(x.tier||1)===tier){BAG.splice(i,1);removed++}}
  if(removed<3)return openBag();
- META.shards-=cost;saveMeta();
+ META.shards-=cost;bTick('fuse');saveMeta();
  BAG.push({kind:'gem',id,tier:tier+1});
  sfx('level');toast(GEMS[id].n+' → tier '+(tier+1));openBag()}
 
@@ -5165,7 +5218,7 @@ function wakeWeft(){
  while(EN.length>=124&&evictFar());
  EN.push(mkEnemy('weft',MG.tx*TILE,(MG.ty-14)*TILE,null,threat(),null));
  MGS=1;addShake(10);flash(0.5);sfx('bosskill');toast('IT PUTS DOWN ITS WORK')}
-function glyphFelled(){MGS=2;toastQ('THE LOOM IS STILL');
+function glyphFelled(){MGS=2;BSTATE.weftdown=1;toastQ('THE LOOM IS STILL');
  openEnding()}   // modal; queues behind a same-frame level-up via PANEL_Q, as shipped
 function openEnding(){
  if(MGS<2)return;
@@ -5183,7 +5236,8 @@ function doEnding(kind){
  if(MGS<2)return;
  if(kind==='mend'&&!allKnots(META))return;                    // gates re-checked — never trust a button
  if(kind==='usurp'&&(META.echoLv|0)<6)return;
- // (replay wave: bounty bank lands HERE, before the purse — the one seam, R9)
+ // an ending must never forfeit finished bounties — that taxed the game's best moment
+ const bp=bountyPayout();if(bp>0){META.shards+=bp;RUNSHARDS+=bp}
  META.escapes=(META.escapes||0)+1;
  // Every ending opens one more rung of the ladder — USURP is the ladder's fiction, but MEND
  // and ESCAPE climb it too. Equal payout: no ending is the farm ending.
@@ -5208,6 +5262,7 @@ Escape ${META.escapes}. Somewhere below, the shaft is already the wrong depth.`;
    <tr><td>Dissonance</td><td>${Math.round(DISSONANCE)}</td></tr>
    <tr><td>Shards torn loose</td><td class="r3">${Math.round(400+DISSONANCE*6)}◆</td></tr>
    <tr><td>Threat ceiling</td><td>${THREATS[META.maxThreat].n}</td></tr>
+   ${bp>0?`<tr><td>Bounties honored</td><td class="r3">+${bp}◆</td></tr>`:''}
   </table>
   <button onclick="newRun()">DESCEND AGAIN</button>`,true,null)}
 function doEscape(){MGS=2;doEnding('escape')}   // compat alias: suite-9 and any stale caller
@@ -5269,7 +5324,7 @@ function openTitle(){
  UIROOT='title';
  const first=!META.runs;
  openPanel(`<div class="title">SHARDFALL</div>
-  <div class="sub tagline">Something fell. We have been mining it for nine hundred years.</div>
+  <div class="sub tagline">${TAGLINES.find(t=>t.gate(META)).t}</div>
   ${first?'':`<div class="dps">Best ${META.bestDepth||0}m · ${META.runs} run${META.runs===1?'':'s'} · ${META.shards}◆ banked · ${threat().n}</div>`}
   <button onclick="startRun()">${first?'DESCEND':'DESCEND AGAIN'} <span class="sub">${pr('confirm')}</span></button>
   ${first?'':'<button onclick="openCamp()">CAMP <span class="sub">spend shards, pick a class</span></button>'}
@@ -5414,10 +5469,24 @@ function nearCamp(){
  return !!(ANCHOR&&Math.hypot(P.x-ANCHOR.x,P.y-ANCHOR.y)<90)}
 // The ladder, and the objectives, as screens. Both are stacks of buttons like everything else,
 // so a dpad reaches them without a single extra line of navigation code.
+// The ladder's fiction follows the ending you chose. First match wins; silence before any.
+const ECHO_FRAME=[
+ {gate:m=>!!(m.endings||{}).usurp, t:'The world re-forms harder because you sign it that way. Each echo is a clause in your hand.'},
+ {gate:m=>!!(m.endings||{}).mend,  t:'The sky holds. The deep does not have to. Each echo is a strain you order it to bear.'},
+ {gate:m=>(m.escapes|0)>0,         t:'Every escape writes the world over once more. It remembers being rewritten.'},
+];
+// The first sentence of the game, kept true to the save that is reading it.
+const TAGLINES=[
+ {gate:m=>!!(m.endings||{}).usurp,t:'Something fell. It answers to you now.'},
+ {gate:m=>!!(m.endings||{}).mend, t:'Something fell. The sky is back where it was.'},
+ {gate:m=>(m.escapes|0)>0,        t:'Something fell. You have been to the bottom that is not there.'},
+ {gate:m=>true,                   t:'Something fell. We have been mining it for nine hundred years.'},
+];
 function openEcho(){
  const max=META.maxEcho|0;
  let h=`<h2>ECHO</h2><div class="sub">Each escape opens another. An Echo stacks a named rule on
   the world and pays for it. There is no top.</div>`;
+ {const ef=ECHO_FRAME.find(f=>f.gate(META));if(ef)h+='<div class="sub">'+ef.t+'</div>'}
  for(let i=0;i<=max;i++){
   const cur=(META.echoLv|0)===i;
   const rules=i===0?'the world as it stands':ECHOES.filter((E,k)=>k<Math.min(i,ECHOES.length)).map(E=>E.n).join(', ')+(i>ECHOES.length?' (+'+(i-ECHOES.length)+' again)':'');
@@ -5657,7 +5726,7 @@ function doForgeOp(uid,op,key){
   // guard simply starts granting it the moment it exists
   if(LORE.frag.some(fr=>fr.id==='annealed'))discover('frag','annealed');
  }
- META.shards-=cost;META.forge.n++;saveMeta();
+ META.shards-=cost;META.forge.n++;bTick('forge');saveMeta();
  if(f.worn)refreshAttacks();   // TEMPER on a worn item must move ATK immediately (the most-forgotten call)
  sfx('gem');
  openForgeItem(uid)}

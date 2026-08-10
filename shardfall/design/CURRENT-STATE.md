@@ -312,6 +312,13 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | linked | Linked | your hits chain to one more enemy | mechanic |
 | finisher | Finisher | +30% damage below half health | mechanic |
 | lastlight | Last Light | below a third health, take 25% less | mechanic |
+| jolt | Jolted | your hits shock | mechanic |
+| gash | Opened | your hits bleed | mechanic |
+| buoy | Buoyant | +35 fuel | stat |
+| slick | Slick | longer dodge i-frames | stat |
+| wake | In the Wake | +30% damage just after a dodge | mechanic |
+| shift | Second Shift | one more construct may stand | mechanic |
+| span | Long-Armed | +15% melee reach | stat |
 
 ### Level curve
 
@@ -399,6 +406,12 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | Whetstone | your hits strip 3 armour |
 | Harvest | kills heal you for 3% |
 | Unbroken | survive one fatal hit |
+| Redheart | your hits bleed, and bleeding hurts more |
+| Skyborne | +25% damage while airborne |
+| Cohort | your constructs stand longer |
+| Stormfed | shocked kills hasten your ability |
+| Gale | +40 fuel, +10% move speed |
+| Red Price | +40% damage, every swing costs blood |
 
 ## The descent arc
 
@@ -470,6 +483,11 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | 8 | Hollow | What dies here leaves a wound behind. |
 | 9 | Silent | No ground markers. Read the creature. |
 | 10 | Rich | And it is worth far more. |
+| 11 | Crowned | The dark has more captains. |
+| 12 | Seeping | The floor remembers how to hurt. |
+| 13 | Charged | What dies here still argues. |
+| 14 | Thin | The air gives you less to burn. |
+| 15 | Braced | The dark recovers sooner. |
 
 ## Bounties
 
@@ -482,6 +500,18 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | Open 6 sealed places | 100◆ |
 | Kill 25 while they burn | 110◆ |
 | Land 20 hits on spent foes | 130◆ |
+| Carve 250 stones | 100◆ |
+| Survive 3 hard landings | 90◆ |
+| Slip through 12 attacks | 140◆ |
+| Kill 20 while they spark | 120◆ |
+| Kill 25 while they bleed | 110◆ |
+| Raise 6 constructs | 130◆ |
+| Fuse a gem | 130◆ |
+| Work the forge twice | 120◆ |
+| Reach 700m before the Weight stirs | 190◆ |
+| Fell a Knot untouched | 260◆ |
+| Reach 1,500m in an echoed world | 250◆ |
+| Fell what keeps the glyph | 400◆ |
 | Reach 600m without a hit | 220◆ |
 | Kill 60 of anything | 90◆ |
 | Rewrite a strand | 150◆ |
@@ -499,12 +529,12 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | affixes | 16 |
 | unlocks | 119 |
 | tree nodes | 15 |
-| boons | 21 |
-| attunements | 29 |
+| boons | 27 |
+| attunements | 36 |
 | threat tiers | 6 |
 | lore fragments | 44 |
 | modifier affixes | 17 |
 | elite modifiers | 11 |
 | room templates | 15 |
-| echo rules | 10 (unbounded ladder) |
-| bounties | 12 |
+| echo rules | 15 (unbounded ladder) |
+| bounties | 24 |

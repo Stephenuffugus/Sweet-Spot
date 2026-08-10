@@ -53,6 +53,9 @@ const ARCH = [
   { n: 'Blood Price',       cls: 'bloodletter',slot: 'melee',  base: 'sword',    gems: ['bloodlet', 'bloodtithe', 'hunger'],     armor: ['surfeit'] },
   { n: 'Minelayer',         cls: 'delver',     slot: 'ranged', base: 'crossbow', gems: ['mine', 'firstblow', 'conc'],            armor: ['vigil'] },
   { n: 'Skyfall',           cls: 'vanguard',   slot: 'melee',  base: 'greataxe', gems: ['deadweight', 'vantage', 'heavyimpact'], armor: ['plumbline'] },
+  // the long tail: the true minion build and the horizontal movement build
+  { n: 'Turret Crew',  cls: 'marksman', slot: 'ranged', base: 'bow',   gems: ['cairn', 'fasteratk', 'pierce'],    armor: ['foreman'] },
+  { n: 'Tempo Dancer', cls: 'delver',   slot: 'melee',  base: 'sword', gems: ['flurry', 'momentum', 'serration'], armor: ['tempo'] },
 ];
 
 function assemble(a, depthM, lvl) {
@@ -85,6 +88,7 @@ function effDps(at) {
   if (at.slam) m *= 1 + at.slam * 0.25;
   if (at.aloft) m *= 1 + at.aloft * 0.35;
   if (at.farshot) m *= 1 + at.farshot * 0.5;
+  if (at.raise) m *= 1.2;   // turret uptime — else the minion archetype drags the spread floor
   // dpsOf() cannot see an execute or a missing-health scalar, and an execution build is nothing
   // but those two things — scoring it without them rates the archetype at a third of its real
   // throughput and then blames the archetype. Averaged over a full health bar: reap is worth half
@@ -348,7 +352,8 @@ console.log('\n-- boons and attunements --');
   for (const t of ATTUNE) { if (ids['a' + t.id]) dupes.push(t.id); ids['a' + t.id] = 1 }
   A(dupes.length === 0, 'no duplicate boon or attunement ids' + (dupes.length ? ': ' + dupes.join(',') : ''));
   // every mechanical key one of them writes must be read somewhere
-  const KNOWN = ['feast', 'dodgeBlast', 'cornered', 'moving', 'overflow', 'echo', 'thorn', 'scav', 'secondWind',
+  const KNOWN = ['vsBleed', 'aloft', 'hpCost', 'construct', 'stormEcho', 'dodgeRush', 'crewcap',
+    'feast', 'dodgeBlast', 'cornered', 'moving', 'overflow', 'echo', 'thorn', 'scav', 'secondWind',
     'hitBurn', 'hitBleed', 'hitChill', 'hitShock', 'vsBurn', 'vsChill', 'vsSpent', 'vsLow',
     'extraProj', 'chain', 'sunder', 'lastLight'];
   const unread = [];

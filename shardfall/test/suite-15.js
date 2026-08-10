@@ -34,7 +34,7 @@ console.log('\n-- echoes --');
   A(/x2/.test(wrapped), 'past the end of the list the rules stack with themselves (' + wrapped.slice(0, 60) + ')');
   // and it keeps mattering: each rung has to be measurably worse than the one below
   let lastHp = 0, lastDmg = 0, mono = true;
-  for (let n = 0; n <= 24; n++) {
+  for (let n = 0; n <= 36; n++) {
     META.echoLv = n; refreshEcho();
     const hp = ECHO.hp || 1, dmg = ECHO.dmg || 1;
     if (hp < lastHp || dmg < lastDmg) mono = false;
@@ -43,7 +43,7 @@ console.log('\n-- echoes --');
   A(mono, 'every rung is at least as hard as the one below it');
   // Health alone understates it: at Echo 24 every rule has stacked two or three times over, so
   // the honest measure is the combined pressure — tougher AND more of them AND you smaller.
-  META.echoLv = 24; refreshEcho();
+  META.echoLv = 36; refreshEcho();   // 15 rungs now: the stack-twice-or-thrice intent lives at 36, not 24
   const pressure = (ECHO.hp || 1) * (ECHO.dens || 1) / (ECHO.php || 1);
   A(pressure > 6, 'and by Echo 24 the world is genuinely another game (' + pressure.toFixed(1) +
     'x combined pressure: ' + (ECHO.hp || 1).toFixed(1) + 'x health, ' + (ECHO.dens || 1).toFixed(1) +
@@ -270,6 +270,81 @@ console.log('\n-- integrity at the top of the ladder --');
   A(EN.length <= 125 && HAZ.length <= HAZ_MAX && PROJ.length <= 230, 'and every cap still holds');
   A(maxHP() > 0 && isFinite(maxHP()), 'and you still have a health bar');
   META.echoLv = 0; META.maxEcho = 0; META.threat = 0; refreshEcho();
+}
+
+// ---------- THE LADDER'S NEW RUNGS ----------
+console.log('\n-- rungs 11-15 --');
+{
+  A(ECHOES.length === 15, 'the ladder holds fifteen named rungs');
+  const want = [['Crowned','elite'],['Seeping','vent'],['Charged','spark'],['Thin','pfuel'],['Braced','rec']];
+  want.forEach(([n, k], i) => {
+    const r = ECHOES[10 + i];
+    A(r.n === n && r[k] !== undefined, 'rung ' + (11 + i) + ' is ' + n + ' and carries ' + k);
+  });
+  META.echoLv = 11; refreshEcho();
+  A(ECHO.elite === 1.5, 'Crowned raises the captains');
+  META.echoLv = 13; refreshEcho();
+  A(ECHO.spark === 1, 'Charged is a flag');
+  { // every corpse argues
+    EN.length = 0; HAZ.length = 0;
+    const e = mkEnemy('crawler', P.x + 40, P.y, null, threat(), null); EN.push(e); e.hp = 1;
+    killEnemy(e);
+    A(HAZ.some(h => h.kind === 'shock' && !h.friendly), 'a Charged corpse leaves a spark');
+    EN.length = 0; HAZ.length = 0;
+  }
+  META.echoLv = 0; refreshEcho();
+  const f0 = maxFuel();
+  META.echoLv = 14; refreshEcho();
+  A(maxFuel() < f0 && maxFuel() >= 30, 'Thin taxes the tank, never below 30 (' + maxFuel() + ')');
+  const r0 = mkAtk(ENEMIES.crawler.atk, THREATS[0]).rec;
+  META.echoLv = 15; refreshEcho();
+  A(mkAtk(ENEMIES.crawler.atk, THREATS[0]).rec < r0, 'Braced narrows the punish window');
+  A(mkAtk(ENEMIES.crawler.atk, THREATS[0]).rec >= 0.10, 'but never closes it');
+  META.echoLv = 0; META.maxEcho = 0; refreshEcho();
+}
+// ---------- THE NEW BOUNTIES ----------
+console.log('\n-- the long-tail bounties --');
+{
+  A(BOUNTIES.length >= 24, 'the pool holds ' + BOUNTIES.length + ' bounties');
+  // gated rows never draw on a virgin save; pool stays deep
+  const virgin = { unlocks: {}, bosses: {}, echoLv: 0 };
+  const gated = BOUNTIES.filter(b => b.ok && !b.ok(virgin)).map(b => b.id);
+  A(gated.indexOf('crew') >= 0 && gated.indexOf('tempered') >= 0 && gated.indexOf('echoed') >= 0 && gated.indexOf('loom') >= 0,
+    'impossible bounties are fenced off a fresh save: ' + gated.join(','));
+  A(BOUNTIES.filter(b => !b.ok || b.ok(virgin)).length >= 20, 'and the drawable pool stays deep');
+  // the amount arg is load-bearing now
+  BOUNTY = [BOUNTIES.find(b => b.id === 'carver')]; BSTATE = { hurt: 0, shrine: 0 };
+  bTick('dig', 7);
+  A(BSTATE.carver === 7, 'a seven-tile carve pays seven');
+  // ghost: a live roll only, never post-hit inv
+  BOUNTY = [BOUNTIES.find(b => b.id === 'ghost')]; BSTATE = { hurt: 0, shrine: 0 };
+  P.dead = false; P.hp = P.maxhp; P.dodgeT = 0.1; P.inv = 0.2;
+  hurtPlayer(10, false, P.x + 10);
+  A(P.hp === P.maxhp && BSTATE.ghost === 1, 'slipping through an attack mid-roll pays');
+  P.dodgeT = 0; P.inv = 0.2;
+  hurtPlayer(10, false, P.x + 10);
+  A(BSTATE.ghost === 1, 'post-hit invulnerability never does');
+  // bossclean
+  BOUNTY = [BOUNTIES.find(b => b.id === 'clean')]; BSTATE = { hurt: 0, shrine: 0 };
+  EN.length = 0;
+  const b1 = mkEnemy('warden', P.x + 60, P.y, null, threat(), null); EN.push(b1); b1.hp = 1;
+  killEnemy(b1);
+  A(BSTATE.bossclean === 1, 'an untouched Knot flags clean');
+  BSTATE = { hurt: 1, shrine: 0 }; EN.length = 0;
+  const b2 = mkEnemy('warden', P.x + 60, P.y, null, threat(), null); EN.push(b2); b2.hp = 1;
+  killEnemy(b2);
+  A(!BSTATE.bossclean, 'a bloodied one does not');
+  // the ending banks bounties
+  BOUNTY = [BOUNTIES.find(b => b.id === 'kills') || BOUNTIES[0]];
+  BOUNTY = [Object.assign({}, BOUNTIES.find(b => b.id === 'carver'))];
+  BSTATE = { hurt: 0, shrine: 0, carver: 250 };
+  const s0 = META.shards; MGS = 2; META.endings = {};
+  doEnding('escape');
+  A(META.shards >= s0 + 100, 'an ending banks finished bounties on top of the purse');
+  META.endings = {}; META.escapes = 0; META.maxEcho = 0; META.echoLv = 0; MGS = 0;
+  BOUNTY = []; BSTATE = { hurt: 0, shrine: 0 }; EN.length = 0; refreshEcho();
+  // close the ending's modal so later suites are not paused behind it
+  closePanel(true); paused = false;
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
