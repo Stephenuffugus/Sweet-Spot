@@ -332,10 +332,11 @@ console.log('\n-- new enemies --');
   EN.push(e); killEnemy(e);
   // Splits are QUEUED, not pushed straight into EN — killEnemy runs from inside `for..of EN`
   // loops, and appending there makes the live iteration walk into the enemies it just made.
-  A(SPAWNQ.length === E.split, 'void spawn queues its splits instead of mutating EN mid-iteration');
+  // split is a table FIELD now: {into, n} — the child species stopped being hard-coded
+  A(SPAWNQ.length === E.split.n, 'void spawn queues its splits instead of mutating EN mid-iteration');
   flushSpawns();
-  A(EN.filter(x => x.type === 'voidling').length === E.split, 'void spawn splits into voidlings');
-  const half = EN.find(x => x.type === 'voidling');
+  A(EN.filter(x => x.type === E.split.into).length === E.split.n, 'void spawn splits into its declared children');
+  const half = EN.find(x => x.type === E.split.into);
   EN.length = 0; SPAWNQ.length = 0; if (half) { half.hp = 1; killEnemy(half) }
   flushSpawns();
   A(EN.filter(x => x.type === 'voidling').length === 0, 'voidlings do not split again (no infinite chain)');

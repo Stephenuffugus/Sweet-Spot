@@ -193,7 +193,7 @@ console.log('\n-- delvemite: the count is the mechanic --');
 // ---------- 8. ELITES ARE FAIR ----------
 console.log('\n-- elites --');
 {
-  A(ELITES.length >= 8, 'there are ' + ELITES.length + ' elite modifiers');
+  A(ELITES.length >= 11, 'there are ' + ELITES.length + ' elite modifiers');
   let unfair = [];
   for (const t in ENEMIES) {
     const E = ENEMIES[t]; if (E.boss) continue;
@@ -276,7 +276,8 @@ console.log('\n-- encounters have a shape --');
 console.log('\n-- integrity --');
 {
   META.cls = 'delver'; META.threat = 5; newRun(); OFF(2600);
-  for (const t of ['chanter', 'warder', 'mortar', 'hollowed', 'bloomback', 'burrower', 'delvemite'])
+  for (const t of ['chanter', 'warder', 'mortar', 'hollowed', 'bloomback', 'burrower', 'delvemite',
+    'blackdamp', 'felter', 'hypha', 'drudge', 'lurcher', 'pavise', 'cinder', 'clinker', 'seep', 'voidmote', 'cleft', 'gazer'])
     put(t, rr(-160, 160), 0);
   P.inv = 0; P.hp = P.maxhp;
   let bad = 0;
@@ -414,6 +415,101 @@ console.log('\n-- regressions --');
   A(packsSeen > 0, 'packs generate at Threat IV');
   A(worst <= 1, 'at most one member of a pack is eligible to be elite (' + worst + ')');
   META.threat = 0;
+}
+
+// ---------- THE BENCH: wave-3 behaviors ----------
+console.log('\n-- the bench --');
+{ // felter: the Bloom's nurse obeys the healer laws (output from the HEALER, never the target)
+  OFF(); P.inv = 999;
+  const f = put('felter', -60), hurt = put('bloomback', 60);
+  f.hcd = 0; f.spd = 0; hurt.spd = 0; hurt.acd = 99; f.acd = 99;
+  hurt.hp = hurt.maxhp * 0.3;
+  const b0 = hurt.hp;
+  for (let i = 0; i < 60; i++) upEnemies(DT);
+  A(hurt.hp > b0, 'a felter knits the most wounded thing near it');
+  const rate = (hurt.hp - b0) / 1;
+  A(rate < 90, 'and its rate derives from ITSELF, bounded (' + rate.toFixed(0) + ' hp/s)');
+  f.hp = f.maxhp * 0.2; const f0 = f.hp; EN.splice(EN.indexOf(hurt), 1);
+  for (let i = 0; i < 300; i++) upEnemies(DT);
+  A(f.hp <= f0 + 0.001, 'a lone felter cannot knit itself');
+}
+{ // split chains: declared, acyclic, terminating
+  const seenChains = [];
+  for (const id in ENEMIES) {
+    let t = id, hops = 0, seen = {};
+    while (ENEMIES[t] && ENEMIES[t].split) {
+      A(!seen[t], 'split chain from ' + id + ' never revisits ' + t);
+      seen[t] = 1; t = ENEMIES[t].split.into; hops++;
+      A(hops <= 4, 'split chain from ' + id + ' terminates within 4 hops');
+    }
+    A(!!ENEMIES[t], 'split chain from ' + id + ' ends on a real species');
+  }
+  // cleft -> 2 voidspawn (fresh, isSplit:0) -> each splits normally; every body queued
+  OFF(); EN.length = 0; SPAWNQ.length = 0;
+  const c = mkEnemy('cleft', P.x + 40, P.y, null, threat(), null); EN.push(c);
+  c.hp = 1; killEnemy(c);
+  A(SPAWNQ.length === 2 && SPAWNQ.every(x => x.type === 'voidspawn' && !x.isSplit),
+    'a cleft breaks into two FRESH voidspawn — the halves can still halve');
+  flushSpawns();
+  let total = EN.filter(x => x.type === 'voidspawn').length;
+  for (const v of EN.filter(x => x.type === 'voidspawn')) { v.hp = 1; killEnemy(v) }
+  flushSpawns();
+  total += EN.filter(x => x.type === 'voidling').length;
+  A(EN.filter(x => x.type === 'voidling').length === 4 && total === 6,
+    'the full cascade is 2 spawn + 4 voidlings, all through the queue');
+  EN.length = 0;
+}
+{ // the three new elites: fairness bars and behaviors
+  for (let i = 0; i < 300; i++) {
+    const m1 = eliteFor(ENEMIES.crawler);      // no shoot
+    if (m1) A(m1.id !== 'searing', 'searing never rolls on a shoot-less species');
+    const m2 = eliteFor(ENEMIES.bloomback);    // trail
+    if (m2) A(m2.id !== 'quaking', 'quaking never rolls on a trail species');
+    if ((m1 && m1.id === 'searing') || (m2 && m2.id === 'quaking')) break;
+  }
+  pass = pass; // (the negatives above only log on failure)
+  // quaking: a completed swing leaves exactly one HOSTILE shock hazard where the lunge ended
+  OFF(); P.inv = 999; HAZ.length = 0;
+  const q = mkEnemy('brute', P.x + 40, P.y, ELITES.find(m => m.id === 'quaking'), threat(), null);
+  EN.length = 0; EN.push(q); q.acd = 0; q.spd = 0;
+  for (let i = 0; i < 200 && !(q.rec > 0); i++) upEnemies(DT);
+  const qh = HAZ.filter(h => h.kind === 'shock' && !h.friendly);
+  A(q.rec > 0 && qh.length === 1, 'a quaking swing leaves exactly one hostile aftershock');
+  A(qh.length && qh[0].dmg > 0, 'and it is NOT friendly-neutered (the 9-arg addHaz law)');
+  // searing: the shot's impact leaves a burning patch
+  OFF(); P.inv = 0; P.hp = P.maxhp; HAZ.length = 0; PROJ.length = 0;
+  const g = mkEnemy('archer', P.x + 200, P.y, ELITES.find(m => m.id === 'searing'), threat(), null);
+  EN.length = 0; EN.push(g); g.scd = 0; g.acd = 99; g.spd = 0;
+  for (let i = 0; i < 400 && !HAZ.some(h => h.kind === 'fire' && !h.friendly); i++) { upEnemies(DT); upProj(DT); P.hp = P.maxhp; P.inv = 0 }
+  A(HAZ.some(h => h.kind === 'fire' && !h.friendly), "a searing shot's impact leaves a burning patch");
+  // tithing: hits knock recoverable shards out; the corpse refunds with interest
+  OFF(); P.inv = 0; P.hp = P.maxhp;
+  RUNSHARDS = 100; const m0 = META.shards = 500;
+  const t = mkEnemy('brute', P.x + 2, P.y, ELITES.find(m => m.id === 'tithing'), threat(), null);
+  EN.length = 0; EN.push(t); t.act = 0.1; t.rec = 0; PICK.length = 0;
+  upEnemies(DT);
+  A(RUNSHARDS < 100 && META.shards < m0, 'a tithing hit debits the run purse');
+  const scattered = PICK.filter(k => k.kind === 'shard').length;
+  A(scattered > 0 && t.tithed > 0, 'and the shards scatter as recoverable pickups (' + scattered + ')');
+  PICK.length = 0; t.hp = 1; killEnemy(t);
+  A(PICK.filter(k => k.kind === 'shard').length >= t.tithed, 'the corpse refunds at least what it took');
+  META.shards = m0; RUNSHARDS = 0; EN.length = 0;
+}
+{ // pavise: the wall drops for the length of the shot — both tells count
+  OFF(); NOCRIT(); NOARMOR();
+  const pv = mkEnemy('pavise', P.x + 30, P.y, null, threat(), null);
+  EN.length = 0; EN.push(pv); pv.dir = -1;   // facing the player
+  pv.hp = pv.maxhp = 10000; pv.arm = 0; pv.invT = 0; pv.wind = 0; pv.swind = 0; pv.acd = 99; pv.scd = 99;
+  const dmgAt = () => { const h0 = pv.hp; strike(pv, { kind: 'melee', dmg: 100, crit: 0, critMult: 1, more: 1, col: '#fff' }, 0); return h0 - pv.hp };
+  const idle = dmgAt();
+  pv.swind = 0.4; const slit = dmgAt(); pv.swind = 0;
+  pv.wind = 0.4; const tell = dmgAt(); pv.wind = 0;
+  A(idle < slit * 0.3, 'the raised shield quarters frontal damage (' + idle + ' vs ' + slit + ')');
+  A(Math.abs(slit - tell) <= 0.01 && Math.abs(slit - 100) <= 1, 'and BOTH tells drop it fully — the slit is the fight');
+}
+{ // packs: every pack species arrives as a pack from the real generator
+  for (const sp of ['delvemite', 'drudge', 'lurcher', 'cinder', 'voidmote'])
+    A((ENEMIES[sp].pack || 0) >= 2, sp + ' is written as a pack species');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

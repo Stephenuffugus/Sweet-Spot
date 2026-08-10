@@ -21,11 +21,11 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | biome | ends at (tiles) | depth (m) | ground | cave density | roster |
 |---|---|---|---|---|---|
 | surface | 70 | 0–10 | 1 | 0 | crawler |
-| caves | 400 | 10–340 | 2 | 0.055 | crawler, bat, rockling, delvemite, burrower, spitter |
-| fungal | 900 | 340–840 | 4 | 0.06 | spitter, sporeling, stalker, bat, bloomback, delvemite |
-| ruins | 1600 | 840–1540 | 5 | 0.05 | brute, archer, shieldman, chanter, warder, mortar, burrower |
-| forge | 2400 | 1540–2340 | 6 | 0.055 | ember, smith, spitter, mortar, warder, burrower |
-| abyss | 3200 | 2340–3140 | 7 | 0.045 | wraith, voidspawn, stalker, hollowed, chanter |
+| caves | 400 | 10–340 | 2 | 0.055 | crawler, bat, rockling, delvemite, burrower, spitter, blackdamp |
+| fungal | 900 | 340–840 | 4 | 0.06 | spitter, sporeling, stalker, bat, bloomback, delvemite, felter, hypha |
+| ruins | 1600 | 840–1540 | 5 | 0.05 | brute, archer, shieldman, chanter, warder, mortar, burrower, drudge, lurcher, pavise |
+| forge | 2400 | 1540–2340 | 6 | 0.055 | ember, smith, spitter, mortar, warder, burrower, cinder, clinker |
+| abyss | 3200 | 2340–3140 | 7 | 0.045 | wraith, voidspawn, stalker, hollowed, chanter, seep, voidmote, cleft, gazer |
 
 ## Enemies
 
@@ -52,6 +52,18 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | warder | 60 | 12 | 22 | 4 | 14x16 | walk | 0.44 | 0.18 | 2.6 | 120 | — | 8 |
 | mortar | 50 | 12 | 16 | 0 | 14x15 | walk | 0.4 | 0.14 | 2.6 | 100 | cd 3.2 dmg 22 x1 r560 | 7 |
 | hollowed | 140 | 24 | 30 | 7 | 15x22 | walk | 0.54 | 0.22 | 2.5 | 150 | — | 9 |
+| blackdamp | 28 | 12 | 36 | 0 | 14x12 | fly | 0.3 | 0.14 | 2 | 140 | — | 3 |
+| felter | 44 | 9 | 40 | 0 | 13x14 | fly | 0.34 | 0.12 | 2.6 | 100 | — | 7 |
+| hypha | 60 | 16 | 52 | 0 | 15x13 | fly | 0.34 | 0.16 | 1.9 | 230 | — | 7 |
+| drudge | 16 | 9 | 60 | 3 | 10x11 | walk | 0.26 | 0.1 | 1.3 | 180 | — | 1 |
+| lurcher | 30 | 16 | 104 | 0 | 15x12 | walk | 0.28 | 0.14 | 1.4 | 320 | — | 4 |
+| pavise | 60 | 14 | 18 | 14 | 16x18 | walk | 0.44 | 0.16 | 2.5 | 110 | cd 2.8 dmg 18 x1 r440 | 8 |
+| cinder | 12 | 9 | 80 | 0 | 9x9 | fly | 0.26 | 0.1 | 1.3 | 220 | — | 1 |
+| clinker | 110 | 18 | 24 | 9 | 19x19 | walk | 0.48 | 0.2 | 2.4 | 160 | — | 8 |
+| seep | 66 | 15 | 30 | 0 | 16x14 | walk | 0.4 | 0.16 | 2.2 | 170 | — | 8 |
+| voidmote | 14 | 10 | 82 | 0 | 10x9 | fly | 0.26 | 0.12 | 1.5 | 240 | — | 2 |
+| cleft | 130 | 20 | 40 | 0 | 20x20 | walk | 0.44 | 0.18 | 2.2 | 200 | — | 12 |
+| gazer | 55 | 14 | 44 | 0 | 14x16 | fly | 0.34 | 0.14 | 2.4 | 140 | cd 3 dmg 26 x1 r560 | 9 |
 | warden **(boss)** | 420 | 22 | 46 | 4 | 28x30 | walk | 0.5 | 0.22 | 2.2 | 260 | cd 2.4 dmg 12 x3 r380 | 40 |
 | sporemother **(boss)** | 520 | 23 | 58 | 0 | 30x26 | fly | 0.42 | 0.18 | 2.4 | 280 | cd 1.7 dmg 10 x5 r420 | 55 |
 | sentinel **(boss)** | 700 | 25 | 40 | 10 | 26x32 | walk | 0.44 | 0.2 | 2 | 240 | cd 1.4 dmg 14 x2 r460 | 75 |
@@ -89,7 +101,7 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 
 ## Gems by type
 
-### skill (18)
+### skill (29)
 
 | id | name | color | for | effect |
 |---|---|---|---|---|
@@ -111,8 +123,19 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | siphon | Siphon Beam | b | ranged | continuous beam, leeches, drains focus |
 | hail | Hail | g | ranged | three arcing shots, they bounce and burst |
 | rend | Rend | r | melee | slow, huge, always interrupts |
+| impale | Impale | r | melee | long thrust, narrow, staggers |
+| dragline | Dragline | g | melee | long reach, hauls them to you |
+| whipsaw | Whipsaw | r | ranged | heavy blade, comes back |
+| cairn | Cairn | g | ranged | kills raise a turret from the corpse |
+| mine | Shard Mine | r | ranged | plant it, walk away |
+| stormlash | Stormlash | b | ranged | fast bolt, shocks and chains |
+| bloodlet | Bloodlet | r | melee | costs blood, bleeds hard, feeds you |
+| deadweight | Deadweight | r | melee | hits harder the faster you fall |
+| longshot | Longshot | g | ranged | flies far, hurts far |
+| flurry | Flurry | g | melee | many small cuts, very fast |
+| arcblade | Arcblade | b | melee | hits shock, and jump once |
 
-### sup (29)
+### sup (39)
 
 | id | name | color | for | effect |
 |---|---|---|---|---|
@@ -145,8 +168,18 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | hunger | Hunger | r | any | +40% more damage below half health |
 | splinter | Splinter | g | any | kills scatter shards |
 | contagion | Contagion | b | any | ailments spread on kill |
+| sterile | Sterile | b | any | +35% more damage, hits carry nothing |
+| firstblow | First Blow | g | any | +70% more to an unhurt enemy |
+| bloodtithe | Blood Tithe | r | any | +45% more damage, each attack costs blood |
+| overdraw | Overdraw | b | any | +50% more damage, attacks cost focus |
+| seeker | Seeker | g | ranged | projectiles steer toward prey |
+| stormcall | Stormcall | b | any | three kills charge a thunderbolt |
+| longhaft | Long Haft | r | melee | half again the reach, narrower swing |
+| ricochet | Ricochet | g | ranged | projectiles bounce off the rock |
+| vantage | Vantage | g | any | +40% more while airborne |
+| rasp | Rasp | r | any | hits file away armor |
 
-### aura (14)
+### aura (19)
 
 | id | name | color | for | effect |
 |---|---|---|---|---|
@@ -164,8 +197,13 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | vigil | Vigil | b | armor | +25% damage while untouched for 3s |
 | reaper | Reaper's Eye | r | armor | +20% vs enemies below half health |
 | tempo | Tempo | g | armor | kills stack attack speed, up to 5 |
+| galvanic | Galvanic | b | armor | shocks last longer and arc further |
+| surfeit | Surfeit | r | armor | leech past full becomes an overshield |
+| foreman | Foreman | g | armor | your constructs work harder and last longer |
+| slipstream | Slipstream | g | armor | dodging reloads both weapons |
+| plumbline | Plumbline | r | armor | a hard landing is a weapon |
 
-### abil (16)
+### abil (21)
 
 | id | name | color | for | effect |
 |---|---|---|---|---|
@@ -185,6 +223,11 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | crucible | Crucible | b | armor | lay a burning field · 13s / 50 focus |
 | wardbreak | Sunder Ward | r | armor | strip armor and stagger everything near · 12s / 45 focus |
 | tether | Tether | b | armor | link enemies — damage one, damage all · 15s / 55 focus |
+| bastion | Bastion | r | armor | stand and be stone — 3s of heavy armor · 12s / 40 focus |
+| effigy | Effigy | g | armor | a decoy with thorns — it bites back · 14s / 45 focus |
+| lodestone | Lodestone | b | armor | plant it; strike again to snap back · 9s / 15 focus |
+| tempest | Tempest | b | armor | a standing storm — everything under it arcs · 15s / 55 focus |
+| transfuse | Transfuse | r | armor | rip the bleeds out of the room and drink them · 14s / 45 focus |
 
 ## Affixes
 
@@ -308,10 +351,10 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 
 | sink | total shards |
 |---|---|
-| unlock pool (83 entries) | 6735 |
+| unlock pool (114 entries) | 10030 |
 | meta tree (15 nodes) | 810 |
-| classes | 225 |
-| **total one-time** | **7770** |
+| classes | 460 |
+| **total one-time** | **11300** |
 | gem fusion | 150 (T1→T2) / 500 (T2→T3), unbounded |
 | vault deposit | 60 / 140 / 300 / 650 by rarity |
 
@@ -346,11 +389,11 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | band | air target | character | identity |
 |---|---|---|---|
 | surface | — | the rim | — |
-| caves | 0.42 | tight, winding | — |
-| fungal | 0.58 | open caverns and vertical shafts | spore vents |
-| ruins | 0.48 | built geometry | room templates |
-| forge | 0.28 | narrow and hot | flame vents, heat 30/s |
-| abyss | 0.62 | vast, dark, sparse | darkness x1.28 |
+| caves | 0.42 | tight, winding | grit vents |
+| fungal | 0.58 | open caverns and vertical shafts | room templates, spore vents, darkness x0.85 |
+| ruins | 0.48 | built geometry | room templates, volt vents |
+| forge | 0.28 | narrow and hot | room templates, flame vents, heat 30/s |
+| abyss | 0.62 | vast, dark, sparse | room templates, heat 12/s, darkness x1.28 |
 
 ## Affix tiers
 
@@ -424,19 +467,19 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 
 | | |
 |---|---|
-| gems | 77 |
+| gems | 108 |
 | gear bases | 12 |
 | uniques | 24 |
-| enemies | 26 |
+| enemies | 38 |
 | affixes | 12 |
-| unlocks | 83 |
+| unlocks | 114 |
 | tree nodes | 15 |
 | boons | 21 |
 | attunements | 29 |
 | threat tiers | 6 |
 | lore fragments | 16 |
 | modifier affixes | 12 |
-| elite modifiers | 8 |
-| room templates | 6 |
+| elite modifiers | 11 |
+| room templates | 15 |
 | echo rules | 10 (unbounded ladder) |
 | bounties | 12 |
