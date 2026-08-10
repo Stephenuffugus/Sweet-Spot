@@ -4,7 +4,7 @@
 // Strategy is deliberately NOT cache-first for the app shell: a stale index.html is the one
 // failure mode that matters here (it is the entire game). Navigations go network-first with a
 // cache fallback; everything else is cache-first because icons never change.
-const CACHE = 'shardfall-v2';
+const CACHE = 'shardfall-v3';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'];
 
 self.addEventListener('install', e => {

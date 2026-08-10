@@ -49,7 +49,7 @@ with a thumb on the buttons. Everything about pacing, button reach and difficult
 there, not here.
 
 Controls — keyboard: `A/D` move, `Space/W` jump (**hold to hover**), `J` melee, `K` ranged,
-`Shift` dodge, `F/Q` ability, `E` bag, `C` camp (when at camp/anchor). Touch: left half of the
+`Shift` dodge, `F` ability, `Q/Y` grapple (once the Longarm gait is earned), `E` bag, `C` camp (when at camp/anchor). Touch: left half of the
 screen is a virtual stick; the thumb cluster is bottom-right with MEL nearest the corner and
 ABIL furthest; `MAP`/`BAG`/`CAMP` top-right; minimap below them.
 

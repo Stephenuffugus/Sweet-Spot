@@ -151,6 +151,8 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
 #bAbil{grid-column:2;width:52px;height:52px;font-size:10px;justify-self:end;border-color:#6f8fe0}
 #bAbil.rdy{border-color:var(--acc);box-shadow:0 0 10px #3fc9c155}
 #bAbil.cold{opacity:.45}
+/* the Long Arm's grapple — hidden until the gait is earned (refreshPrompts toggles it) */
+#bGrap{grid-column:1;grid-row:1;width:52px;height:52px;font-size:10px;justify-self:end;border-color:#d8a53f}
 #bJump{grid-column:1;grid-row:2}#bRng{grid-column:2;grid-row:2}
 #bDodge{grid-column:1;grid-row:3}#bMel{grid-column:2;grid-row:3}
 #stickzone{position:fixed;left:0;bottom:0;width:45vw;height:55vh}
@@ -226,7 +228,7 @@ body.touchmode canvas{cursor:auto}
 </div>
 <div id="stickzone"></div><div id="stick"><div id="nub"></div></div>
 <div id="btns">
-  <div class="tb" id="bAbil">ABIL</div>
+  <div class="tb" id="bGrap" style="display:none">GRAP</div><div class="tb" id="bAbil">ABIL</div>
   <div class="tb" id="bJump">JUMP</div><div class="tb" id="bRng">RNG</div>
   <div class="tb" id="bDodge">DODGE</div><div class="tb" id="bMel">MEL</div>
 </div>
@@ -537,6 +539,8 @@ const TILES={
  7:{c:'#241f2e',hard:2},           // abyss stone
  8:{c:'#3fc9c1',hard:0,ore:1},     // shard ore
  10:{c:'#41464e',hard:0,secret:1}, // secret wall — mimics stone, breaks to any weapon
+ 11:{c:'#544a3a',hard:1,seal:1},   // vault seal — brick to the eye, but ONLY vault edges use it,
+                                   // so CARVE_VAULT and seamstep can tell a seal from ruins ground
 };
 // THE DESCENT ARC. The world used to be one noise field with a density number per band, and the
 // measured result was a caves band that was 90% air — an open void, not caves — and then five
@@ -1654,6 +1658,88 @@ const UNLOCKS=[
  {id:'hail',      n:'Hail gem',                cost:105},
  {id:'rend',      n:'Rend gem',                cost:120},
 ];
+// ============ MOVEMENT — GAITS ============
+// Permanent movement, earned by deeds, never sold — the Dead Cells rune model. They live in
+// their own table (like classes), NEVER in UNLOCKS: the deed is the price. Stored
+// META.moves[id]=1. ck runs on a snapshot s={best,bosses,echo}; fx keys are read by moveFx()
+// only ('fuel' adds, 'drain' multiplies). Input notes: airdash/seamstep ride DODGE, wallkick
+// rides JUMP, longarm is the one new edge action ('grap'). d is deferred so pr() reads the
+// current device (rule 11).
+const MOVES=[
+ {id:'draught', n:'Long Draught', deed:'reach 150m',          ck:s=>s.best>=150,  fx:{fuel:20},
+   d:()=>'the tank holds more — +20 fuel'},
+ {id:'airdash', n:'Air Step',     deed:'reach the Bloom',     ck:s=>s.best>=340,
+   d:()=>`dodge (${pr('dodge')}) works in the air — once per airborne, back on landing`},
+ {id:'wallkick',n:'Rebound',      deed:'fell your first Knot',ck:s=>s.bosses>=1,
+   d:()=>`jump (${pr('jump')}) against a wall to kick off it`},
+ {id:'glide',   n:'Slow Burn',    deed:'reach the Forge',     ck:s=>s.best>=1540, fx:{drain:0.68},
+   d:()=>'hover burns a third less fuel'},
+ {id:'longarm', n:'The Long Arm', deed:'fell three Knots',    ck:s=>s.bosses>=3,
+   d:()=>`a grapple line of your own (${pr('grap')}) — no gem, no focus`},
+ {id:'seamstep',n:'Seamstep',     deed:'escape twice',        ck:s=>s.echo>=2,
+   d:()=>'your dodge passes through one tile of rock'},
+];
+function moveFx(k){let v=k==='drain'?1:0;
+ for(const M of MOVES){if(!META.moves[M.id]||!M.fx||M.fx[k]===undefined)continue;
+  v=k==='drain'?v*M.fx[k]:v+M.fx[k]}return v}
+let MOVE_CK=0;   // depth watermark: deeds re-check every 25m of NEW depth, not every frame
+// The deed snapshot folds live runDepth in because bestDepth only updates at die() — a deed
+// reached mid-run must grant mid-run. Retro-grant note: any save past 150m holds draught, so
+// a veteran's tank is 45+20=65 >= the old 60 — the baseline cut never nerfs them into the floor.
+function checkMoves(quiet){
+ const s={best:Math.max(META.bestDepth||0,runDepth||0),
+          bosses:Object.keys(META.bosses||{}).length,echo:META.maxEcho||0};
+ let got=0;
+ for(const M of MOVES){
+  if(META.moves[M.id]||!M.ck(s))continue;
+  META.moves[M.id]=1;got=1;
+  if(!quiet){toastQ(M.n.toUpperCase());toast('GAIT EARNED — '+M.d());sfx('level');flash(0.2);
+   UNLOCK_MSG.push('gait: '+M.n)}}          // the death screen's sanctioned channel
+ if(got){saveMeta();refreshPrompts();       // longarm may have just added a touch button
+  // The celebrated stat must LAND at the celebration: draught's +20 lives in the cached
+  // P.maxfuel, and only refreshAttacks recomputes it (CLAUDE.md's most-forgotten call).
+  // Quiet path (boot retro-grant) skips it — newRun refreshes moments later.
+  if(!quiet)refreshAttacks()}}
+// ============ TIPS ============
+// One table, one queue, riding the toast machinery. ev = named hook; when = predicate over
+// live state AT that hook; msg deferred so pr() reads the current device (rule 11). Once per
+// save (META.tips, flagged at SHOW time), deferred while a boss is near, dismissed by any edge
+// action or a fresh attack press. The ten shipped hint ids migrated here 1:1; hint() survives
+// as the immediate-path shim for out-of-combat tips other waves add (hidden, wayout).
+// vaultdig sits BEFORE dig so a refused vault seal names itself first (R5/R6).
+const TIPS=[
+ {id:'move',   ev:'run',   when:()=>!META.runs, msg:()=>`${pr('move')} to move · ${pr('jump')} to jump — hold it in the air`},
+ {id:'fight',  ev:'near',  msg:()=>`Strike ${pr('mel')} · shoot ${pr('rng')} · dodge ${pr('dodge')}`},
+ {id:'dodge',  ev:'hurt',  when:c=>c.srcX!==undefined, msg:()=>`${pr('dodge')} rolls THROUGH an attack — you are untouchable for a beat`},
+ {id:'punish', ev:'spent', msg:()=>'It is SPENT — the amber bar is your window. Strike now'},
+ {id:'vaultdig',ev:'nodig',when:c=>c.vault>0,   msg:()=>'A vault seal shrugs off blades. It wants dig power — an Axe, a Greataxe, or the Bore gem.'}, // copy: story spec
+ {id:'dig',    ev:'nodig', when:c=>c.blocked>0, msg:()=>'That stone is past this tool. Dig power opens it — it is printed on every gear card.'},      // copy: story spec
+ {id:'hover',  ev:'jump',  msg:()=>'Hold jump in the air to hover — the blue bar is fuel'},
+ {id:'socket', ev:'gem',   msg:()=>`Open the bag (${pr('bag')}) and socket that gem — colors must match`},
+ {id:'lattice',ev:'sigil', msg:()=>`Open the lattice (${pr('pause')} → THE LATTICE) to rewrite the world`},
+ {id:'heat',   ev:'dry',   when:c=>c.bn==='forge', msg:()=>'The forge burns your fuel. Updraft and the harness carry more.'},
+ {id:'depth',  ev:'band',  when:c=>c.bn!=='surface', msg:()=>'Deeper enemies hit harder and drop far more. Anchors let you start here.'},
+ {id:'camp',   ev:'camp',  msg:()=>`At camp — ${pr('camp')} to spend shards`},
+ {id:'shrine', ev:'boon',  msg:()=>'The boon is yours for the run. Each new stratum you reach offers another — deeper is stronger.'}, // copy: story spec
+ {id:'tour',   ev:'shop',  msg:()=>'Most of what can drop is still buried in the pool below. Unlocks are forever'},                   // copy: story spec ratifies
+ {id:'collect',ev:'unique',msg:()=>'The codex keeps a collection. What you have seen, and the shape of what you have not'},           // copy: story spec ratifies
+];
+let TIP=null,TIPQ=[],TIPHm=false,TIPHr=false;
+const BANDCTX={bn:''};   // reusable ctx for the per-frame band hook (no-alloc convention)
+function bossNear(){for(const e of EN)if(e.boss&&e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<560)return true;return false}
+function tipEv(ev,ctx){if(!SET.hints)return;
+ for(const T of TIPS){if(T.ev!==ev||META.tips[T.id]||(T.when&&!T.when(ctx||{})))continue;
+  if(TIPQ.indexOf(T.id)<0)TIPQ.push(T.id)}}
+// Runs once per sim frame. Non-modal by construction — never a panel, never pauses. Flagging
+// at SHOW time means a boss-deferral lost to death simply re-queues on the next trigger.
+function upTips(dt){
+ if(TIP){TIP.t-=dt;if(TIP.t<=0){TIP=null;$('toast').style.display='none'}return}
+ if(!TIPQ.length||paused||bossNear())return;
+ const id=TIPQ.shift(),T=TIPS.find(t=>t.id===id);
+ if(!T||META.tips[id])return;
+ META.tips[id]=1;saveMeta();TIP={id,t:7};toast(T.msg(),1)}
+function tipDismiss(){if(!TIP)return;TIP=null;
+ clearTimeout(toastT);toastT=setTimeout(()=>$('toast').style.display='none',250)}
 // ============ RNG + NOISE + THE LATTICE ============
 // The world is not generated from one seed. It is generated from SIX — one per STRAND — and
 // the whole late game is about editing them.
@@ -1854,7 +1940,7 @@ function genChunk(cx,cy){
    const rw=rS('terrain',9,13),rh=rS('terrain',6,8),lx=rS('terrain',3,CHUNK-rw-3),ly=rS('terrain',3,CHUNK-rh-3);
    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
     const edge=(x===0||y===0||x===rw-1||y===rh-1);
-    t[(ly+y)*CHUNK+lx+x]=edge?5:0}
+    t[(ly+y)*CHUNK+lx+x]=edge?11:0}
    spawns.push({x:(cx*CHUNK+lx+(rw>>1))*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});
    if(cS('poi',.5))spawns.push({x:(cx*CHUNK+lx+2)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'chest'});}
   // SECRET CACHE: sealed pocket whose wall is a secret tile (breaks to ANY weapon). Same rule —
@@ -1890,7 +1976,14 @@ function setTile(tx,ty,v){if(tx<0||ty<0||tx>=WORLD_W||ty>=WORLD_H)return;
  c.tiles[(ty%CHUNK)*CHUNK+(tx%CHUNK)]=v;c.dirty=true}
 // ===== CARVE — the one function that removes terrain. Every dig path calls this. =====
 // returns tiles removed. maxHard gates what you can chew through (see TILES[].hard).
+// THE BLOCKED-CARVE REPORT: per-call scratch, read-immediately contract — read these on the
+// line after your OWN carve() call, never later (explode/projectile digs overwrite them).
+// CARVE_VAULT counts refused vault-seal brick (tile 11) separately so the tip can name it (R6).
+// It was tile 5 for one review cycle — but tile 5 is the entire RUINS band's ground, so every
+// refused corridor wall down there claimed to be a vault and burned the once-per-save tip.
+let CARVE_BLOCK=0,CARVE_BED=0,CARVE_VAULT=0;
 function carve(px,py,radius,maxHard,dropOre){
+ CARVE_BLOCK=0;CARVE_BED=0;CARVE_VAULT=0;
  if(maxHard<0)return 0;
  const ctx0=Math.floor(px/TILE),cty=Math.floor(py/TILE);
  const r=Math.max(0,Math.ceil(radius/TILE));let n=0;
@@ -1898,7 +1991,8 @@ function carve(px,py,radius,maxHard,dropOre){
   if(ox*ox+oy*oy>r*r+0.5)continue;
   const tx=ctx0+ox,ty=cty+oy,v=getTile(tx,ty);
   if(v===0)continue;const T=TILES[v];
-  if(T.hard>maxHard||T.hard>=9)continue;       // bedrock (hard 9) is never carvable
+  if(T.hard>maxHard||T.hard>=9){               // bedrock (hard 9) is never carvable
+   if(T.hard>=9)CARVE_BED++;else if(T.seal)CARVE_VAULT++;else CARVE_BLOCK++;continue}
   if(T.ore&&dropOre!==false)dropShards(tx*TILE+8,ty*TILE+8,ri(2,4));
   setTile(tx,ty,0);n++;
   if(n<14&&chance(.5))burst(tx*TILE+8,ty*TILE+8,T.c,1)}
@@ -1975,6 +2069,10 @@ function loadMeta(){
  if(!META.dlg)META.dlg={};if(!META.firsts)META.firsts={};
  if(!META.tips)META.tips=Object.assign({},META.hints||{});
  if(!META.moves)META.moves={};
+ // Retroactive deeds, quiet: a veteran's bestDepth/bosses/maxEcho grant every gait already
+ // earned the moment the save loads. bestDepth>=150 grants draught (tank 45+20=65 >= the old
+ // 60), so no veteran is ever nerfed into the floor by the 45 baseline.
+ checkMoves(1);
  META.ver=SAVE_VER;
  AUDIO_ON=META.audio!==0;
  if(!META.startBiome||!META.anchors[META.startBiome])META.startBiome='surface'}
@@ -2001,7 +2099,13 @@ function codexTitle(kind,id){
  if(kind==='sigil')return (SIGILS_DEF[id]&&SIGILS_DEF[id].n)||id;
  if(kind==='diss')return id;
  if(kind==='item')return UNIQUES[id]?UNIQUES[id].n:(GEAR[id]?GEAR[id].n:id);
+ if(kind==='gem')return (GEMS[id]&&GEMS[id].n)||id;
+ if(kind==='uni'){const i=id.lastIndexOf('#'),T=uniTables()[(+id.slice(i+1)||1)-1];
+  const u=T&&T[id.slice(0,i)];return u?u.n:id}
  return id}
+// The unique tables that exist, probed not assumed — a third alt table (UNIQ3, gear's wave)
+// slots in without touching a caller. Collection keys are base+'#'+(alt+1) (R12).
+function uniTables(){let t=[UNIQUES,UNIQ2];try{if(typeof UNIQ3==='object'&&UNIQ3)t.push(UNIQ3)}catch(e){}return t}
 // Lore is authored as wrapped source. A blank line is a paragraph break; a single newline is
 // just where the source ran out of room and must not become a line break on screen.
 function loreHTML(t){return String(t).trim()
@@ -2153,7 +2257,8 @@ function hitStop(dur,frac,pre){
  const k=(SET.hitstop===undefined?100:SET.hitstop)/100;if(k<=0)return;
  const d=dur*k;if(d<=HS.t)return;          // never shorten a heavier stop already running
  HS.t=d;HS.dur=d;HS.frac=frac===undefined?0.12:frac;HS.pre=(pre||0)*k}
-const P={x:0,y:0,vx:0,vy:0,w:12,h:20,hp:100,maxhp:100,face:1,onG:false,coyote:0,jbuf:0,dodgeT:0,dodgeCd:0,inv:0,mcd:0,rcd:0,acd:0,dead:false,block:false,st:null,fuel:60,maxfuel:60,focus:FOCUS_MAX,flying:false,noFall:0,levT:0,burrowT:0,kills:0,bestHit:0,weight:0,weightT:0,band:''};
+const P={x:0,y:0,vx:0,vy:0,w:12,h:20,hp:100,maxhp:100,face:1,onG:false,coyote:0,jbuf:0,dodgeT:0,dodgeCd:0,inv:0,mcd:0,rcd:0,acd:0,dead:false,block:false,st:null,fuel:45,maxfuel:45,focus:FOCUS_MAX,flying:false,noFall:0,levT:0,burrowT:0,kills:0,bestHit:0,weight:0,weightT:0,band:'',
+ pd:0,airDash:1,dodgeAir:0,grapCd:0,thunkT:0,lastDodge:-9};
 
 // ---- ADDITIVE POOL ("increased") -------------------------------------------------------
 // Every source that is NOT a support gem or a unique lands here and sums flat.
@@ -2180,7 +2285,9 @@ function ailmentMul(){return 1+inc('ailment')}
 function focusGainMul(){return 1+inc('focus')}
 function auraHas(id){return !!(EQ.armor&&EQ.armor.sockets.some(g=>gemId(g)===id))}
 function isShield(slot){const it=EQ[slot];return !!(it&&GEAR[it.base].shield)}
-function maxFuel(){let f=60+inc('fuel');if(auraHas('updraft'))f+=70;return f}
+// Baseline tank 45 (was 60): the modest start the movement track grows from — draught's +20
+// lands at 150m and puts every veteran at 65 >= the old 60. Updraft/harness ride on top.
+function maxFuel(){let f=45+moveFx('fuel')+inc('fuel');if(auraHas('updraft'))f+=70;return f}
 function digPower(){ // best dig stat across equipped weapons — used by abilities/traversal
  let d=0;for(const k of ['melee','ranged']){const a=ATK[k];if(a&&a.dig!==undefined)d=Math.max(d,a.dig)}
  // computeAttack has ALREADY folded classFx('digBonus') into a.dig. Adding it again here gave
@@ -2352,16 +2459,10 @@ function useAbility(){
   P.fuel=P.maxfuel;P.levT=perf+6;P.noFall=Math.max(P.noFall,7);
   burst(P.x,P.y,'#9fd0ff',18);toast('Levitate — 6s free flight')}
  else if(a.fx==='grapple'){ // fire a line; anchor to terrain and yank, or yank an enemy to you
-  const v=aimVec();let hx=P.x,hy=P.y,hitTile=false,hitE=null;
-  for(let d=10;d<300;d+=6){const tx=P.x+v.x*d,ty=P.y+v.y*d;
-   for(const e of EN){if(e.hp>0&&Math.abs(e.x-tx)<e.w/2+4&&Math.abs(e.y-ty)<e.h/2+4){hitE=e;hx=tx;hy=ty;break}}
-   if(hitE)break;
-   if(solidAt(tx,ty)){hitTile=true;hx=tx;hy=ty;break}
-   hx=tx;hy=ty}
-  GRAPPLE={x:hx,y:hy,t:0.25};
-  if(hitE&&!hitE.boss){hitE.vx+=(P.x-hitE.x)*3.2;hitE.vy+=(P.y-hitE.y)*3.2-80;applyStatus(hitE,{shock:1.2});toast('Grapple — pulled')}
-  else if(hitTile){const dx=hx-P.x,dy=hy-P.y,dd=Math.max(1,Math.hypot(dx,dy));
-   P.vx=dx/dd*620;P.vy=dy/dd*620-90;P.noFall=Math.max(P.noFall,1.2);P.inv=Math.max(P.inv,0.2);toast('Grapple')}
+  const g=grapLine();
+  GRAPPLE={x:g.hx,y:g.hy,t:0.25};
+  if(g.hitE&&!g.hitE.boss){g.hitE.vx+=(P.x-g.hitE.x)*3.2;g.hitE.vy+=(P.y-g.hitE.y)*3.2-80;applyStatus(g.hitE,{shock:1.2});toast('Grapple — pulled')}
+  else if(g.hitTile){grapYank(g.hx,g.hy);toast('Grapple')}
   else{P.acd=a.cd*0.3;toast('Grapple — no anchor')}}
  else if(a.fx==='burrow'){ // phase THROUGH terrain briefly, carving a tunnel behind you
   P.burrowT=perf+1.1;P.inv=Math.max(P.inv,1.2);P.noFall=Math.max(P.noFall,2);
@@ -2392,6 +2493,30 @@ function useAbility(){
   explode(P.x,P.y,120,a.dmg*1.4*dm,'#b0a070',{bleed:a.dmg*0.25});
   carve(P.x,P.y+TILE*1.5,TILE*4.5,Math.max(1,digPower()));
   toast('Quake')}}
+// The grapple ray march, shared by the Grapple GEM and the longarm GAIT. Enemies occlude the
+// line for both; the caller decides what an enemy hit means.
+function grapLine(aim,skipE){
+ const v=aim||aimVec();let hx=P.x,hy=P.y,hitTile=false,hitE=null;
+ for(let d=10;d<300;d+=6){const tx=P.x+v.x*d,ty=P.y+v.y*d;
+  if(!skipE)for(const e of EN){if(e.hp>0&&Math.abs(e.x-tx)<e.w/2+4&&Math.abs(e.y-ty)<e.h/2+4){hitE=e;hx=tx;hy=ty;break}}
+  if(hitE)break;
+  if(solidAt(tx,ty)){hitTile=true;hx=tx;hy=ty;break}
+  hx=tx;hy=ty}
+ return {hx,hy,hitTile,hitE}}
+function grapYank(hx,hy){const dx=hx-P.x,dy=hy-P.y,dd=Math.max(1,Math.hypot(dx,dy));
+ P.vx=dx/dd*620;P.vy=dy/dd*620-90;P.noFall=Math.max(P.noFall,1.2);P.inv=Math.max(P.inv,0.2)}
+// LONGARM (gait): terrain-only grapple on its own edge action — no gem, no focus, its own
+// cooldown (P.grapCd is not a forgiveness window, so it decays on sim time). The Grapple GEM
+// stays strictly better for combat (enemy yank + shock); the gait's value is the freed socket.
+function doGrap(){
+ if(P.dead)return;
+ if((P.grapCd||0)>0){sfx('deny');return}
+ // Terrain-only, so the ray MARCHES THROUGH enemies (skipE) — a thumb has no manual aim, and
+ // any visible enemy used to occlude the line into a guaranteed deny on touch. Without manual
+ // aim the line goes up-forward: a traversal hook reaches for ceilings, not for feet.
+ const g=grapLine(IN.manual?null:{x:P.face*0.55,y:-0.835},true);
+ if(g.hitTile){grapYank(g.hx,g.hy);GRAPPLE={x:g.hx,y:g.hy,t:0.25};P.grapCd=3.5;sfx('abil',P.x)}
+ else{sfx('deny');P.grapCd=0.5}}
 function tickBuffs(){for(let i=BUFFS.length-1;i>=0;i--){const b=BUFFS[i];
  if(perf>=b.until){RUNB[b.k]-=b.v;BUFFS.splice(i,1);refreshAttacks()}}}
 // ============ PHYSICS ============
@@ -2442,6 +2567,8 @@ const SFX={
  level:{w:'sine',    f:520,f2:1040,d:.35,g:.6},
  deny: {w:'square',  f:150,f2:110,d:.10,g:.4},
  die:  {w:'sawtooth',f:280,f2:40, d:1.1,g:.9},
+ thunk:{w:'square',  f:90, f2:45, d:.07,g:.3},   // rock refusing a dull tool — distinct from 'dig'
+ dash: {w:'sawtooth',f:340,f2:90, d:.12,g:.18},  // the dodge — a dodge should not sound like an attack
 };
 let sfxBudget=0; // hard cap on simultaneous voices: a Nova into a crowd must not blow the mix
 // A budget of 6 voices meant a busy fight dropped the sounds that carry information — the crit,
@@ -2606,6 +2733,13 @@ function doMelee(){
  // dig soft tiles in front
  const cut=carve(P.x+P.face*a.range*0.8,P.y,a.digR||TILE*1.5,a.dig>=0?a.dig:-1);
  if(cut&&CLASSES[META.cls].foc==='dig')gainFocus(cut*1.5);
+ // Refused by the rock: a dull thunk + spark at the site — "I tried to dig and was refused",
+ // not combat noise (!hit = the swing struck no enemy). CARVE_* is per-call scratch, read on
+ // the line after our own carve. Bedrock sparks but never tips — no tool exists, the tip
+ // must not lie. 0.5s rate limit; 3 particles, well under the PART cap.
+ if(!cut&&!hit&&(CARVE_BLOCK||CARVE_BED||CARVE_VAULT)&&perf>(P.thunkT||0)){P.thunkT=perf+0.5;
+  const hx=P.x+P.face*a.range*0.8;burst(hx,P.y,'#e8e2c9',3);sfx('thunk',hx);
+  if(CARVE_BLOCK||CARVE_VAULT)tipEv('nodig',{blocked:CARVE_BLOCK,vault:CARVE_VAULT})}
  // An ordinary hit no longer shakes the screen. Hitstop, the white flash and the particle
  // burst carry it — a shake on every swing is a shake you stop being able to read.
  if(hit)hitStop(0.045,0.30,0.012);
@@ -2865,6 +2999,7 @@ function killEnemy(e){
    const n=Object.keys(META.bosses).length;
    if(n>(META.maxThreat||0)&&n<THREATS.length){META.maxThreat=n;
     UNLOCK_MSG.push('THREAT '+THREATS[n].n);toastQ('THREAT UNLOCKED')}
+   checkMoves();   // boss deeds (wallkick, longarm) land the moment the knot falls
    saveMeta()}}
  dropShards(e.x,e.y,Math.ceil(ENEMIES[e.type].shards*(e.elite?(e.elite.loot||3):1)*rr(0.7,1.3)));
  if(e.elite){
@@ -2907,7 +3042,18 @@ function openChest(ch){ch.opened=true;bTick('chest');burst(ch.x,ch.y,'#d8a53f',1
 // damageTaken = max(1, incoming - armor) x (1-blockDR) x (1-ironskin)   [DESIGN-PLAN §1.4]
 // Flat subtraction is deliberate: armor is strong against many small hits and weak against one
 // big one, which is what actually separates Vanguard from Marksman.
-function hurtPlayer(dmg,noArmor,srcX){if(P.inv>0||P.dead)return;
+function hurtPlayer(dmg,noArmor,srcX){
+ if(P.inv>0||P.dead){
+  // PERFECT DODGE: an attack swallowed by the roll's own i-frames (keyed on dodgeT, never on
+  // post-hit inv) pays 8 Focus once per roll (P.pd=0 set in dodge()). The hitStop sits between
+  // landing-a-hit (0.045) and taking one (0.15) — suite-15's ordering holds. inv does not rise
+  // on this path, so the enemy-side landed-hit detector stays honest.
+  // (replay's wave adds bTick('ghost') at the top of this block — keep it the one seam.)
+  // srcX!==undefined: only an ATTACK can be perfect-dodged — fall damage passes no source,
+  // and paying focus for rolling into the ground was a free engine.
+  if(P.dodgeT>0&&!P.dead&&dmg>0&&srcX!==undefined&&!P.pd){P.pd=1;gainFocus(8);
+   burst(P.x,P.y,'#9fd0ff',8);sfx('block',P.x);hitStop(0.05,0.35,0.012)}
+  return}
  SRCX=(srcX===undefined?null:srcX);
  if(P.shield>0){const absorbed=Math.min(P.shield,dmg);P.shield-=absorbed;dmg-=absorbed;
   burst(P.x,P.y,'#9fd0ff',6);if(dmg<=0){P.inv=0.35;return}}
@@ -2922,6 +3068,7 @@ function hurtPlayer(dmg,noArmor,srcX){if(P.inv>0||P.dead)return;
  else{addShake(5);hitStop(0.15,0.02,0.022);burst(P.x,P.y,'#e05555',10);sfx('hurt');rumble(0.6,0.3,140);
   HURT={x:(SRCX===null?0:Math.sign(SRCX-P.x)),t:0.55}}
  P.hp-=dmg;P.inv=0.7;P.lastHurt=perf;BSTATE.hurt=1;
+ tipEv('hurt',{srcX});   // teaches the dodge; `when` excludes fall damage (no srcX)
  if(RUNM.thorn)for(const e of EN){if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<44)
   hurtEnemy(e,14*depthDmg(P.y),Math.sign(e.x-P.x)*120,'#8fdc6a',null,true)}
  if(P.hp<=0&&!secondWind())die()}
@@ -3183,17 +3330,17 @@ function upEnemies(dt){
   const endAct=()=>{e.act=0;e.rec=(e.atk&&e.atk.rec)||0.24;e.vx*=0.35;
    // The moment the window OPENS must pop: 3 dust motes at the feet — "it stumbled".
    burst(e.x,e.y+e.h/2-2,'#9a938a',3);
-   // never teach during a boss fight — grunts re-trigger this within seconds of any descent
-   if(!e.boss&&Math.hypot(e.x-P.x,e.y-P.y)<240)hint('punish','It is SPENT — the amber bar is your window. Strike now for extra damage')};
+   // teach only when it's relevant — grunts re-trigger this within seconds of any descent
+   // (the TIPS queue's bossNear() deferral handles the boss-fight case globally)
+   if(!e.boss&&Math.hypot(e.x-P.x,e.y-P.y)<240)tipEv('spent')};
   if(e.atk){e.acd=Math.max(0,e.acd-dt*frenzy);
    if(e.act>0){e.act-=dt;lunging=true;
     const tw=onDecoy?12:P.w, th=onDecoy?20:P.h;
     if(Math.abs(dx)<(e.w+tw)/2+6&&Math.abs(dy)<(e.h+th)/2+6){
      if(onDecoy){DECOY.hp-=e.dmg;burst(DECOY.x,DECOY.y,'#e8e2d0',5);endAct()}
      else{
-      const before=P.inv;hurtPlayer(e.dmg,false,e.x);
+      const before=P.inv;hurtPlayer(e.dmg,false,e.x);   // the dodge tip now rides hurtPlayer's 'hurt' hook
       if(P.inv>before){
-       if(!e.boss)hint('dodge',`${pr('dodge')} dodges THROUGH an attack — you are untouchable for a beat`);
        P.vx+=Math.sign(-dx||1)*-(e.atk.kb||150);
        if(e.elite&&e.elite.drain){e.hp=Math.min(e.maxhp,e.hp+e.dmg*0.5);burst(e.x,e.y,'#c04a70',4)}
        if(e.elite&&e.elite.hex)applyStatus(P,e.elite.hex,true);
@@ -3210,7 +3357,7 @@ function upEnemies(dt){
    else if((e.rec||0)>0){e.rec-=dt;e.vx*=0.86}   // spent: cannot act, cannot turn, takes more
    else if(e.acd<=0&&d<atkReach(e.atk)*0.85+e.w/2&&e.invT<=0){e.wind=e.atk.wind;e.acd=e.atk.cd;
     e.dir=Math.sign(dx)||e.dir;
-    if(!e.boss&&d<240)hint('fight',`Strike ${pr('mel')} · shoot ${pr('rng')} · dodge ${pr('dodge')}`)}}
+    if(!e.boss&&d<240)tipEv('near')}}
   const winding=e.wind>0, recovering=(e.rec||0)>0;
   // Rule 15 applies hardest to the units with the most going on: a spent boss must not open a
   // bolt ring or lock a beam into the window you just earned. Continuing states still tick.
@@ -3391,7 +3538,10 @@ function upHaz(dt){
     if(Math.hypot(e.x-h.x,e.y-h.y)<h.r+e.w/2)hurtEnemy(e,h.dmg,0,h.col,h.st,true)}}
    // hurtPlayer's own i-frames rate-limit this, so standing in fire costs ~one hit per 0.7s
    // rather than one per tick — chip damage that says "move", not a death sentence.
-   else if(!P.dead&&Math.hypot(P.x-h.x,P.y-h.y)<h.r){hurtPlayer(h.dmg,false,h.x);if(h.st)applyStatus(P,h.st,true)}}
+   // The P.inv<=0 gate is damage-identical (the early-out ate the hit anyway) but keeps the
+   // continuous tick out of the perfect-dodge path — every roll in a cloud was "perfect",
+   // a farmable +8-focus engine with hitstop spam on top.
+   else if(!P.dead&&P.inv<=0&&Math.hypot(P.x-h.x,P.y-h.y)<h.r){hurtPlayer(h.dmg,false,h.x);if(h.st)applyStatus(P,h.st,true)}}
   if(PART.length<300&&chance(dt*(h.kind==='fire'?26:14)))
    PART.push({x:h.x+rr(-h.r*.7,h.r*.7),y:h.y+rr(-h.r*.5,h.r*.4),vx:rr(-14,14),
     vy:h.kind==='fire'?rr(-60,-20):rr(-18,6),t:rr(.3,.7),col:h.col})}}
@@ -3417,14 +3567,18 @@ function upPickups(dt){
    else if(k.kind==='sigil'){SIGILS.push(k.id);sfx('level');flash(0.2);
     toastQ('SIGIL');toast(SIGILS_DEF[k.id].n+' — '+SIGILS_DEF[k.id].d);
     discover('sigil',k.id);
-    hint('lattice',`Open the lattice (${pr('pause')} → THE LATTICE) to rewrite the world`)}
+    tipEv('sigil')}
    else if(k.kind==='gem'){BAG.push({kind:'gem',id:k.id,tier:k.tier||1});toast('Gem: '+GEMS[k.id].n);sfx('gem');
-    hint('socket',`Open the bag (${pr('bag')}) and socket that gem — colors must match`)}
+    discover('gem',k.id,true);   // the gem collection — quiet; fusion changes tier, not id
+    tipEv('gem')}
    else{BAG.push({kind:'gear',item:k.item});toast(itemName(k.item));sfx('gem');
     // the run remembers its best find, because "what did I get" is half of why you went down
     if(!BESTITEM||itemScore(k.item)>itemScore(BESTITEM))BESTITEM=k.item;
     RUNITEMS++;
     if(k.item.rarity>=2){toastQ(k.item.rarity>=3?'UNIQUE':'RARE');flash(0.14);sfx('level');bTick('rare')}
+    // Uniques record under base+'#'+(alt+1) so a found unique is distinguishable from a seen
+    // base, and a third alt table slots in without a keying change (R12).
+    if(k.item.unique){discover('uni',k.item.base+'#'+((k.item.alt||0)+1),true);tipEv('unique')}
     discover('item',k.item.unique?k.item.base+(k.item.alt?'#2':''):k.item.base,true)}
    PICK.splice(i,1);continue}
   if(k.t<=0)PICK.splice(i,1)}}
@@ -3491,6 +3645,7 @@ function upPlayer(dt){
  {const rdt=dt/Math.max(0.05,TSCALE);
   P.coyote=Math.max(0,P.coyote-rdt);P.jbuf=Math.max(0,P.jbuf-rdt);}
  P.acd=Math.max(0,(P.acd||0)-dt);P.dodgeCd=Math.max(0,P.dodgeCd-dt);
+ P.grapCd=Math.max(0,(P.grapCd||0)-dt);   // longarm's cooldown — not a forgiveness window, sim time is right
  if(P.tempo&&perf>P.tempoT)P.tempo=0;
  if(P.shield>0&&perf>P.shieldT)P.shield=0;
  gainFocus(FOCUS_REGEN*dt);                            // slow trickle out of combat
@@ -3501,7 +3656,23 @@ function upPlayer(dt){
  if(P.hpDrain>0){const d=P.hpDrain;P.hpDrain=0;P.hp-=d;
   if(P.hp<=0&&!secondWind()){die();return}}
  const ms=moveSpd();
- if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*2.4;P.vy=Math.min(P.vy,0);
+ if(P.dodgeT>0){P.dodgeT-=dt;P.vx=P.face*ms*(P.dodgeAir?3.1:2.4);P.vy=Math.min(P.vy,0);
+  // dodge-jump cancel: the roll's tail yields to a buffered jump/hover (i-frames keep their remainder)
+  if(P.dodgeT<0.12&&P.jbuf>0)P.dodgeT=0;
+  // SEAMSTEP (gait): the dodge PHASES through exactly one tile of rock — no setTile, no carve,
+  // the wall survives (rule 3 untouched, the terrain strand untouched). Never bedrock.
+  if(P.dodgeT>0&&META.moves.seamstep){
+   const wx=Math.floor((P.x+P.face*(P.w/2+3))/TILE),bx=wx+P.face;
+   const y0=Math.floor((P.y-6)/TILE),y1=Math.floor((P.y+6)/TILE);
+   // Never bedrock, and never a vault SEAL — seamstep must not collapse the game's one dig
+   // gate (the seal exists so Greataxe/Bore mean something).
+   const t0=TILES[getTile(wx,y0)],t1=TILES[getTile(wx,y1)];
+   if(getTile(wx,y0)!==0&&getTile(wx,y1)!==0
+     &&t0.hard<9&&t1.hard<9&&!t0.seal&&!t1.seal
+     &&getTile(bx,y0)===0&&getTile(bx,y1)===0){
+    burst(P.x+P.face*P.w/2,P.y,'#9fd0ff',3);
+    P.x=bx*TILE+TILE/2;   // land centered in the first air column beyond
+    burst(P.x-P.face*P.w/2,P.y,'#9fd0ff',3);sfx('dig',P.x)}}
   // afterimage streak — ~13 particles per roll, guarded well under the PART 350 cap
   if(PART.length<330)PART.push({x:P.x,y:P.y-2,vx:0,vy:0,t:0.16,col:'#9fd0ff90'})}
  else{
@@ -3509,9 +3680,21 @@ function upPlayer(dt){
   P.vx+=((ax*ms)-P.vx)*Math.min(1,dt*14);
   P.vy+=GRAV*dt;
  }
- if(P.onG)P.coyote=0.1;
+ if(P.onG){P.coyote=0.1;P.airDash=1;P.kickW=0}   // landing hands back the air dodge and the kick
  if(P.jbuf>0&&P.coyote>0){P.vy=-JUMPV;P.jbuf=0;P.coyote=0;P.fuel=Math.max(0,P.fuel-6);
-  hint('hover','Hold jump in the air to hover — the blue bar is fuel')}
+  tipEv('jump')}
+ // WALLKICK (gait): jump pressed airborne against a wall — kick up and away, air dash
+ // refreshed. No fuel cost. The SAME-WALL LOCKOUT is what makes "chaining needs two facing
+ // walls" true rather than aspirational: air control erased the push in ~4 frames, so one
+ // wall was an infinite fuel-free ladder (measured: 39 tiles in 10s). P.kickW remembers the
+ // side; only the opposite wall (or landing) hands the kick back. jbuf already decays on
+ // real time, so hitstop cannot stretch the kick window.
+ if(META.moves.wallkick&&P.jbuf>0&&!P.onG&&P.coyote<=0){
+  const wd=(solidAt(P.x+P.w/2+3,P.y)||solidAt(P.x+P.w/2+3,P.y-6))?1:
+           (solidAt(P.x-P.w/2-3,P.y)||solidAt(P.x-P.w/2-3,P.y-6))?-1:0;
+  if(wd&&wd!==P.kickW){P.vy=-JUMPV*0.92;P.vx=-wd*MOVE*1.6;P.face=-wd;P.jbuf=0;P.airDash=1;
+   P.kickW=wd;
+   burst(P.x+wd*P.w/2,P.y,'#9fd0ff',5);sfx('swing',P.x)}}
  // --- HOVER: hold jump in the air to burn fuel and thrust. The Noita traversal beat. ---
  const lev=(P.levT||0)>perf;
  if(lev)P.fuel=P.maxfuel;
@@ -3519,16 +3702,16 @@ function upPlayer(dt){
  // sputter: on empty, weak thrust still bleeds off fall speed so running dry isn't a death sentence
  if(HELD.jmp&&!P.onG&&P.fuel<=0&&P.vy>0&&P.dodgeT<=0)P.vy-=GRAV*0.45*dt;
  if(HELD.jmp&&!P.onG&&P.coyote<=0&&P.fuel>0&&P.dodgeT<=0){
-  P.flying=true;if(!lev)P.fuel=Math.max(0,P.fuel-FLY_DRAIN*dt);
+  P.flying=true;if(!lev)P.fuel=Math.max(0,P.fuel-FLY_DRAIN*moveFx('drain')*dt);   // glide: same thrust, longer endurance
   P.vy-=FLY_THRUST*dt;
   if(P.vy<FLY_VMAX)P.vy=FLY_VMAX;
   if(chance(dt*30))PART.push({x:P.x+rr(-4,4),y:P.y+P.h/2,vx:rr(-30,30),vy:rr(40,120),t:rr(.15,.3),col:'#9fd0ff'})}
  P.fuel=Math.min(P.maxfuel,P.fuel+(P.onG?FLY_REGEN:FLY_REGEN_AIR)*dt);
  // BIOME IDENTITY: the forge cooks off your fuel wherever you stand. A band you have to
  // manage a resource through reads differently from a band with a different palette.
- {const bs=BSHAPE[biomeName(Math.floor(P.y/TILE))];
+ {const hb=biomeName(Math.floor(P.y/TILE)),bs=BSHAPE[hb];
   if(bs&&bs.heat&&!nearCamp()){P.fuel=Math.max(0,P.fuel-bs.heat*dt);
-   if(P.fuel<=0&&chance(dt*1.5))hint('heat','The forge burns your fuel. Updraft and the harness carry more.')}}
+   if(P.fuel<=0&&chance(dt*1.5))tipEv('dry',{bn:hb})}}
  // --- FALL DAMAGE: the price of a 3200-tile vertical world ---
  const vyPrev=P.vy,wasAir=!P.onG;
  // BURROW: ignore collision, move freely through rock, leave a tunnel
@@ -3544,9 +3727,10 @@ function upPlayer(dt){
   if(dmg>=1){hurtPlayer(dmg);addShake(6);burst(P.x,P.y+P.h/2,'#8a8578',10)}}
  P.noFall=Math.max(0,P.noFall-dt);
  runDepth=Math.max(runDepth,Math.floor(P.y/TILE)-SURFACE);
+ if(runDepth>=MOVE_CK+25){MOVE_CK=runDepth;checkMoves()}   // depth deeds land mid-run, throttled
  const bn=biomeName(Math.floor(P.y/TILE));
  discover('biome',bn);
- if(bn!=='surface')hint('depth','Deeper enemies hit harder and drop far more. Anchors let you start here.');
+ BANDCTX.bn=bn;tipEv('band',BANDCTX);   // hoisted ctx — no per-frame allocation in the hot loop
  if(!META.anchors[bn]){META.anchors[bn]=1;saveMeta();UNLOCK_MSG.push(bn+' anchor');
   toast('ANCHOR SET: '+bn.toUpperCase()+' — descend from here next run');sfx('level')}
  // DESCENT BONUS (§3.4.3): reaching a new band this run is a free shrine roll. Pull, not push.
@@ -3555,9 +3739,19 @@ function upPlayer(dt){
 }
 // Dodge needs a cooldown longer than its own i-frame window, or spamming it is permanent
 // invulnerability. 0.30s of i-frames on a 0.55s cycle leaves a real gap to be punished in.
+// The AIR dodge is EARNED (airdash gait): airborne, one charge, back on landing/wallkick.
+// Horizontal only, direction = held axis else facing — the verb stays identical on thumb,
+// stick and cursor (cursor aim deliberately not consulted; dodge is a movement verb).
 function dodge(){if(P.dodgeT<=0&&P.dodgeCd<=0&&!P.dead){
- P.dodgeT=0.22;P.dodgeCd=0.55;P.inv=Math.max(P.inv,0.30*(1+inc('iframes')));
- burst(P.x,P.y,'#ffffff50',5);sfx('swing');
+ const air=!P.onG&&P.coyote<=0;
+ if(air&&(!META.moves.airdash||!P.airDash))return;
+ if(air){P.airDash=0;if(IN.x)P.face=Math.sign(IN.x)}
+ P.dodgeT=0.22;P.dodgeCd=0.55;P.dodgeAir=air?1:0;P.pd=0;P.lastDodge=perf;
+ P.inv=Math.max(P.inv,0.30*(1+inc('iframes')));
+ // roll-cancel: dodging forgives weapon recovery beyond one roll-length. 0.22, NOT lower —
+ // the slipstream aura (full zero) must stay meaningfully better (R8).
+ P.mcd=Math.min(P.mcd,0.22);P.rcd=Math.min(P.rcd,0.22);
+ burst(P.x,P.y,'#ffffff50',5);sfx('dash');
  if(RUNM.dodgeBlast)explode(P.x,P.y,60,18*depthDmg(P.y),'#ffcf8a',{burn:8*depthDmg(P.y)})}}
 let DYING=false;
 function die(){if(P.dead)return;
@@ -3607,12 +3801,14 @@ function newRun(){
  const C=CLASSES[META.cls]||CLASSES.vanguard;
  const kit=META.useClassKit!==false?C.kit:META.loadout;
  for(const sl of ['melee','ranged','armor']){const id=kit[sl];
-  EQ[sl]=(id&&GEAR[id])?mkItem(id,0,1):null}
+  EQ[sl]=(id&&GEAR[id])?mkItem(id,0,1):null;
+  if(id&&GEAR[id])discover('item',id,true)}   // the gear in your hands must not read as undiscovered
  if(!EQ.melee&&!EQ.ranged)EQ.melee=mkItem('sword',0,1);
  // signature gem: free, pre-socketed. Force the socket's color to match so the class kit
  // is never dead on arrival because of a colour roll.
  if(C.gem&&EQ[C.gem.slot]&&EQ[C.gem.slot].sockets.length){
-  const it=EQ[C.gem.slot];it.sockets[0]={id:C.gem.id,tier:1};it.sc[0]=GEMS[C.gem.id].col||'r'}
+  const it=EQ[C.gem.slot];it.sockets[0]={id:C.gem.id,tier:1};it.sc[0]=GEMS[C.gem.id].col||'r';
+  discover('gem',C.gem.id,true)}   // a socketed signature gem is a known gem
  // THE VAULT (§3.5): whatever you banked before dying comes back with you.
  // Deep-copy on withdrawal. Handing out the stored object itself means socketing a gem into
  // your vaulted axe this run edits the permanent save, and the next saveMeta() writes it.
@@ -3634,6 +3830,8 @@ function newRun(){
  P.focus=FOCUS_MAX;P.shield=0;P.shieldT=0;P.kills=0;P.bestHit=0;P.tempo=0;P.tempoT=0;P.lastHurt=-9;
  P.weight=0;P.weightT=0;P.band=biomeName(Math.floor(P.y/TILE));RUNBANDS[P.band]=1;
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
+ P.pd=0;P.airDash=1;P.dodgeAir=0;P.grapCd=0;P.thunkT=0;P.lastDodge=-9;
+ MOVE_CK=0;tipDismiss();TIPQ.length=0;   // dismiss, not null — a held tip toast must not haunt the death screen
  shake=0;HS={t:0,dur:0,frac:1,pre:0};TSCALE=1;FLASH=0;CALLOUT=null;HURT=null;
  UIROOT=null;MODAL=false;PANEL_FN=null;PANEL_Q.length=0;
  closePanel(true);
@@ -3680,7 +3878,13 @@ function closePanel(force){if(MODAL&&!force)return;
  MODAL=false;PANEL_FN=null;UIROOT=null;$('overlay').style.display='none';if(!P.dead)paused=false;
  if(PANEL_Q.length&&!P.dead){const q=PANEL_Q.shift();openPanel(q[0],q[1],q[2])}}
 let toastT=null;
-function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',1600)}
+// `hold` keeps the toast up with no auto-fade — the TIPS system owns its lifetime (7s or a
+// dismissal), an ordinary toast still fades on its own.
+function toast(msg,hold){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);
+ // an ordinary toast visually replaces a held tip — release the tip too, or an invisible
+ // "shown" tip blocks the queue for its full 7s and its expiry hides THIS toast early
+ if(!hold&&TIP)TIP=null;
+ if(!hold)toastT=setTimeout(()=>t.style.display='none',1600)}
 $('overlay').addEventListener('pointerdown',e=>{if(e.target===$('overlay')&&!MODAL&&!P.dead)closePanel()});
 
 // -------- inventory / equip / socket --------
@@ -3707,6 +3911,15 @@ function compareTo(it){
  add('crit',before.crit,after.crit,'%');add('fuel',before.fuel,after.fuel);
  return parts.length?parts.join(' '):'<span class="sub">no change</span>'}
 
+// Dig power on the card, honest against unique mods (Worldbreaker digs 3 on a dig-2 base,
+// Bulwark digs 1 on a dig-0 shield). The stub carries every field the shipped mods touch;
+// a future mod referencing a missing field extends the stub. Shown even at 0 — the sword
+// saying `dig 0` IS the lesson (finding #2).
+function digOf(it){const b=GEAR[it.base];
+ const a={dmg:0,more:1,cd:1,range:0,arc:0,kb:0,dig:b.dig||0,st:null,leech:0,pierce:0,explode:0};
+ const u=it.unique&&uniqueDef(it.unique,it.alt);if(u&&u.mod)u.mod(a);return a.dig||0}
+function digStr(it){const b=GEAR[it.base];
+ return (b.slot==='melee'||b.slot==='any')?' · dig '+digOf(it):''}
 // The socket screen is the most-used screen in the game (DESIGN-PLAN §7). Item at the top,
 // sockets as colored circles, a live DPS line, gem list below, two-tap to place.
 function dpsLine(){
@@ -3725,13 +3938,13 @@ function openBag(){
  for(const s of ['melee','ranged','armor']){const it=EQ[s];
   if(!it){h+=`<button class="slotb" disabled>${s.toUpperCase()}: —</button>`;continue}
   h+=`<button class="slotb" onclick="itemMenu('${s}')">${s.toUpperCase()}: <span class="r${it.rarity}">${itemName(it)}</span> ${ilvlStr(it)}
-   <span class="sub">${affixStr(it)}${itemDesc(it)?' — '+itemDesc(it):''}</span>${sockDots(it,s,false)}</button>`}
+   <span class="sub">${affixStr(it)}${itemDesc(it)?' — '+itemDesc(it):''}${digStr(it)}</span>${sockDots(it,s,false)}</button>`}
  if(ATK.abil)h+=`<div class="sub">ABIL: ${ATK.abil.n} — ${ATK.abil.cd.toFixed(1)}s cd, ${ATK.abil.fc} focus</div>`;
  h+='<div class="sub" style="margin-top:8px">Carried:</div>';
  if(!BAG.length)h+='<div class="sub">empty</div>';
  BAG.forEach((b,i)=>{
   if(b.kind==='gear')h+=`<button onclick="equipFromBag(${i})"><span class="r${b.item.rarity}">${itemName(b.item)}</span> ${ilvlStr(b.item)}${bagBetter(b.item)}
-    <span class="sub">${itemDesc(b.item)||affixStr(b.item)||'no affixes'}</span>
+    <span class="sub">${itemDesc(b.item)||affixStr(b.item)||'no affixes'}${digStr(b.item)}</span>
     <span class="cmp">${compareTo(b.item)}</span></button>`;
   else{const G=GEMS[b.id],col=SOCK[G.col||'r'].c;
    h+=`<button onclick="socketGem(${i})"><span style="color:${col}">◆</span> ${G.n}${(b.tier||1)>1?' T'+b.tier:''}
@@ -3740,7 +3953,7 @@ function openBag(){
  openPanel(h)}
 function itemMenu(slot){const it=EQ[slot];if(!it)return openBag();
  let h=`<h2 class="r${it.rarity}">${itemName(it)} ${ilvlStr(it)}</h2>${dpsLine()}
-  <div class="sub">${affixStr(it)||'no affixes'}${itemDesc(it)?'<br>'+itemDesc(it):''}</div>
+  <div class="sub">${affixStr(it)||'no affixes'}${itemDesc(it)?'<br>'+itemDesc(it):''}${digStr(it)}</div>
   <div class="sub" style="margin-top:6px">Sockets — tap to remove:</div>${sockDots(it,slot,true)}`;
  h+='<button onclick="openBag()">BACK</button>';openPanel(h)}
 function unsocket(slot,i){const it=EQ[slot];const g=it.sockets[i];
@@ -3900,6 +4113,7 @@ function doEscape(){
  // Every escape opens one more rung of the ladder. This is the only thing past Threat V, and
  // it is unbounded on purpose: the answer to "what is hour 40" has to not have a ceiling.
  META.maxEcho=Math.max(META.maxEcho||0,META.escapes||0);
+ checkMoves();   // seamstep's deed; this hook moves into doEnding when the endings land (R9)
  META.shards+=Math.round(400+DISSONANCE*6);
  META.maxThreat=Math.min(THREATS.length-1,(META.maxThreat||0)+1);
  discover('frag','escape',true);
@@ -3986,7 +4200,7 @@ function startRun(){
  // Rebuild the run here. INIT builds one before the title is shown, so any camp choice made
  // ON the title — class, starting loadout, descent anchor — would otherwise apply a run late.
  newRun();cam.x=P.x;cam.y=P.y;
- UIROOT=null;closePanel(true);if(SET.hints&&!META.runs)hint('move',`${pr('move')} to move · ${pr('jump')} to jump, HOLD to hover`)}
+ UIROOT=null;closePanel(true);tipEv('run')}
 // Contextual hints: each fires once per save, at the moment it is relevant, and never again.
 // Teaching by interruption is worse than teaching by timing.
 function hint(id,text){
@@ -4014,6 +4228,7 @@ function openCodex(){
   <button onclick="openCodexList('biome')">STRATA <span class="sub">${pctSeen('biome',bT)}% — the layers you have reached</span></button>
   <button onclick="openCodexList('en')">BESTIARY <span class="sub">${pctSeen('en',eT)}% — written on first kill</span></button>
   <button onclick="openCodexList('cls')">DELVERS <span class="sub">${pctSeen('cls',cT)}%</span></button>
+  <button onclick="openCollection()">COLLECTION <span class="sub">what the deep has shown you</span></button>
   <button onclick="openCodexList('sigil')">SIGILS <span class="sub">${pctSeen('sigil',Object.keys(SIGILS_DEF).length)}% — what can be rewritten</span></button>
   <button onclick="backPanel()">CLOSE <span class="sub">${pr('cancel')}</span></button>`)}
 function openLoreWorld(){
@@ -4054,6 +4269,38 @@ function openFrag(id){
   <div class="lore">${loreHTML(f.d)}</div>
   <button onclick="closePanel(true)">POCKET IT <span class="sub">${pr('confirm')}</span></button>`,true)}
 
+// -------- collection --------
+// The codex's discovery-progress wing: live tables vs META.seen, buttons only (menu law).
+// Sealed rows leak their SHAPE on purpose — a base's slot, a unique's base, a gem's type and
+// color — the D2 grid effect: holes you can count are a reason to go down.
+function uniBases(){return Object.keys(GEAR).filter(id=>UNIQUES[id])}
+function uniTotal(){let n=0;const ts=uniTables();for(const id of uniBases())for(const T of ts)if(T[id])n++;return n}
+function openCollection(){
+ const a=Object.keys(META.seen.item||{}).filter(k=>k.indexOf('#')<0&&GEAR[k]).length;
+ const b=Object.keys(META.seen.uni||{}).length,c=Object.keys(META.seen.gem||{}).length,
+       d=Object.keys(META.seen.en||{}).length;
+ openPanel(`<h2>COLLECTION</h2>
+  <div class="dps">${a+b+c+d} finds &nbsp;·&nbsp; the rest is still buried</div>
+  <button onclick="collList('base')">GEAR — ${a}/${Object.keys(GEAR).length} bases</button>
+  <button onclick="collList('uni')">UNIQUES — ${b}/${uniTotal()}</button>
+  <button onclick="collList('gem')">GEMS — ${c}/${Object.keys(GEMS).length}</button>
+  <button onclick="openCodexList('en')">BESTIARY — ${d}/${Object.keys(LORE.enemy).length} <span class="sub">met on first kill</span></button>
+  <button onclick="openCodex()">BACK <span class="sub">${pr('cancel')}</span></button>`,false,openCollection)}
+function collList(kind){
+ let h=`<h2>${kind==='base'?'GEAR':kind==='uni'?'UNIQUES':'GEMS'}</h2>`;
+ if(kind==='base')for(const id in GEAR){const G=GEAR[id];
+  h+=META.seen.item[id]?`<button disabled>${G.n} <span class="sub">${G.slot}${G.dig?' · dig '+G.dig:''}</span></button>`
+    :`<button disabled>??? <span class="sub">${G.slot}</span></button>`}
+ else if(kind==='uni'){const ts=uniTables();
+  for(const id of uniBases())ts.forEach((T,i)=>{if(!T[id])return;
+   h+=META.seen.uni[id+'#'+(i+1)]?`<button disabled>${T[id].n} <span class="sub">${T[id].d}</span></button>`
+     :`<button disabled>??? <span class="sub">${GEAR[id].n}</span></button>`})}   // the base leaks — you learn WHERE to hunt
+ else for(const id in GEMS){const G=GEMS[id],col=SOCK[G.col||'r'];
+  h+=META.seen.gem[id]?`<button disabled>◆ ${G.n} <span class="sub">${G.t} · ${col.n}</span></button>`
+    :`<button disabled>??? <span class="sub">${G.t} · ${col.n}</span></button>`}
+ h+=`<button onclick="openCollection()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,()=>collList(kind))}
+
 // -------- shrine --------
 let SHRINE_PICK=[],SHRINE_SRC=null;
 function openShrine(sh){
@@ -4072,6 +4319,7 @@ function openShrine(sh){
  openPanel(h,true)}
 function takeBoon(i){const b=SHRINE_PICK[i];if(!b)return;
  if(SHRINE_SRC)SHRINE_SRC.used=true;SHRINE_SRC=null;BSTATE.shrine=1;
+ tipEv('boon');
  (RUNM.__boons||(RUNM.__boons={}))[b.id]=1;
  for(const k in (b.fx||{}))RUNB[k]=(RUNB[k]||0)+b.fx[k];
  for(const k in (b.m||{}))RUNM[k]=(RUNM[k]||0)+b.m[k];
@@ -4109,10 +4357,12 @@ function openBounties(){
  h+=`</table><button onclick="backPanel()">BACK <span class="sub">${pr('cancel')}</span></button>`;
  openPanel(h,false,openBounties)}
 function openCamp(){
+ tipEv('shop');   // the unlock-pool tour line — shows (non-modally) once the panel closes
  let h=`<h2>CAMP</h2><div class="sub">Shards: ${META.shards}</div>
  <button onclick="openClasses()">CLASS — ${(CLASSES[META.cls]||CLASSES.vanguard).n}</button>
  <button onclick="openAnchors()">DESCEND FROM — ${(META.startBiome||'surface').toUpperCase()}</button>
  <button onclick="openLoadout()">STARTING LOADOUT — ${['melee','ranged','armor'].map(s=>META.loadout[s]?GEAR[META.loadout[s]].n:'—').join(' / ')}</button>
+ <button onclick="openMoves()">MOVEMENT — ${Object.keys(META.moves).length}/${MOVES.length}</button>
  <button onclick="openThreat()">THREAT — ${threat().n}</button>
  ${(META.maxEcho|0)>0?`<button onclick="openEcho()">ECHO — ${(META.echoLv|0)?('&#215;'+(META.echoLv|0)):'none'}</button>`:''}
  <button onclick="openBounties()">BOUNTIES — ${BOUNTY.filter(bDone).length}/${BOUNTY.length} this run</button>
@@ -4127,6 +4377,16 @@ function openCamp(){
   h+=`<button ${owned||locked||META.shards<n.cost?'disabled':''} onclick="buyNode('${n.id}')">[${n.br}] ${n.n} — ${owned?'OWNED':locked?'locked':n.cost+'◆'}</button>`}
  h+='<button onclick="closePanel()" style="text-align:center">CLOSE</button>';
  openPanel(h)}
+// The movement track. The deed is SHOWN on sealed rows (codex philosophy — a map of what you
+// have not done), and the footer makes the dodge's numbers visible so c3/iframe gear reads.
+function openMoves(){
+ let h=`<h2>MOVEMENT</h2><div class="sub">Not bought. Taken.</div>`;
+ for(const M of MOVES){
+  if(META.moves[M.id])h+=`<button>${M.n} <span class="sub">${M.d()}</span></button>`;
+  else h+=`<button disabled>??? <span class="sub">${M.deed}</span></button>`}
+ h+=`<div class="sub" style="margin-top:6px">DODGE — 0.22s roll · ${(0.30*(1+inc('iframes'))).toFixed(2)}s untouchable · 0.55s cycle</div>`;
+ h+=`<button onclick="openCamp()">BACK <span class="sub">${pr('cancel')}</span></button>`;
+ openPanel(h,false,openMoves)}
 function openClasses(){
  let h='<h2>CLASS</h2><div class="sub">Sets your starting kit, a free signature gem, and a permanent passive.</div>';
  for(const id in CLASSES){const C=CLASSES[id],owned=META.classes[id];
@@ -4215,7 +4475,9 @@ function vaultTake(i){const v=META.vault[i];if(!v)return;
  META.vault.splice(i,1);saveMeta();
  delete v.fromVault;   // no longer stored, so it may be deposited again later
  BAG.push({kind:'gear',item:v});toast('Withdrawn to bag');openVault()}
-function buyUnlock(id){const u=UNLOCKS.find(x=>x.id===id);if(META.shards>=u.cost&&!META.unlocks[id]){META.shards-=u.cost;META.unlocks[id]=1;saveMeta();toast('Unlocked: '+u.n)}openCamp()}
+function buyUnlock(id){const u=UNLOCKS.find(x=>x.id===id);if(META.shards>=u.cost&&!META.unlocks[id]){META.shards-=u.cost;META.unlocks[id]=1;
+ if(GEMS[id])discover('gem',id,true);   // a bought gem is a KNOWN gem — the collection must agree with the shop
+ saveMeta();toast('Unlocked: '+u.n)}openCamp()}
 function buyNode(id){const n=TREE.find(x=>x.id===id);if(META.shards>=n.cost&&!META.tree[id]){META.shards-=n.cost;META.tree[id]=1;saveMeta();P.maxhp=maxHP();refreshAttacks();toast(n.n)}openCamp()}
 // The canvas is grabbed here rather than in RENDER because the mouse listeners below need it,
 // and a `const` declared further down would be in the temporal dead zone at this point.
@@ -4234,7 +4496,7 @@ const HELD={mel:false,rng:false,jmp:false};
 const KEYS={};
 // Edge-triggered actions. Held state lives in HELD; one-shot presses go through EDGE so a
 // gamepad button and a key can fire the same action without either double-firing.
-const EDGE={dodge:0,abil:0,bag:0,camp:0,map:0,pause:0,confirm:0,cancel:0,navU:0,navD:0,navL:0,navR:0};
+const EDGE={dodge:0,abil:0,bag:0,camp:0,map:0,pause:0,grap:0,confirm:0,cancel:0,navU:0,navD:0,navL:0,navR:0};
 function fire(a){EDGE[a]=1}
 function consumed(a){const v=EDGE[a];EDGE[a]=0;return v}
 
@@ -4266,7 +4528,8 @@ const KEYMAP={
  // stands for all four, and it is the one GLYPH carries.
  left:['KeyA','ArrowLeft'], right:['KeyD','ArrowRight'], up:['KeyW','ArrowUp'], down:['KeyS','ArrowDown'],
  jump:['Space','KeyW','ArrowUp'], mel:['KeyJ','KeyZ'], rng:['KeyK','KeyX'],
- dodge:['ShiftLeft','ShiftRight','KeyL'], abil:['KeyF','KeyQ'],
+ // KeyQ moved from abil's undocumented alternate to grap — the GLYPH label always said F.
+ dodge:['ShiftLeft','ShiftRight','KeyL'], abil:['KeyF'], grap:['KeyQ'],
  bag:['KeyE','KeyI','Tab'], camp:['KeyC'], map:['KeyM'], pause:['Escape','KeyP'],
 };
 const heldKey=a=>KEYMAP[a].some(c=>KEYS[c]);
@@ -4280,6 +4543,7 @@ addEventListener('keydown',e=>{
  if(KEYMAP.rng.includes(e.code))HELD.rng=true;
  if(KEYMAP.dodge.includes(e.code))fire('dodge');
  if(KEYMAP.abil.includes(e.code))fire('abil');
+ if(KEYMAP.grap.includes(e.code))fire('grap');
  if(KEYMAP.bag.includes(e.code))fire('bag');
  if(KEYMAP.camp.includes(e.code))fire('camp');
  if(KEYMAP.map.includes(e.code))fire('map');
@@ -4353,7 +4617,7 @@ function pollPad(){
  if(Math.hypot(rx,ry)>0.35){IN.aimX=rx;IN.aimY=ry;IN.manual=true;IN.manualT=perf}
  HELD.jmp=down(PAD.A)||down(PAD.LB);
  HELD.mel=down(PAD.X)||down(PAD.RB);
- HELD.rng=down(PAD.RT)||down(PAD.Y);
+ HELD.rng=down(PAD.RT);   // Y freed from its undocumented ranged-alternate to be grap (label stays RT/R2)
  // Snapshot every edge ONCE. Reading through a function that also advanced padPrev meant the
  // second read of a button was always false — A fired 'confirm' and then failed to buffer a
  // jump, and B fired 'dodge' and then never fired 'cancel', leaving a controller with no way
@@ -4373,6 +4637,7 @@ function pollPad(){
  else{
   if(edge(PAD.B))fire('dodge');
   if(edge(PAD.LT))fire('abil');
+  if(edge(PAD.Y))fire('grap');   // suppressed while paused — no pause-menu meaning
   if(edge(PAD.BACK))fire('bag');
   if(edge(PAD.START))fire('pause');
   if(edge(PAD.L3))fire('map');
@@ -4408,6 +4673,7 @@ bindBtn('bMel',()=>HELD.mel=true,()=>HELD.mel=false);
 bindBtn('bRng',()=>HELD.rng=true,()=>HELD.rng=false);
 bindBtn('bDodge',()=>fire('dodge'));
 bindBtn('bAbil',()=>fire('abil'));
+bindBtn('bGrap',()=>fire('grap'));   // hidden until longarm is earned — refreshPrompts toggles it
 $('bagBtn').addEventListener('click',()=>fire('bag'));
 $('mapBtn').addEventListener('click',()=>fire('map'));
 $('campBtn').addEventListener('click',()=>fire('camp'));
@@ -4444,8 +4710,12 @@ function readInput(){
  // a stick released or a mouse that left the canvas falls back to auto-aim after a beat
  if(IN.manual&&perf-(IN.manualT||0)>1.5)IN.manual=false;
  if(paused){menuInput();return}
+ // Any edge press (never plain movement) dismisses a held tip — captured BEFORE the dispatch
+ // consumes them, acted on after, so a tip survives walking but yields to the first real input.
+ const tipEdge=EDGE.dodge||EDGE.abil||EDGE.bag||EDGE.camp||EDGE.map||EDGE.pause||EDGE.grap||EDGE.confirm||EDGE.cancel;
  if(consumed('dodge'))dodge();
  if(consumed('abil'))useAbility();
+ if(consumed('grap')&&META.moves.longarm)doGrap();   // consumed unconditionally: an unearned press never queues
  if(consumed('bag'))openBag();
  if(consumed('camp')){if(nearCamp())openCamp();else toast('Not at camp')}
  // First press toggles the corner map, a second press within a beat opens the full one —
@@ -4455,7 +4725,9 @@ function readInput(){
   else{MMON=!MMON;toast('Minimap '+(MMON?'on':'off')+' — press again for the full map')}
   lastMapT=perf}
  if(consumed('pause'))openPause();
- consumed('confirm');consumed('cancel');consumed('navU');consumed('navD');consumed('navL');consumed('navR')}
+ consumed('confirm');consumed('cancel');consumed('navU');consumed('navD');consumed('navL');consumed('navR');
+ if(TIP&&(tipEdge||(HELD.mel&&!TIPHm)||(HELD.rng&&!TIPHr)))tipDismiss();
+ TIPHm=HELD.mel;TIPHr=HELD.rng}
 
 // ---- menu navigation ----
 // Every panel is a stack of <button>s, so one focus cursor over the enabled ones makes the
@@ -4473,7 +4745,7 @@ function menuInput(){
  const go=consumed('confirm'),back=consumed('cancel'),esc=consumed('pause');
  // Drain EVERY gameplay action before acting. Returning early left them queued, so a key
  // pressed while a menu was open fired the moment the menu closed.
- consumed('dodge');consumed('abil');consumed('bag');consumed('camp');consumed('map');
+ consumed('dodge');consumed('abil');consumed('bag');consumed('camp');consumed('map');consumed('grap');
  if(go){const b=menuButtons()[menuIdx];if(b)b.click();return}
  // A modal panel demands a real choice; everything else backs out to wherever it came from.
  if((back||esc)&&!MODAL)backPanel()}
@@ -4484,15 +4756,16 @@ function menuInput(){
 const GLYPH={
  // mel/rng carry the key alternates: a touchpad has no comfortable RMB and no MMB at all,
  // and nothing else ever tells that player the keys exist.
- kb:   {jump:'SPACE',mel:'LMB/J',rng:'RMB/K',dodge:'SHIFT',abil:'F',bag:'E',camp:'C',map:'M',pause:'ESC',confirm:'ENTER',cancel:'ESC',move:'WASD',aim:'MOUSE'},
- xbox: {jump:'A',mel:'X',rng:'RT',dodge:'B',abil:'LT',bag:'BACK',camp:'R3',map:'L3',pause:'START',confirm:'A',cancel:'B',move:'L-STICK',aim:'R-STICK'},
- ps:   {jump:'✕',mel:'□',rng:'R2',dodge:'○',abil:'L2',bag:'SHARE',camp:'R3',map:'L3',pause:'OPTIONS',confirm:'✕',cancel:'○',move:'L-STICK',aim:'R-STICK'},
- touch:{jump:'JUMP',mel:'MEL',rng:'RNG',dodge:'DODGE',abil:'ABIL',bag:'BAG',camp:'CAMP',map:'MAP',pause:'❚❚',confirm:'TAP',cancel:'BACK',move:'STICK',aim:'AUTO'},
+ kb:   {jump:'SPACE',mel:'LMB/J',rng:'RMB/K',dodge:'SHIFT',abil:'F',grap:'Q',bag:'E',camp:'C',map:'M',pause:'ESC',confirm:'ENTER',cancel:'ESC',move:'WASD',aim:'MOUSE'},
+ xbox: {jump:'A',mel:'X',rng:'RT',dodge:'B',abil:'LT',grap:'Y',bag:'BACK',camp:'R3',map:'L3',pause:'START',confirm:'A',cancel:'B',move:'L-STICK',aim:'R-STICK'},
+ ps:   {jump:'✕',mel:'□',rng:'R2',dodge:'○',abil:'L2',grap:'△',bag:'SHARE',camp:'R3',map:'L3',pause:'OPTIONS',confirm:'✕',cancel:'○',move:'L-STICK',aim:'R-STICK'},
+ touch:{jump:'JUMP',mel:'MEL',rng:'RNG',dodge:'DODGE',abil:'ABIL',grap:'GRAP',bag:'BAG',camp:'CAMP',map:'MAP',pause:'❚❚',confirm:'TAP',cancel:'BACK',move:'STICK',aim:'AUTO'},
 };
 function pr(a){const set=INMODE==='pad'?GLYPH[PADTYPE]:GLYPH[INMODE]||GLYPH.kb;return set[a]||a.toUpperCase()}
 function refreshPrompts(){
  // touch buttons keep their words; on other devices they show the real binding
- const map={bJump:'jump',bMel:'mel',bRng:'rng',bDodge:'dodge'};
+ const map={bJump:'jump',bMel:'mel',bRng:'rng',bDodge:'dodge',bGrap:'grap'};
+ {const g=$('bGrap');if(g)g.style.display=META.moves.longarm?'':'none'}   // longarm's button exists only once earned
  for(const id in map){const el=$(id);if(el&&INMODE!=='touch')el.textContent=pr(map[id]);
   else if(el)el.textContent=map[id].toUpperCase().replace('BJUMP','JUMP')}
  if(INMODE==='touch'){$('bJump').textContent='JUMP';$('bMel').textContent='MEL';
@@ -4552,6 +4825,7 @@ function resetSet(){SET=Object.assign({},SET_DEF);saveSet();applyVol();openSetti
 function openControls(){
  const rows=[['move','Move'],['jump','Jump / hold to hover'],['mel','Melee'],['rng','Ranged'],
   ['dodge','Dodge'],['abil','Ability'],['bag','Bag'],['camp','Camp'],['map','Minimap'],['pause','Pause']];
+ if(META.moves.longarm)rows.splice(6,0,['grap','Grapple (the Long Arm)']);   // listed once the gait exists
  let h=`<h2>CONTROLS</h2><div class="sub">Showing: ${INMODE==='pad'?(PADTYPE==='ps'?'PlayStation pad':'Xbox pad'):INMODE==='touch'?'touch':'keyboard + mouse'}
   — plug in a controller or touch the screen and this updates itself.</div><table class="sum">`;
  for(const [k,label] of rows)h+=`<tr><td>${label}</td><td class="r3">${pr(k)}</td></tr>`;
@@ -4871,13 +5145,19 @@ function render(){
   if(P.inv>0&&Math.floor(perf*20)%2===0){}else{
    // 0 idle, 1 stride, 2 airborne — three keyposes, per the animation budget
    const pf=!P.onG?2:(Math.abs(P.vx)>18?((perf*9)|0)%2?1:0:0);
+   // dodge afterimages — render-only, fixed offsets, no RNG, no state. The trailing ghosts
+   // plus a cyan tint make the untouchable beat VISIBLE (distinct from the post-hit white
+   // flicker, which keys on inv>0.45). Falls back to nothing without an atlas, like all tints.
+   if(P.dodgeT>0)for(let k=3;k>=1;k--)
+    drawEntityTinted(ctx,'player',x-P.face*10*k,y,P.h,P.face,pf,'#9fd0ff',0.42-0.12*k);
    const drew=drawEntity(ctx,'player',x,y,P.w,P.h,'#e8e2d0',P.face,pf);
    if(!drew){
     ctx.fillStyle='#12121a';ctx.fillRect(x-P.w/2-1,y-P.h/2-1,P.w+2,P.h+2);
     ctx.fillStyle='#e8e2d0';ctx.fillRect(x-P.w/2,y-P.h/2,P.w,P.h);
     ctx.fillStyle='#28344a';ctx.fillRect(x-P.w/2,y-P.h/2,P.w,5);
     ctx.fillStyle='#000';ctx.fillRect(x+P.face*2,y-P.h/2+2,2,2)}
-   if(drew&&P.inv>0.45)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#ffffff',0.5)}
+   if(drew&&P.dodgeT>0)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#9fd0ff',0.5);
+   else if(drew&&P.inv>0.45)drawEntityTinted(ctx,'player',x,y,P.h,P.face,pf,'#ffffff',0.5)}
   if(P.block){ctx.fillStyle='#9fd0ff';ctx.fillRect(x+P.face*7,y-P.h/2,3,P.h)}
   if(ATK.melee&&P.mcd>ATK.melee.cd*0.7){
    // Along the RESOLVED swing angle — the slash must show where the swing actually went,
@@ -4970,12 +5250,12 @@ function sim(dt){
  else{if(PREVr&&isShield('ranged')&&HOLDr<=0.18)doRanged();HOLDr=0}
  P.block=(HELD.mel&&isShield('melee')&&HOLDm>0.18)||(HELD.rng&&isShield('ranged')&&HOLDr>0.18);
  PREVm=HELD.mel;PREVr=HELD.rng;
- upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upHaz(dt);upVents(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);
+ upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upHaz(dt);upVents(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);upTips(dt);
  if(!P.dead){if(auraHas('regrowth'))P.hp=Math.min(P.maxhp,P.hp+2*dt);
   if(auraHas('staticfield')&&(staticT-=dt)<=0){staticT=1.6;   // Static Field: periodic shock pulse
    burst(P.x,P.y,'#e6d34a',8);
    for(const e of EN)if(e.hp>0&&Math.hypot(e.x-P.x,e.y-P.y)<90)applyStatus(e,{shock:1.25},false)}
-  if(nearCamp()){P.hp=Math.min(P.maxhp,P.hp+12*dt);hint('camp',`At camp — ${pr('camp')} to spend shards`)}}
+  if(nearCamp()){P.hp=Math.min(P.maxhp,P.hp+12*dt);tipEv('camp')}}
  if(!P.dead)for(const sh of SHRINES){if(sh.used)continue;
   if(Math.hypot(sh.x-P.x,sh.y-P.y)<20){openShrine(sh);break}}
  tickBuffs();
@@ -5038,6 +5318,9 @@ function hud(){
  else if(P.acd>0){b.textContent=P.acd.toFixed(1)+'s';b.className='tb cold'}
  else if(P.focus<ab.fc){b.textContent=ab.n.slice(0,6);b.className='tb cold'}
  else{b.textContent=ab.n.slice(0,6);b.className='tb rdy'}
+ // GRAP mirrors ABIL's affordance — with sound off, a cooldown press otherwise reads as a dead button
+ const gb=$('bGrap');
+ if(gb&&META.moves.longarm)gb.className=(P.grapCd||0)>0?'tb cold':'tb rdy';
  $('campBtn').style.display=nearCamp()?'inline-block':'none'}
 let last=0,acc=0;
 function frame(t){

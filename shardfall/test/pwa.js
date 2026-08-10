@@ -124,6 +124,35 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applica
   ok(mig.ver === 3 && mig.vault, 'v1 save is upgraded to v3 with a vault');
   ok(mig.v3, 'all eight v3 fields exist after migration');
 
+  // ---- a v2 save gets its earned gaits back on load (movement wave: retroactive deeds) ----
+  // bestDepth 1600 -> draught+airdash+glide; 3 bosses -> wallkick+longarm; no escapes -> no
+  // seamstep. hints migrate into tips, alt-unique history and bought gems seed the collection.
+  await page.evaluate(() => {
+    localStorage.setItem('shardfall', JSON.stringify({
+      ver: 2, shards: 10, unlocks: { fireball: 1 }, cls: 'vanguard', classes: { vanguard: 1 },
+      anchors: { surface: 1 }, loadout: { melee: 'sword', ranged: 'bow', armor: 'vest' },
+      bestDepth: 1600, bosses: { warden: 1, sporemother: 1, sentinel: 1 },
+      hints: { socket: 1 }, vault: [],
+      seen: { item: { 'plate#2': 1, axe: 1 }, en: {}, biome: {}, frag: {}, cls: {}, sigil: {}, diss: {} },
+    }));
+  });
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(400);
+  const v2 = await page.evaluate(() => ({
+    ver: META.ver, moves: Object.assign({}, META.moves), tipSocket: META.tips.socket,
+    uni: META.seen.uni['plate#2'], gemFb: META.seen.gem.fireball,
+    seeded: DEFAULT_GEM_POOL.every(g => META.seen.gem[g] === 1),
+    fuel: maxFuel(),
+  }));
+  ok(v2.ver === 3, 'v2 save is upgraded to v3');
+  ok(v2.moves.draught === 1 && v2.moves.airdash === 1 && v2.moves.glide === 1
+    && v2.moves.wallkick === 1 && v2.moves.longarm === 1, 'earned gaits retro-grant from bestDepth/bosses');
+  ok(!v2.moves.seamstep, 'seamstep stays sealed without two escapes');
+  ok(v2.tipSocket === 1, 'shown-once hints migrate into tips (nothing re-fires)');
+  ok(v2.uni === 1, 'alt-unique history recovers into seen.uni');
+  ok(v2.gemFb === 1 && v2.seeded, 'bought + default gems seed the gem collection');
+  ok(v2.fuel >= 60, `a draught veteran holds ${v2.fuel} fuel — never under the old 60`);
+
   await browser.close(); srv.close();
   console.log('');
   console.log(fails ? `=== ${fails} PWA CHECK(S) FAILED ===` : '=== PWA PASS ===');

@@ -222,6 +222,30 @@ const ok = (c, m) => { console.log((c ? 'ok: ' : 'FAIL: ') + m); if (!c) fails++
   ok(revealed, 'a discovered page becomes readable');
   await page.evaluate(() => closePanel());
 
+  // the codex carries the COLLECTION wing (movement wave)
+  await page.evaluate(() => { closePanel(true); openCodex() });
+  await page.waitForTimeout(100);
+  ok(await page.evaluate(() => document.getElementById('panel').innerHTML.includes('COLLECTION')),
+    'the codex shows the COLLECTION button');
+  await page.evaluate(() => openCollection());
+  await page.waitForTimeout(100);
+  ok(await page.evaluate(() => {
+    const h = document.getElementById('panel').innerHTML;
+    return h.includes('UNIQUES') && h.includes('GEMS') && h.includes('BESTIARY');
+  }), 'the collection lists its four wings');
+  await page.evaluate(() => closePanel(true));
+
+  // the grap touch button: present, hidden on a fresh save, shown once longarm is earned
+  await page.evaluate(() => setMode('touch'));
+  await page.waitForTimeout(80);
+  ok(await page.evaluate(() => !!document.getElementById('bGrap')
+    && getComputedStyle(document.getElementById('bGrap')).display === 'none'),
+    'bGrap exists and stays hidden without the Long Arm gait');
+  ok(await page.evaluate(() => { META.moves.longarm = 1; refreshPrompts();
+    return getComputedStyle(document.getElementById('bGrap')).display !== 'none' }),
+    'and appears the moment the gait is earned');
+  await page.evaluate(() => { delete META.moves.longarm; setMode('kb'); refreshPrompts() });
+
   // Audio: the input rewrite once deleted the gesture handler and the game shipped silent.
   // Only a real browser can tell us the AudioContext actually came up.
   await page.evaluate(() => { closePanel(true); paused = false });

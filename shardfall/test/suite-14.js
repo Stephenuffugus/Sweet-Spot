@@ -157,16 +157,21 @@ console.log('\n-- band identity --');
     P.maxfuel = maxFuel(); P.fuel = P.maxfuel; HELD.jmp = false;
     EN.length = 0; HAZ.length = 0; VENTS.length = 0;
   }
+  // Movement-wave ruling: the base tank is 45 (was 60) and every player who reaches the forge
+  // deed-owns the draught gait (+20 -> 65) — grant it here or a 1.5s hover floors BOTH bands
+  // at 0 and the identity is invisible. 1.0s of hover keeps both readings off the clamp.
+  META.moves = { draught: 1 };
   function hover(depthM) {
     standIn(depthM); P.fuel = P.maxfuel; P.onG = false; P.noFall = 99;
     HELD.jmp = true;
-    for (let i = 0; i < 90; i++) { P.onG = false; upPlayer(DT) }
+    for (let i = 0; i < 60; i++) { P.onG = false; upPlayer(DT) }
     HELD.jmp = false;
     return P.fuel;
   }
   const ruinsFuel = hover(1200), forgeFuel = hover(1900);
-  console.log('   fuel left after 1.5s of hovering: ruins ' + ruinsFuel.toFixed(0) + ', forge ' + forgeFuel.toFixed(0));
+  console.log('   fuel left after 1.0s of hovering: ruins ' + ruinsFuel.toFixed(0) + ', forge ' + forgeFuel.toFixed(0));
   A(forgeFuel < ruinsFuel - 5, 'the forge burns your fuel where the ruins do not');
+  META.moves = {};
   // and on the ground it slows the refill rather than stopping it, so the band is hard, not hostile
   standIn(1900); P.fuel = 0; P.onG = true;
   for (let i = 0; i < 120; i++) { P.onG = true; upPlayer(DT) }

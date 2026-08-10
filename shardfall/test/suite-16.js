@@ -10,6 +10,9 @@ function A(c, m) { if (c) { pass++; console.log('ok: ' + m) } else { fail++; con
 const near = (a, b, tol) => Math.abs(a - b) <= (tol === undefined ? 0.001 : tol);
 
 loadMeta(); META.shards = 100000; META.cls = 'vanguard'; newRun();
+// Movement wave: the AIR dodge is now gated behind the airdash gait, so any section that
+// calls dodge() directly must be grounded (P.onG=true) and the gait table must start empty.
+META.moves = {};
 function OFF(depthM) {
   P.x = (CAMP_X + 400) * TILE; P.y = (SURFACE + (depthM === undefined ? 260 : depthM)) * TILE;
   const tx = Math.floor(P.x / TILE), ty = Math.floor(P.y / TILE);
@@ -89,7 +92,7 @@ plainSword(); NOCRIT();
 { // B5b a mid-dodge swing NEVER reverses the roll: the swing aims, the body keeps its line
   OFF(); plainSword(); IN.manual = false; IN.x = 0; SET.aimassist = 55;
   const e = mkE({ x: P.x - 40, y: P.y }); EN.push(e);
-  P.face = 1; P.dodgeCd = 0; dodge();
+  P.face = 1; P.dodgeCd = 0; P.onG = true; dodge();   // grounded: the air dodge is earned, not free
   A(P.dodgeT > 0, 'rolling');
   P.mcd = 0; doMelee();
   A(P.face === 1, 'swinging mid-roll leaves the roll direction alone (a flip reversed the dodge and exited you on the enemy)');
@@ -160,7 +163,7 @@ console.log('\n-- the punish is cashable --');
   A(e.hp < h0, 'and a player at dodge-exit distance lands the punish inside the window');
 }
 { // D4 particle budgets: afterimage and stumble dust stay bounded
-  OFF(); PART.length = 0; P.dodgeCd = 0; dodge();
+  OFF(); PART.length = 0; P.dodgeCd = 0; P.onG = true; dodge();   // grounded: air dodge is gated now
   for (let i = 0; i < 14; i++) upPlayer(DT);
   A(PART.length >= 10 && PART.length <= 25, 'dodge afterimage: ' + PART.length + ' particles in [10,25]');
   A(PART.length < 350, 'and under the PART cap');
@@ -215,23 +218,28 @@ console.log('\n-- surfacing --');
 A(GLYPH.kb.mel.indexOf('J') >= 0, 'keyboard melee label carries the key alternative (LMB/J)');
 A(GLYPH.kb.rng.indexOf('K') >= 0, 'keyboard ranged label carries the key alternative (RMB/K)');
 A(KEYMAP.mel.includes('KeyJ') && KEYMAP.rng.includes('KeyK'), 'the keys the labels promise exist');
-{ // the three combat tips fire once each, at the teachable moment
-  OFF(); META.tips = {}; SET.hints = 1; P.inv = 999; IN.x = 0;
+{ // the three combat tips fire once each, at the teachable moment. Movement wave: the tips
+  // now ride the queue — tipEv() queues at the trigger, upTips() flags at SHOW time — so
+  // each trigger is pumped once (no boss present; TIP cleared so the held toast can't block).
+  OFF(); META.tips = {}; TIPQ.length = 0; TIP = null; SET.hints = 1; P.inv = 999; IN.x = 0;
+  closePanel(true); paused = false;   // D4's upPlayer frames opened the descent-bonus shrine; upTips respects paused
   const e = mkE({ atk: mkAtk(ENEMIES.crawler.atk), acd: 0, dmg: 5, spd: 0, x: P.x + 40, y: P.y });
-  EN.push(e); upEnemies(DT);
+  EN.push(e); upEnemies(DT); upTips(DT);
   A(META.tips.fight === 1, 'first windup within 240px teaches the buttons (in META.tips, the v3 store)');
   for (let i = 0; i < 400 && !(e.rec > 0); i++) upEnemies(DT);
+  TIP = null; upTips(DT);
   A(META.tips.punish === 1, 'first spent enemy within 240px teaches the window');
   OFF(); P.inv = 0; P.hp = P.maxhp;
   const m = mkE({ atk: mkAtk(ENEMIES.crawler.atk), act: 0.1, dmg: 5, x: P.x + 2, y: P.y });
   EN.push(m); upEnemies(DT);
+  TIP = null; upTips(DT);
   A(META.tips.dodge === 1, 'first hit taken teaches the dodge');
   // once ever: a second trigger leaves the flags untouched
-  META.tips.fight = 1; OFF(); P.inv = 999;
+  META.tips.fight = 1; OFF(); P.inv = 999; TIPQ.length = 0; TIP = null;
   const e2 = mkE({ atk: mkAtk(ENEMIES.crawler.atk), acd: 0, dmg: 5, spd: 0, x: P.x + 40, y: P.y });
-  EN.push(e2); upEnemies(DT);
-  A(META.tips.fight === 1, 'tips fire once per save, ever');
-  META.tips = {};
+  EN.push(e2); upEnemies(DT); upTips(DT);
+  A(META.tips.fight === 1 && TIPQ.indexOf('fight') < 0, 'tips fire once per save, ever');
+  META.tips = {}; TIPQ.length = 0; TIP = null;
 }
 // restore knobs other suites assume
 SET.aimassist = 55; IN.manual = false; IN.x = 0; EN.length = 0; PART.length = 0;
