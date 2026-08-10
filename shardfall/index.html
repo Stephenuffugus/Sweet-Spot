@@ -909,6 +909,12 @@ const GEAR={
  plate:{slot:'armor', n:'Plate',        hp:80, arm:12, sockets:1, sc:'r', tend:'rrr', ilvl:900},
  greataxe:{slot:'melee',n:'Greataxe', dmg:30, range:42, arc:120, cd:.85, kb:300, dig:2, sockets:2, sc:'rr', tend:'rrr', ilvl:900},
  crossbow:{slot:'ranged',n:'Crossbow',dmg:20, speed:560, cd:.9, kb:120, pierce:1, sockets:2, col:'#c9b48f', sc:'gg', tend:'ggb', ilvl:900},
+ // ---- gear wave: the knife, the reach, the deep caster, and armor for the new blood ----
+ dagger:{slot:'melee', n:'Dagger', dmg:6,  range:20, arc:70,  cd:.22, kb:60,  dig:0, sockets:2, sc:'gg', tend:'ggr', ilvl:150},
+ spear:{slot:'melee',  n:'Spear',  dmg:14, range:44, arc:50,  cd:.48, kb:200, dig:0, sockets:2, sc:'rg', tend:'rgg', ilvl:300},
+ brig: {slot:'armor',  n:'Brigandine', hp:34, arm:5, sockets:2, sc:'rg', tend:'rgg', ilvl:600},
+ staff:{slot:'ranged', n:'Staff',  dmg:24, speed:380, cd:.95, kb:140, pierce:1, sockets:3, col:'#bfe8ff', sc:'bbg', tend:'bbg', ilvl:1500},
+ shroud:{slot:'armor', n:'Abyssal Shroud', hp:55, arm:7, sockets:3, sc:'rgb', tend:'rgb', ilvl:1600},
  shield:{slot:'any',  n:'Shield', dmg:6, range:26, arc:70, cd:.5, kb:260, dig:0, sockets:1, shield:1, arm:4, sc:'r', tend:'rrb'},
 };
 // UNIQUES — rarity 3. One per base. mod() runs AFTER all gems, so uniques break rules.
@@ -926,6 +932,16 @@ const UNIQUES={
  chain:   {n:'Scalemail of the Deep', d:'+35 HP, +8 armor', hp:35, arm:8},
  plate:   {n:'Anchor',         d:'+90 HP, +15 armor, heavy', hp:90, arm:15, ms:-0.12},
  harness: {n:'Skyrigger',      d:'huge fuel, immune to fall damage', fuel:160, noFall:1},
+ // ---- gear wave primaries ----
+ dagger:  {n:'Fever',          d:'hits bleed and feed you · resonates: Lifelode',
+   mod:a=>{a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.4);a.vsBleed=(a.vsBleed||0)+0.25;a.leech=(a.leech||0)+0.05;a.more*=0.85;
+    if(wornUniq('chain',2)){a.stR.bleed=Math.max(a.stR.bleed,0.55);a.leech+=0.03}}},
+ spear:   {n:'Fathom',         d:'twice the reach, half the arc',
+   mod:a=>{a.range*=1.6;a.arc=Math.max(24,a.arc*0.5);a.kb*=1.3;a.more*=1.2}},
+ staff:   {n:'Stormspine',     d:'every bolt is a storm',
+   mod:a=>{a.chain=(a.chain||0)+2;a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,1.3);a.more*=0.8;a.cd*=1.1;a.col='#e6d34a'}},
+ brig:    {n:"Butcher's Apron",d:'+6% crit, +4% leech, no padding', crit:.06, leech:.04, hp:-10},
+ shroud:  {n:'The Quiet',      d:'+1 socket, +40% focus, it keeps some of you · resonates: Patience', sockets:1, focus:.4, hp:-15},
 };
 // A second unique per base, so finding "the" unique for your weapon isn't a single lottery
 // ticket. UNIQ2 rolls half the time when a rarity-3 item drops.
@@ -942,8 +958,39 @@ const UNIQ2={
  chain:   {n:'Ironbound',      d:'+16 armor, slower',     arm:16, ms:-.08},
  plate:   {n:'The Mountain',   d:'+140 HP, +22 armor, very heavy', hp:140, arm:22, ms:-.22},
  harness: {n:'Stormrigger',    d:'+110 fuel, +15% move',  fuel:110, ms:.15},
+ // ---- gear wave alternates ----
+ dagger:  {n:'Quill',          d:'huge crit, hesitates',
+   mod:a=>{a.critAdd=(a.critAdd||0)+0.20;a.critMultAdd=(a.critMultAdd||0)+0.6;a.cd*=1.15;a.more*=0.95}},
+ spear:   {n:'Patience',       d:'cruel to the spent · resonates: The Quiet',
+   mod:a=>{a.vsSpent=(a.vsSpent||0)+0.6;a.stagger=(a.stagger||0)+0.3;a.more*=0.9;
+    if(wornUniq('shroud',0)){a.vsSpent+=0.25;a.interrupt=1}}},
+ staff:   {n:'Lodestar',       d:'bolts seek, slowly',
+   mod:a=>{a.homing=2.4;a.life=3;a.speed*=0.7;a.more*=0.9}},
+ brig:    {n:'Restless',       d:'+12% attack speed, +6% move, thinner plate', cdr:.12, ms:.06, arm:-3},
+ shroud:  {n:'Tithe',          d:'+50% shard yield, it collects too', greed:.5, sres:-.15},
 };
-function uniqueDef(id,alt){return (alt&&UNIQ2[id])?UNIQ2[id]:UNIQUES[id]}
+// A third alternate for bases whose archetypes outgrew two. Only legal where UNIQ2 exists.
+const UNIQ3={
+ sword:   {n:'Mercy',          d:'hits bleed, the wounded are finished',
+   mod:a=>{a.stR=a.stR||{};a.stR.bleed=Math.max(a.stR.bleed||0,0.35);a.cull=Math.max(a.cull||0,0.10);a.more*=0.9}},
+ wand:    {n:'Fulgurite',      d:'one bolt, it shocks and arcs · resonates: Static',
+   mod:a=>{a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,1.35);a.chain=(a.chain||0)+1;a.count=1;a.more*=0.9;a.col='#e6d34a';
+    if(wornUniq('robe',2)){a.chain+=1;a.st.shock=Math.max(a.st.shock,1.5)}}},
+ bow:     {n:'Dowser',         d:'arrows find their own way',
+   mod:a=>{a.homing=2.8;a.life=3;a.more*=0.85}},
+ crossbow:{n:'Thunderhead',    d:'shells burst and shock, slow',
+   mod:a=>{a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,1.4);a.explode=Math.max(a.explode||0,40);a.count=1;a.more*=1.15;a.cd*=1.35;a.col='#e6d34a'}},
+ chain:   {n:'Lifelode',       d:'+5% leech, +25 HP, lets everything in · resonates: Fever', leech:.05, hp:25, arm:-6},
+ robe:    {n:'Static',         d:'+15% attack speed, +30% focus, restless · resonates: Fulgurite', cdr:.15, focus:.3, hp:-10},
+ vest:    {n:'Bellows',        d:'+50% focus gain, +10% attack speed, thin', focus:.5, cdr:.1, arm:-2},
+ harness: {n:'Tailwind',       d:'+20% move, +60 fuel, nothing spare', ms:.2, fuel:60, hp:-12},
+};
+function uniqueDef(id,alt){return alt===2&&UNIQ3[id]?UNIQ3[id]:(alt&&UNIQ2[id])?UNIQ2[id]:UNIQUES[id]}
+// Resonance: a unique may answer to another worn unique. Weapon-side mods only — an armor
+// unique's mod() never runs, so the WEAPON half always carries the bonus. Cache-coherent for
+// free: refreshAttacks fires on every equip change.
+function wornUniq(base,alt){for(const sl of ['melee','ranged','armor']){const it=EQ[sl];
+ if(it&&it.unique===base&&(it.alt||0)===alt)return true}return false}
 // AFFIXES rolled on magic/rare gear: [key,label,min,max,scale,grow]
 // scale 'pct' => stored as a percent that folds into the ADDITIVE pool; 'flat' => added raw.
 //
@@ -961,6 +1008,10 @@ const AFFIXES=[
  ['arm','armor',2,9,'flat',1.32],              ['sres','% status resist',8,22,'pct',1.22],
  ['greed','% shard drops',10,28,'pct',1.30],   ['fuel','fuel',12,40,'flat',1.30],
  ['focus','% focus gain',10,30,'pct',1.26],    ['leech','% life leech',2,5,'pct',1.22],
+ // gear wave: the axes the new archetypes starved for. reach/aildur deliberately compressed —
+ // reach interacts with telegraph literacy and duration with stack saturation; neither may quadruple.
+ ['ailment','% ailment damage',10,30,'pct',1.28], ['aildur','% ailment duration',8,20,'pct',1.22],
+ ['reach','% melee reach',6,16,'pct',1.22],       ['area','% blast radius',10,25,'pct',1.24],
 ];
 const AFF=Object.fromEntries(AFFIXES.map(a=>[a[0],a]));
 // Built step by step rather than by a closed-form power, because rounding a small range (armour
@@ -971,9 +1022,9 @@ function affTierRange(a,t){const g=a[5]||1.3;let lo=a[2],hi=a[3];
  return [lo,hi]}
 // The highest tier this item level may roll, and then a weighted draw beneath it — a deep item is
 // USUALLY good rather than ALWAYS perfect, which is what keeps the drop worth reading.
+function affTierCap(ilvl){let m=1;for(let t=0;t<AFF_TIER_ILVL.length;t++)if(ilvl>=AFF_TIER_ILVL[t])m=t+1;return m}
 function affTierFor(ilvl){
- let max=1;for(let t=0;t<AFF_TIER_ILVL.length;t++)if(ilvl>=AFF_TIER_ILVL[t])max=t+1;
- let t=max;while(t>1&&chance(0.42))t--;
+ let t=affTierCap(ilvl);while(t>1&&chance(0.42))t--;
  return t}
 // MODIFIER AFFIXES — the other half of itemisation, and the half that was missing entirely.
 // A number cannot change how a build plays; these can. They run through the same `mod(a)` seam as
@@ -992,6 +1043,12 @@ const MODAFF=[
  {k:'aburn', n:'hits burn',                  ilvl:200, mod:a=>{a.stR=a.stR||{};a.stR.burn=Math.max(a.stR.burn||0,.25)}},
  {k:'ashock',n:'hits shock',                 ilvl:700, mod:a=>{a.st=a.st||{};a.st.shock=Math.max(a.st.shock||1,1.22)}},
  {k:'amom',  n:'damage scales with your speed',ilvl:1000,mod:a=>{a.momentum=(a.momentum||0)+0.5}},
+ // gear wave
+ {k:'achill',n:'hits chill',                 ilvl:500, mod:a=>{a.st=a.st||{};a.st.chill=Math.min(a.st.chill||9,0.62)}},
+ {k:'abounce',n:'projectiles bounce',        slot:'ranged',ilvl:500, mod:a=>{a.bounce=(a.bounce||0)+2}},
+ {k:'alunge',n:'swings lunge you forward',   slot:'melee', ilvl:800, mod:a=>{a.lunge=Math.max(a.lunge||0,150)}},
+ {k:'agore', n:'+30% vs bleeding',           ilvl:900, mod:a=>{a.vsBleed=(a.vsBleed||0)+0.30}},
+ {k:'astun', n:'hits stagger the spent',     ilvl:900, mod:a=>{a.stagger=(a.stagger||0)+0.25}},
 ];
 const MODA=Object.fromEntries(MODAFF.map(m=>[m.k,m]));
 // ENEMIES.
@@ -1942,6 +1999,12 @@ const UNLOCKS=[
  {id:'lodestone', n:'Lodestone gem (ability)', cost:105},
  {id:'tempest',   n:'Tempest gem (ability)',   cost:125},
  {id:'transfuse', n:'Transfuse gem (ability)', cost:120},
+ // ---- gear wave: the knife, the reach, the deep caster, and armor for the new blood ----
+ {id:'dagger',n:'Dagger (gear)',        cost:40},
+ {id:'spear', n:'Spear (gear)',         cost:55},
+ {id:'brig',  n:'Brigandine (gear)',    cost:60},
+ {id:'staff', n:'Staff (gear)',         cost:85},
+ {id:'shroud',n:'Abyssal Shroud (gear)',cost:85},
 ];
 // ============ MOVEMENT — GAITS ============
 // Permanent movement, earned by deeds, never sold — the Dead Cells rune model. They live in
@@ -2486,7 +2549,9 @@ function mkItem(baseId,rarity,ilvl){ // 0 normal, 1 magic, 2 rare, 3 unique
  const b=GEAR[baseId];
  if(rarity===3&&!UNIQUES[baseId])rarity=2;
  // Two uniques per base, coin-flipped, so a rarity-3 drop isn't a single known outcome.
- const alt=(rarity===3&&UNIQ2[baseId]&&chance(0.5))?1:0;
+ // uniform draw over however many alternates the base owns (UNIQ2 and/or UNIQ3)
+ const nAlt=(UNIQ2[baseId]?1:0)+(UNIQ3[baseId]?1:0);
+ const alt=(rarity===3&&nAlt)?ri(0,nAlt):0;
  const it={uid:itemUid++,base:baseId,rarity:rarity||0,ilvl,affixes:{},tiers:{},mods:{},sockets:[],sc:[],chroma:-1,unique:rarity===3?baseId:null,alt};
  const UD=rarity===3?uniqueDef(baseId,alt):null;
  const s=b.sockets+(rarity>=2?1:0)+((UD&&UD.sockets)||0);
@@ -2711,6 +2776,10 @@ function computeAttack(slot){
  if(a.dig!==undefined)a.dig+=classFx('digBonus');
  a.cd*=1/(1+inc('cdr'));
  a.kb*=1+inc('kb');
+ // gear-wave axes: reach serves the melee hand only (ranged has no range field to move),
+ // area scales blasts only where a blast exists — neither invents a stat the attack lacks
+ if(kind==='melee'&&a.range)a.range*=1+inc('reach');
+ if(a.explode)a.explode*=1+inc('area');
  if(a.pierce!==undefined)a.pierce+=inc('pierce');
  // cap AFTER critAdd: clamping inside critChance() alone let Precision push past 95%
  a.crit=Math.max(0,Math.min(0.95,critChance()+(a.critAdd||0)));
@@ -2969,7 +3038,10 @@ function applyStatus(o,st,isPlayer){if(!st)return;o.st=o.st||{};
  const resist=isPlayer?(P.sres||0):0;
  for(const k in st){if(!STATUS[k])continue;
   // Galvanic: shocks the PLAYER inflicts last half again as long (never shocks taken)
-  const pot=st[k],dur=STATUS[k].dur*(1-resist)*(!isPlayer&&k==='shock'&&auraHas('galvanic')?1.5:1);
+  // aildur: only enemies receive player-applied statuses, so the !isPlayer guard is exact —
+  // hostile statuses landing ON the player never inherit the player's duration affix.
+  const pot=st[k],dur=STATUS[k].dur*(1-resist)*(!isPlayer&&k==='shock'&&auraHas('galvanic')?1.5:1)
+   *(!isPlayer?1+inc('aildur'):1);
   if(dur<=0.05)continue;
   const arr=o.st[k]||(o.st[k]=[]);
   if(STATUS[k].stack){
@@ -3184,7 +3256,7 @@ function doRanged(){
    // Conditional gems ride along on the projectile — they resolve at impact, not at fire time.
    // Without this, Momentum/Culling/Chain/Reap/Sunder are pure `more` penalties when ranged.
    momentum:a.momentum||0,cull:a.cull||0,chain:a.chain||0,reap:a.reap||0,sunder:a.sunder||0,
-   vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,
+   vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,vsBleed:a.vsBleed||0,
    slam:a.slam||0,aloft:a.aloft||0,vsFull:a.vsFull||0,farshot:a.farshot||0,
    stormcall:a.stormcall||0,raise:a.raise||0,noSt:a.noSt||0,
    interrupt:a.interrupt||0,stagger:a.stagger||0,splinter:a.splinter||0,contagion:a.contagion||0,
@@ -3211,6 +3283,7 @@ function condMul(a,e){
  // ...and the conditions the new roster made possible. Each one rewards a different thing you
  // can actually DO: set them on fire, freeze them, learn the tell, or finish what you started.
  if(a.vsBurn&&hasSt(e,'burn'))m*=1+a.vsBurn;
+ if(a.vsBleed&&hasSt(e,'bleed'))m*=1+a.vsBleed;
  if(a.vsChill&&hasSt(e,'chill'))m*=1+a.vsChill;
  if(a.vsSpent&&(e.rec||0)>0)m*=1+a.vsSpent;
  if(a.vsLow&&e.maxhp&&e.hp<e.maxhp*0.5)m*=1+a.vsLow;
@@ -3953,7 +4026,7 @@ function upSentry(dt){
     const d=Math.max(1,bd),vx=(best.x-s.x)/d,vy=(best.y-s.y)/d;
     if(PROJ.length<200)PROJ.push({x:s.x,y:s.y,vx:vx*a.speed,vy:vy*a.speed,dmg:a.dmg*0.6,
      crit:a.crit,critMult:a.critMult,pierce:a.pierce,explode:a.explode,leech:0,st:a.st||null,
-     vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,
+     vsBurn:a.vsBurn||0,vsChill:a.vsChill||0,vsSpent:a.vsSpent||0,vsLow:a.vsLow||0,vsBleed:a.vsBleed||0,
      chain:a.chain||0,cull:a.cull||0,vsFull:a.vsFull||0,
      // `raise` is deliberately NOT copied: turrets must never raise turrets
      col:a.col,t:2,friendly:1,ox:s.x,oy:s.y})}}}}
@@ -4034,7 +4107,7 @@ function upPickups(dt){
     // Uniques record under base+'#'+(alt+1) so a found unique is distinguishable from a seen
     // base, and a third alt table slots in without a keying change (R12).
     if(k.item.unique){discover('uni',k.item.base+'#'+((k.item.alt||0)+1),true);tipEv('unique')}
-    discover('item',k.item.unique?k.item.base+(k.item.alt?'#2':''):k.item.base,true)}
+    discover('item',k.item.unique?k.item.base+(k.item.alt?'#'+(k.item.alt+1):''):k.item.base,true)}   // alt 2 opens the #3 page
    PICK.splice(i,1);continue}
   if(k.t<=0)PICK.splice(i,1)}}
 // ============ PLAYER UPDATE ============
@@ -4828,6 +4901,7 @@ function openCamp(){
  ${(META.maxEcho|0)>0?`<button onclick="openEcho()">ECHO — ${(META.echoLv|0)?('&#215;'+(META.echoLv|0)):'none'}</button>`:''}
  <button onclick="openBounties()">BOUNTIES — ${BOUNTY.filter(bDone).length}/${BOUNTY.length} this run</button>
  <button onclick="openVault()">THE VAULT — ${META.vault.length}/3 stored</button>
+ ${Object.keys(META.bosses||{}).length>=1?`<button onclick="openForge()">THE FORGE — ${META.forge.n?META.forge.n+' worked':'cold iron'}</button>`:''}
  <button onclick="openCodex()">CODEX${CODEX_NEW?' <span class="r3">('+CODEX_NEW+' new)</span>':''}</button>
  <button onclick="toggleAudio()">SOUND — ${AUDIO_ON?'on':'off'}</button>
  <div class="sub" style="margin-top:6px">UNLOCK INTO DROP POOL</div>`;
@@ -4924,6 +4998,121 @@ function openVault(){
  h+='<button onclick="openCamp()">BACK</button>';
  VAULT_SRC=carried;openPanel(h)}
 let VAULT_SRC=[];
+// ============ THE FORGE ============
+// The Smith works on magic and rare gear. Uniques are finished work; modifier affixes are
+// found, not made. Costs scale with item level so deep work costs deep money, and RECAST is
+// the uncapped variance sink that keeps shards worth carrying after the pool is bought out.
+const FORGE_OPS=[
+ {id:'fup',  n:'TEMPER',   d:'raise one affix a tier, value rerolled',      cost:it=>Math.round(90+it.ilvl*0.10)},
+ {id:'frr',  n:'RECAST',   d:'one affix becomes another, tier redrawn',     cost:it=>Math.round(45+it.ilvl*0.05)},
+ {id:'fsock',n:'CUT',      d:'one more socket. once per item.',             cost:it=>Math.round(150+it.ilvl*0.15)},
+ {id:'frisk',n:'OVERWORK', d:'he stops being careful. once. it remembers.', cost:it=>Math.round(200+it.ilvl*0.20)},
+];
+function forgeItem(uid){
+ for(const sl of ['melee','ranged','armor'])if(EQ[sl]&&EQ[sl].uid===uid)return {it:EQ[sl],worn:sl};
+ for(const b of BAG)if(b.kind==='gear'&&b.item.uid===uid)return {it:b.item};
+ for(const v of META.vault)if(v.uid===uid)return {it:v};
+ return null}
+function forgeWhyNot(it){
+ if(it.rarity===3)return 'finished work';
+ if(it.rarity===0)return 'nothing to work';
+ if(it.owk)return 'overworked';
+ return null}
+function openForge(){
+ let h=`<h2>THE FORGE</h2><div class="sub">He looks at your gear, not at you. Shards: ${META.shards}◆</div>`;
+ const rows=[];
+ for(const sl of ['melee','ranged','armor'])if(EQ[sl])rows.push({it:EQ[sl],w:'worn '+sl});
+ BAG.forEach(b=>{if(b.kind==='gear')rows.push({it:b.item,w:'in the pack'})});
+ META.vault.forEach(v=>rows.push({it:v,w:'in the vault'}));
+ if(!rows.length)h+='<div class="sub">nothing to work</div>';
+ for(const r of rows){const bad=forgeWhyNot(r.it);
+  h+=`<button ${bad?'disabled':''} onclick="openForgeItem(${r.it.uid})"><span class="r${r.it.rarity}">${itemName(r.it)}</span>
+   <span class="sub">${bad?bad:(affixStr(r.it)||'no affixes')+' · '+r.w}</span></button>`}
+ h+='<button onclick="openCamp()">BACK</button>';
+ openPanel(h,false,openForge)}
+function openForgeItem(uid){
+ const f=forgeItem(uid);if(!f||forgeWhyNot(f.it)){openForge();return}
+ const it=f.it;
+ let h=`<h2>${itemName(it)}</h2><div class="sub">ilvl ${it.ilvl} · ${affixStr(it)||'no affixes'} · ${it.sockets.length} sockets · ${META.shards}◆</div>`;
+ for(const op of FORGE_OPS){
+  const cost=op.cost(it);let no=null;
+  if(op.id==='fup'&&!Object.keys(it.affixes).some(k=>(it.tiers[k]||1)<affTierCap(it.ilvl)))no='at what this depth allows';
+  if(op.id==='frr'&&!Object.keys(it.affixes).length)no='nothing to recast';
+  if(op.id==='fsock'&&(it.cut||it.sockets.length>=GEAR[it.base].sockets+(it.rarity>=2?1:0)+1))no=it.cut?'already cut':'no room in it';
+  // OVERWORK waits on the forgelord: the Smith will not stop being careful until the forge
+  // itself has answered for it (act structure — R11).
+  if(op.id==='frisk'&&!(META.bosses||{}).forgelord)no='not until the forge answers';
+  if(op.id==='frisk'&&it.owk)no='it remembers';
+  if(!no&&META.shards<cost)no=cost+'◆ — short';
+  if(op.id==='fup'||op.id==='frr')
+   h+=`<button ${no?'disabled':''} onclick="openForgeAff(${uid},'${op.id}')">${op.n} — ${op.d}<span class="sub">${no||cost+'◆'}</span></button>`;
+  else if(op.id==='frisk'&&!no)
+   h+=`<button onclick="forgeConfirm(${uid})">${op.n} — ${op.d}<span class="sub">${cost}◆</span></button>`;
+  else
+   h+=`<button ${no?'disabled':''} onclick="doForgeOp(${uid},'${op.id}')">${op.n} — ${op.d}<span class="sub">${no||cost+'◆'}</span></button>`}
+ h+=`<button onclick="openForge()">BACK</button>`;
+ openPanel(h,false,()=>openForgeItem(uid))}
+function forgeConfirm(uid){
+ const f=forgeItem(uid);if(!f)return;
+ openPanel(`<h2>OVERWORK</h2><div class="sub">He stops being careful. Whatever happens, happens once.</div>
+  <button onclick="doForgeOp(${uid},'frisk')">LET HIM</button>
+  <button onclick="openForgeItem(${uid})">NOT YET</button>`,false,()=>forgeConfirm(uid))}
+function openForgeAff(uid,op){
+ const f=forgeItem(uid);if(!f){openForge();return}
+ const it=f.it,cap=affTierCap(it.ilvl);
+ let h=`<h2>${op==='fup'?'TEMPER':'RECAST'}</h2><div class="sub">${itemName(it)}</div>`;
+ for(const k of Object.keys(it.affixes)){
+  const a=AFF[k],t=it.tiers[k]||1;
+  if(op==='fup'){
+   const no=t>=cap?'at what this depth allows':null;
+   h+=`<button ${no?'disabled':''} onclick="doForgeOp(${uid},'fup','${k}')">${a[1]}: T${t} → ${AFF_TIER_NAME[t]||''}T${t+1}<span class="sub">${no||''}</span></button>`}
+  else h+=`<button onclick="doForgeOp(${uid},'frr','${k}')">${a[1]} → ?</button>`}
+ h+=`<button onclick="openForgeItem(${uid})">BACK</button>`;
+ openPanel(h,false,()=>openForgeAff(uid,op))}
+function doForgeOp(uid,op,key){
+ const f=forgeItem(uid);if(!f||forgeWhyNot(f.it))return;
+ const it=f.it,O=FORGE_OPS.find(o=>o.id===op),cost=O.cost(it);
+ if(META.shards<cost){sfx('deny');toast('Short by '+(cost-META.shards)+'◆');return}
+ if(op==='fup'){
+  const t=it.tiers[key]||1;
+  if(!it.affixes[key]||t>=affTierCap(it.ilvl)){sfx('deny');return}
+  it.tiers[key]=t+1;const [lo,hi]=affTierRange(AFF[key],t+1);it.affixes[key]=ri(lo,hi)}
+ else if(op==='frr'){
+  if(!it.affixes[key]){sfx('deny');return}
+  delete it.affixes[key];delete it.tiers[key];
+  const pool=AFFIXES.filter(a=>!(a[0] in it.affixes));
+  const a=pool[ri(0,pool.length-1)],t=affTierFor(it.ilvl),[lo,hi]=affTierRange(a,t);
+  it.affixes[a[0]]=ri(lo,hi);it.tiers[a[0]]=t}
+ else if(op==='fsock'){
+  if(it.cut||it.sockets.length>=GEAR[it.base].sockets+(it.rarity>=2?1:0)+1){sfx('deny');return}
+  it.cut=1;const tend=GEAR[it.base].tend||'rgb';
+  it.sockets.push(null);it.sc.push(tend[ri(0,tend.length-1)])}
+ else if(op==='frisk'){
+  if(it.owk||!(META.bosses||{}).forgelord){sfx('deny');return}
+  it.owk=1;META.forge.owk++;
+  const roll=RNG();
+  const uncapped=Object.keys(it.affixes).filter(k=>(it.tiers[k]||1)<affTierCap(it.ilvl));
+  if(roll<0.40&&uncapped.length){const k=uncapped[ri(0,uncapped.length-1)];
+   it.tiers[k]=(it.tiers[k]||1)+1;const [lo,hi]=affTierRange(AFF[k],it.tiers[k]);it.affixes[k]=ri(lo,hi);
+   toast('THE METAL GIVES')}
+  else if(roll<0.65&&!Object.keys(it.mods).length){
+   const slot=GEAR[it.base].slot;
+   const cand=MODAFF.filter(m=>it.ilvl>=m.ilvl&&(!m.slot||m.slot===slot||slot==='armor'));
+   if(cand.length){const m=cand[ri(0,cand.length-1)];it.mods[m.k]=1;toast('THE METAL SINGS')}
+   else toast('the metal holds')}
+  else if(roll<0.85)toast('the metal holds');
+  else{const ks=Object.keys(it.affixes);
+   if(ks.length){const k=ks[ri(0,ks.length-1)];delete it.affixes[k];delete it.tiers[k];toast('THE METAL TAKES')}
+   else toast('the metal holds')}
+  // the Smith remembers his one lapse — the fragment lands with the story wave and this
+  // guard simply starts granting it the moment it exists
+  if(LORE.frag.some(fr=>fr.id==='annealed'))discover('frag','annealed');
+ }
+ META.shards-=cost;META.forge.n++;saveMeta();
+ if(f.worn)refreshAttacks();   // TEMPER on a worn item must move ATK immediately (the most-forgotten call)
+ sfx('gem');
+ openForgeItem(uid)}
+
 function vaultPut(i){const c=VAULT_SRC[i];if(!c||META.vault.length>=3)return;
  if(c.item.fromVault)return;   // see openVault: re-depositing would duplicate the item
  const cost=VAULT_COST[c.item.rarity]||100;

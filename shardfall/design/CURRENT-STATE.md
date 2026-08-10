@@ -97,6 +97,11 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | Plate | armor | — | — | — | — | 1 | r | 12 | 80 | 0 | — |
 | Greataxe | melee | 30 | 0.85 | 35.3 | 42 | 2 | rr | 0 | 0 | 0 | 2 |
 | Crossbow | ranged | 20 | 0.9 | 22.2 | 560 | 2 | gg | 0 | 0 | 0 | — |
+| Dagger | melee | 6 | 0.22 | 27.3 | 20 | 2 | gg | 0 | 0 | 0 | 0 |
+| Spear | melee | 14 | 0.48 | 29.2 | 44 | 2 | rg | 0 | 0 | 0 | 0 |
+| Brigandine | armor | — | — | — | — | 2 | rg | 5 | 34 | 0 | — |
+| Staff | ranged | 24 | 0.95 | 25.3 | 380 | 3 | bbg | 0 | 0 | 0 | — |
+| Abyssal Shroud | armor | — | — | — | — | 3 | rgb | 7 | 55 | 0 | — |
 | Shield | any (shield) | 6 | 0.5 | 12.0 | 26 | 1 | r | 4 | 0 | 0 | 0 |
 
 ## Gems by type
@@ -245,6 +250,10 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | fuel | fuel | 12 | 40 | flat |
 | focus | % focus gain | 10 | 30 | pct |
 | leech | % life leech | 2 | 5 | pct |
+| ailment | % ailment damage | 10 | 30 | pct |
+| aildur | % ailment duration | 8 | 20 | pct |
+| reach | % melee reach | 6 | 16 | pct |
+| area | % blast radius | 10 | 25 | pct |
 
 ## Uniques
 
@@ -262,6 +271,11 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 | chain | **Scalemail of the Deep** — +35 HP, +8 armor | **Ironbound** — +16 armor, slower |
 | plate | **Anchor** — +90 HP, +15 armor, heavy | **The Mountain** — +140 HP, +22 armor, very heavy |
 | harness | **Skyrigger** — huge fuel, immune to fall damage | **Stormrigger** — +110 fuel, +15% move |
+| dagger | **Fever** — hits bleed and feed you · resonates: Lifelode | **Quill** — huge crit, hesitates |
+| spear | **Fathom** — twice the reach, half the arc | **Patience** — cruel to the spent · resonates: The Quiet |
+| staff | **Stormspine** — every bolt is a storm | **Lodestar** — bolts seek, slowly |
+| brig | **Butcher's Apron** — +6% crit, +4% leech, no padding | **Restless** — +12% attack speed, +6% move, thinner plate |
+| shroud | **The Quiet** — +1 socket, +40% focus, it keeps some of you · resonates: Patience | **Tithe** — +50% shard yield, it collects too |
 
 ## Attunements (in-run levels)
 
@@ -351,10 +365,10 @@ _Generated from the live tables in `index.html`. Do not hand-edit; regenerate._
 
 | sink | total shards |
 |---|---|
-| unlock pool (114 entries) | 10030 |
+| unlock pool (119 entries) | 10355 |
 | meta tree (15 nodes) | 810 |
 | classes | 460 |
-| **total one-time** | **11300** |
+| **total one-time** | **11625** |
 | gem fusion | 150 (T1→T2) / 500 (T2→T3), unbounded |
 | vault deposit | 60 / 140 / 300 / 650 by rarity |
 
@@ -413,6 +427,10 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | fuel | 12–40 | 16–52 | 21–68 | 27–88 | 35–114 |
 | % focus gain | 10–30 | 13–38 | 16–48 | 20–60 | 25–76 |
 | % life leech | 2–5 | 3–7 | 4–9 | 5–11 | 6–13 |
+| % ailment damage | 10–30 | 13–38 | 17–49 | 22–63 | 28–81 |
+| % ailment duration | 8–20 | 10–24 | 12–29 | 15–35 | 18–43 |
+| % melee reach | 6–16 | 7–20 | 9–24 | 11–29 | 13–35 |
+| % blast radius | 10–25 | 12–31 | 15–38 | 19–47 | 24–58 |
 
 ## Modifier affixes
 
@@ -430,6 +448,11 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | hits burn | any | 200 |
 | hits shock | any | 700 |
 | damage scales with your speed | any | 1000 |
+| hits chill | any | 500 |
+| projectiles bounce | ranged | 500 |
+| swings lunge you forward | melee | 800 |
+| +30% vs bleeding | any | 900 |
+| hits stagger the spent | any | 900 |
 
 ## Echoes (the ladder past Threat V)
 
@@ -468,17 +491,17 @@ Tier gates by item level: 1 / 300 / 800 / 1500 / 2400
 | | |
 |---|---|
 | gems | 108 |
-| gear bases | 12 |
-| uniques | 24 |
+| gear bases | 17 |
+| uniques | 34 |
 | enemies | 38 |
-| affixes | 12 |
-| unlocks | 114 |
+| affixes | 16 |
+| unlocks | 119 |
 | tree nodes | 15 |
 | boons | 21 |
 | attunements | 29 |
 | threat tiers | 6 |
 | lore fragments | 16 |
-| modifier affixes | 12 |
+| modifier affixes | 17 |
 | elite modifiers | 11 |
 | room templates | 15 |
 | echo rules | 10 (unbounded ladder) |

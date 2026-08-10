@@ -85,7 +85,9 @@ try{
  A(ATK.melee.cull>0,'The Long Hunger (alt unique) executes instead');
  const alts=Object.keys(UNIQ2).filter(k=>!UNIQUES[k]);
  A(alts.length===0,'every alt unique has a base unique to pair with');
- const sk=mkItem('vest',3);A(sk.sockets.length>=3,'Second Skin grants +2 sockets');
+ // alternates draw uniformly now (UNIQ2/UNIQ3) — redraw until the PRIMARY lands
+ let sk;do{sk=mkItem('vest',3)}while(sk.alt);
+ A(sk.sockets.length>=3,'Second Skin grants +2 sockets');
  const noUnique=mkItem('shield',3);A(noUnique.unique==='shield','shield has a unique');
  EQ.armor=mkItem('plate',3);const hpU=maxHP();
  EQ.armor=mkItem('plate',0);A(hpU>maxHP(),'Anchor unique adds HP');

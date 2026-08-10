@@ -340,9 +340,9 @@ console.log('\n-- dig counters + digOf --');
 console.log('\n-- collection --');
 {
   A(typeof META.seen.gem === 'object' && typeof META.seen.uni === 'object', 'the two v3 buckets exist');
-  A(uniTables().length === 2, 'uniTables derives the alt tables defensively (UNIQ3 slots in later)');
+  A(uniTables().length === 3, 'uniTables picked up UNIQ3 the moment it landed (R12)');
   const bases = Object.keys(GEAR).filter(id => UNIQUES[id]);
-  const expect = bases.length + bases.filter(id => UNIQ2[id]).length;
+  const expect = bases.length + bases.filter(id => UNIQ2[id]).length + bases.filter(id => UNIQ3[id]).length;
   A(uniTotal() === expect, 'uniques total derived from table presence (' + uniTotal() + ')');
   // gem pickup records the gem
   OFF(); delete META.seen.gem.cleave; PICK.length = 0;

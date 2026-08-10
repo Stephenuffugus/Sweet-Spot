@@ -80,6 +80,7 @@ function effDps(at) {
   if (at.vsLow) m *= 1 + at.vsLow * 0.5;
   if (at.vsSpent) m *= 1 + at.vsSpent * 0.35;
   // wave-4 conditionals, credited at the fraction a sustained fight satisfies them
+  if (at.vsBleed) m *= 1 + at.vsBleed * (at.stR && at.stR.bleed ? 1 : 0.5);
   if (at.vsFull) m *= 1 + at.vsFull * 0.15;
   if (at.slam) m *= 1 + at.slam * 0.25;
   if (at.aloft) m *= 1 + at.aloft * 0.35;
@@ -138,7 +139,7 @@ console.log('\n-- no dead gems --');
     'crit', 'critMult', 'leech', 'momentum', 'reap', 'sunder', 'twin', 'fork', 'ret', 'homing', 'grav',
     'bounce', 'dig', 'speed', 'life', 'vsBurn', 'vsChill', 'vsSpent', 'vsLow', 'interrupt', 'stagger',
     'splinter', 'contagion', 'ailMore', 'critAdd', 'critMultAdd', 'chan', 'lunge', 'riposte',
-    'slam', 'aloft', 'vsFull', 'farshot', 'raise', 'stormcall', 'noSt', 'hpCost', 'focusCost', 'mine'];
+    'slam', 'aloft', 'vsFull', 'farshot', 'raise', 'stormcall', 'noSt', 'hpCost', 'focusCost', 'mine', 'vsBleed'];
   function snap(at) {
     const o = {};
     for (const f of FIELDS) o[f] = at[f];
@@ -187,6 +188,7 @@ console.log('\n-- melee and ranged are the same contract --');
     { f: 'slam', set: () => { P.vy = 520 } },
     { f: 'aloft', set: () => { P.onG = false } },
     { f: 'vsFull', set: null },
+    { f: 'vsBleed', set: e => { applyStatus(e, { bleed: 5 }, false) } },
   ];
   function hitFor(fields, setup, ranged) {
     EN.length = 0;
@@ -252,6 +254,9 @@ console.log('\n-- the socket screen is a real decision --');
       if (G.for !== 'any' && G.for !== S.k) continue;
       const ids = S.skill ? [S.skill, id] : [id];
       EQ[S.k] = fit(mkItem(S.base, 1, 1200), ids);
+      // strip the rolled affixes: each candidate gets a FRESH item, so affix luck was quietly
+      // picking winners (the known gear-affixes-feed-inc() trap) — supports compete bare
+      EQ[S.k].affixes = {}; EQ[S.k].tiers = {}; EQ[S.k].mods = {};
       EQ.armor = mkItem('vest', 0, 1); EQ.armor.sockets = []; EQ.armor.sc = [];
       refreshAttacks();
       const d = effDps(ATK[S.k]);

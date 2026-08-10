@@ -250,5 +250,67 @@ console.log('\n-- integrity --');
   META.threat = 0;
 }
 
+// ---------- THE FORGE ----------
+console.log('\n-- the forge --');
+{
+  META.shards = 100000; META.bosses = { warden: 1, forgelord: 1 }; META.forge = { n: 0, owk: 0 };
+  // TEMPER respects the depth law: a 700m item can never reach T4/T5; a 2900m item can
+  A(affTierCap(700) === 2 && affTierCap(2900) === 5, 'affTierCap reads the same gates as the roller');
+  for (let i = 0; i < 400; i++) { const l = 1 + (i * 8) % 3000; A(affTierFor(l) <= affTierCap(l), 'affTierFor never exceeds the cap'); if (affTierFor(l) > affTierCap(l)) break }
+  const it = mkItem('sword', 2, 700); BAG.length = 0; BAG.push({ kind: 'gear', item: it });
+  const k0 = Object.keys(it.affixes)[0];
+  it.tiers[k0] = affTierCap(it.ilvl);
+  const s0 = META.shards;
+  doForgeOp(it.uid, 'fup', k0);
+  A(it.tiers[k0] === affTierCap(it.ilvl) && META.shards === s0, 'TEMPER refuses past what depth allows, free of charge');
+  it.tiers[k0] = 1;
+  doForgeOp(it.uid, 'fup', k0);
+  A(it.tiers[k0] === 2, 'TEMPER raises a tier');
+  A(META.shards === s0 - Math.round(90 + it.ilvl * 0.10), 'and charges exactly the listed price');
+  // RECAST: affix count constant, no duplicate keys, mods untouched
+  const modsBefore = JSON.stringify(it.mods), n0 = Object.keys(it.affixes).length;
+  const kOld = Object.keys(it.affixes)[0];
+  doForgeOp(it.uid, 'frr', kOld);
+  A(Object.keys(it.affixes).length === n0, 'RECAST keeps the affix count');
+  A(new Set(Object.keys(it.affixes)).size === n0, 'and never duplicates a key');
+  A(JSON.stringify(it.mods) === modsBefore, 'and never touches the modifier affix');
+  // CUT: once, cap respected, arrays stay paired
+  const cap = GEAR[it.base].sockets + (it.rarity >= 2 ? 1 : 0) + 1;
+  while (it.sockets.length < cap && !it.cut) doForgeOp(it.uid, 'fsock');
+  A(it.sockets.length <= cap, 'CUT never exceeds base+rarity+1 (' + it.sockets.length + '/' + cap + ')');
+  A(it.sockets.length === it.sc.length, 'sockets and colors stay paired');
+  const sBefore = it.sockets.length; doForgeOp(it.uid, 'fsock');
+  A(it.sockets.length === sBefore, 'a second CUT is refused');
+  // OVERWORK: once, then the forge is closed to it
+  doForgeOp(it.uid, 'frisk');
+  A(it.owk === 1, 'OVERWORK marks the item');
+  const t1 = JSON.stringify([it.affixes, it.tiers, it.mods, it.sockets.length]);
+  doForgeOp(it.uid, 'fup', Object.keys(it.affixes)[0]);
+  doForgeOp(it.uid, 'frisk');
+  A(JSON.stringify([it.affixes, it.tiers, it.mods, it.sockets.length]) === t1, 'an overworked item is closed to every op');
+  // uniques and normals refused
+  const un = mkItem('sword', 3, 900); BAG.push({ kind: 'gear', item: un });
+  const uj = JSON.stringify(un.affixes); doForgeOp(un.uid, 'fup', 'dmg');
+  A(JSON.stringify(un.affixes) === uj, 'finished work: the Smith refuses uniques');
+  // broke player refused
+  const it2 = mkItem('sword', 1, 400); BAG.push({ kind: 'gear', item: it2 });
+  META.shards = 0; const j2 = JSON.stringify(it2.affixes);
+  doForgeOp(it2.uid, 'fup', Object.keys(it2.affixes)[0]);
+  A(JSON.stringify(it2.affixes) === j2, 'no shards, no work');
+  // OVERWORK gates on the forgelord (R11)
+  META.shards = 100000; META.bosses = { warden: 1 };
+  const it3 = mkItem('sword', 1, 400); BAG.push({ kind: 'gear', item: it3 });
+  doForgeOp(it3.uid, 'frisk');
+  A(!it3.owk, 'the Smith will not stop being careful until the forge answers');
+  META.bosses = {}; BAG.length = 0; META.forge = { n: 0, owk: 0 };
+}
+// ---------- BASE GATING (gear wave) ----------
+{
+  const p100 = gearPool(100), p200 = gearPool(200), p2800 = gearPool(2800);
+  for (const b of ['spear', 'brig', 'staff', 'shroud']) A(p100.indexOf(b) < 0, b + ' does not drop at 100m');
+  A(p200.indexOf('dagger') >= 0, 'the dagger drops at 200m');
+  for (const b of ['dagger', 'spear', 'brig', 'staff', 'shroud']) A(p2800.indexOf(b) >= 0, b + ' drops deep');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
