@@ -553,38 +553,74 @@ const TILES={
 //
 // The arc is tight -> open -> built -> tight -> vast. Tension and relief alternate, and the last
 // band is both the most open and the most dangerous, which is the note to end on.
+// Band identity is DECLARED here and consumed by the generator and sim: vent = the band's
+// hazard kind, ventP = how often the floor is the thing you read, rooms = made-structure
+// rate, dark = the light curve (a second descent arc: dim caves -> glowing Bloom -> neutral
+// ruins -> ember forge -> black abyss), heat = fuel drained per second (the abyss taxes the
+// flight its emptiness invites — at less than half the forge's rate), and the pocket flags
+// (under/flue/trav) name which movement-gated pocket the band grows.
 const BSHAPE={
  surface:{air:0,    ax:1,    ay:1,    n:'the rim'},
- caves:  {air:0.42, ax:1.45, ay:0.85, n:'tight, winding'},
- fungal: {air:0.58, ax:0.70, ay:1.60, n:'open caverns and vertical shafts', vent:'spore'},
- ruins:  {air:0.48, ax:1.00, ay:1.00, n:'built geometry', rooms:0.55},
- forge:  {air:0.28, ax:1.25, ay:1.15, n:'narrow and hot', heat:30, vent:'flame'},
- abyss:  {air:0.62, ax:0.85, ay:0.85, n:'vast, dark, sparse', dark:1.28},
+ caves:  {air:0.42, ax:1.45, ay:0.85, n:'tight, winding', vent:'grit', ventP:0.22, under:1},
+ fungal: {air:0.58, ax:0.70, ay:1.60, n:'open caverns and vertical shafts', vent:'spore', rooms:0.18, dark:0.85, flue:1},
+ ruins:  {air:0.48, ax:1.00, ay:1.00, n:'built geometry', rooms:0.55, vent:'volt', ventP:0.30},
+ forge:  {air:0.28, ax:1.25, ay:1.15, n:'narrow and hot', heat:30, vent:'flame', ventP:0.60, rooms:0.25, trav:1},
+ abyss:  {air:0.62, ax:0.85, ay:0.85, n:'vast, dark, sparse', dark:1.28, heat:12, rooms:0.12, flue:1},
 };
 // ROOM TEMPLATES. Spelunky ships a small set and gets enormous variety out of placement; the
 // ruins had none at all, which is why "architectural" was a palette and not a shape. Stamped from
 // the TERRAIN strand, so a room is part of the world's bones: reroll the caches and the chest
 // inside it moves, but the room stays exactly where you learned it was.
 //   #  wall (the band's own stone)   .  air   =  a one-tile ledge you can stand on
+// Each entry is {b: band name, g: grid} — b gates which band's pool it joins (b:0 = any
+// rooms-band). Fungal grows pockets, the forge works stone, the abyss holds rare made things.
 const ROOMS=[
  // pillared hall — cover against ranged, and a reason to move laterally
- ['##################','#................#','#..##..##..##..#.#','#..##..##..##..#.#',
-  '#..##..##..##..#.#','#................#','##################'],
+ {b:'ruins',g:['##################','#................#','#..##..##..##..#.#','#..##..##..##..#.#',
+  '#..##..##..##..#.#','#................#','##################']},
  // two tiers — the flanking room. Archers up top, brutes below.
- ['################','#..............#','#..==....==....#','#..............#',
-  '####==......====','#..............#','#....====......#','################'],
+ {b:'ruins',g:['################','#..............#','#..==....==....#','#..............#',
+  '####==......====','#..............#','#....====......#','################']},
  // the well — a vertical shaft with ledges, drops you fast if you are careless
- ['############','#....##....#','#.==.##.==.#','#....##....#','#.==......=#',
-  '#....##....#','#.==.##.==.#','#....##....#','############'],
+ {b:'ruins',g:['############','#....##....#','#.==.##.==.#','#....##....#','#.==......=#',
+  '#....##....#','#.==.##.==.#','#....##....#','############']},
  // the crossing — four ways out, nothing to hide behind
- ['##########','####..####','####..####','..........','..........',
-  '####..####','####..####','##########'],
+ {b:'ruins',g:['##########','####..####','####..####','..........','..........',
+  '####..####','####..####','##########']},
  // collapsed gallery — broken floor, a fall you have to plan
- ['####################','#..................#','#===..====...====..#','#..................#',
-  '#...====...====....#','#..................#','####################'],
+ {b:'ruins',g:['####################','#..................#','#===..====...====..#','#..................#',
+  '#...====...====....#','#..................#','####################']},
  // the cell block — small chambers, one at a time, good for a bruiser
- ['##############','#....#...#...#','#....#...#...#','#..#########.#','#............#',
-  '#.#########..#','#...#...#....#','##############'],
+ {b:'ruins',g:['##############','#....#...#...#','#....#...#...#','#..#########.#','#............#',
+  '#.#########..#','#...#...#....#','##############']},
+ // the gatehouse — a hung wall ends in a lintel; the door is under it. Chokepoint, high ground.
+ {b:'ruins',g:['################','#......##......#','#..==..##..==..#','#......##......#',
+  '#......==......#','#..............#','################']},
+ // the archive — bays with shelf ledges; floor+headroom cells everywhere, so the cache strand
+ // lands chests and shrines here disproportionately. The room where things are found.
+ {b:'ruins',g:['##################','#.....#....#.....#','#.==..#.==.#..==.#','#.....#....#.....#',
+  '##.####....####.##','#................#','##################']},
+ // the tenement — three storeys, offset drop-gaps. The fight above you is the fight.
+ {b:'ruins',g:['##############','#............#','#..####.####.#','#............#',
+  '#.####.####..#','#............#','##############']},
+ // the gall — a hollow bulb with a ledge ring. The Bloom's one guaranteed grand chamber.
+ {b:'fungal',g:['####........####','##............##','#...==....==...#','#..............#',
+  '#..==......==..#','##............##','####........####']},
+ // the throat — a baffled flue. Landings if you read them, a long drop if you do not.
+ {b:'fungal',g:['####....####','####....####','#......==..#','#..==......#','#......==..#',
+  '#..==......#','#......==..#','####....####','####....####']},
+ // the slag run — two low decks, three floor slots. Mortar shells cannot arc into the lower one.
+ {b:'forge',g:['##################','#................#','####.####.####.###','#................#',
+  '##################']},
+ // the firebox — a hanging block over a wide bowl. Flat floor breeds flame vents; fight above the line.
+ {b:'forge',g:['##############','#....####....#','#.==.####.==.#','#....####....#',
+  '#............#','#............#','##############']},
+ // the last stair — cut steps through the void. Someone descended before you, on foot.
+ {b:'abyss',g:['..............','.==...........','......==......','...........==.',
+  '......==......','.==...........','..............']},
+ // the door — a freestanding frame on a broken sill, opening onto nothing. The doors face inward.
+ {b:'abyss',g:['..........','..######..','..#....#..','..#....#..','..#....#..',
+  '..#....#..','..==..==..']},
 ];
 // biome by tile depth: [maxY, name, groundTile, caveScale, enemyTypes]
 const BIOMES=[
@@ -1825,6 +1861,7 @@ const TIPS=[
  {id:'socket', ev:'gem',   msg:()=>`Open the bag (${pr('bag')}) and socket that gem — colors must match`},
  {id:'lattice',ev:'sigil', msg:()=>`Open the lattice (${pr('pause')} → THE LATTICE) to rewrite the world`},
  {id:'heat',   ev:'dry',   when:c=>c.bn==='forge', msg:()=>'The forge burns your fuel. Updraft and the harness carry more.'},
+ {id:'cold',   ev:'dry',   when:c=>c.bn==='abyss', msg:()=>'The dark is drinking your charge. Keep to the stone.'},
  {id:'depth',  ev:'band',  when:c=>c.bn!=='surface', msg:()=>'Deeper enemies hit harder and drop far more. Anchors let you start here.'},
  {id:'camp',   ev:'camp',  msg:()=>`At camp — ${pr('camp')} to spend shards`},
  {id:'shrine', ev:'boon',  msg:()=>'The boon is yours for the run. Each new stratum you reach offers another — deeper is stronger.'}, // copy: story spec
@@ -1977,16 +2014,18 @@ function genChunk(cx,cy){
   const SH=BSHAPE[B0[1]]||{};
   // ---- ROOMS ----
   if(SH.rooms&&hashS('terrain',cx*29+3,cy*29+11)<SH.rooms){
-   const R=ROOMS[Math.floor(hashS('terrain',cx*31+5,cy*31+7)*ROOMS.length)%ROOMS.length];
-   const rh=R.length,rw=R[0].length;
-   if(rw<CHUNK-2&&rh<CHUNK-2){
-    const lx=rS('terrain',1,CHUNK-rw-1),ly=rS('terrain',1,CHUNK-rh-1);
-    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
-     const ch=R[y][x],idx=(ly+y)*CHUNK+lx+x;
-     if(ch==='#'||ch==='=')t[idx]=B0[2];else if(ch==='.')t[idx]=0}}}
+   const pool=ROOMS.filter(Rm=>!Rm.b||Rm.b===B0[1]);
+   if(pool.length){
+    const R=pool[Math.floor(hashS('terrain',cx*31+5,cy*31+7)*pool.length)%pool.length].g;
+    const rh=R.length,rw=R[0].length;
+    if(rw<CHUNK-2&&rh<CHUNK-2){
+     const lx=rS('terrain',1,CHUNK-rw-1),ly=rS('terrain',1,CHUNK-rh-1);
+     for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){
+      const ch=R[y][x],idx=(ly+y)*CHUNK+lx+x;
+      if(ch==='#'||ch==='=')t[idx]=B0[2];else if(ch==='.')t[idx]=0}}}}
   // ---- VENTS ---- a fixed feature of the band that makes the FLOOR the thing you read.
   // Structural, so it comes from the terrain strand and survives a cache reroll.
-  if(SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<0.42){
+  if(SH.vent&&hashS('terrain',cx*37+13,cy*37+29)<(SH.ventP||0.42)){
    for(let tr=0;tr<12;tr++){const lx=rS('terrain',2,CHUNK-3),ly=rS('terrain',2,CHUNK-3);
     if(t[ly*CHUNK+lx]===0&&t[(ly+1)*CHUNK+lx]!==0){
      spawns.push({x:(cx*CHUNK+lx)*TILE+8,y:(cy*CHUNK+ly)*TILE+8,type:'vent',vent:SH.vent});break}}}
@@ -2061,6 +2100,50 @@ function genChunk(cx,cy){
     const side=cS('terrain',.5)?-1:rw;
     for(let y=0;y<rh;y++)t[(ly+y)*CHUNK+lx+side]=10;
     spawns.push({x:(cx*CHUNK+lx+2)*TILE,y:(cy*CHUNK+ly+rh-1)*TILE,type:'chest'})}}
+  // ---- MOVEMENT POCKETS ---- three kinds, all terrain-strand shape with an unconditional
+  // chest (strand-neutral push, the secret-cache precedent). Soft-gated by geometry the
+  // movement track trivializes; never locked — every wall is the band's own rock or tile 10,
+  // fuel regens on the ground, and digging always works. Teal rim = somebody cut this.
+  // ---- THE UNDERCUT ---- a drop-shaft under the floor. Falling in is free; the way out is
+  // the lesson. Rock is terrain; the bonus chest is the cache strand's call.
+  if(SH.under&&hashS('terrain',cx*41+11,cy*41+7)<0.055){
+   for(let tr=0;tr<10;tr++){
+    const lx=rS('terrain',5,CHUNK-8),ly=rS('terrain',6,CHUNK-14);
+    let ok=1;for(let x=0;x<3;x++)if(t[ly*CHUNK+lx+x]!==0||t[(ly+1)*CHUNK+lx+x]===0)ok=0;
+    if(!ok)continue;                                                     // a 3-wide floor site
+    for(let y=1;y<=8;y++)t[(ly+y)*CHUNK+lx+1]=0;                         // opens the floor: 8-tile shaft
+    for(let y=9;y<=11;y++)for(let x=-1;x<=3;x++)t[(ly+y)*CHUNK+lx+x]=0;  // 5x3 chamber
+    t[(ly+1)*CHUNK+lx]=10;t[(ly+1)*CHUNK+lx+2]=10;                       // teal rim on the lip
+    spawns.push({x:(cx*CHUNK+lx-1)*TILE+8,y:(cy*CHUNK+ly+11)*TILE+8,type:'chest'});
+    if(cS('poi',.5))spawns.push({x:(cx*CHUNK+lx+3)*TILE+8,y:(cy*CHUNK+ly+11)*TILE+8,type:'chest'});
+    break}}
+  // ---- THE FLUE ---- a capped bore above a cavern ceiling. Fuel is the price; the chest is
+  // the argument. Fungal bores are short (12-15 — climbable on the base tank with handholds);
+  // the abyss keeps the long bore (16-20) and is SUPPOSED to want the movement track.
+  if(SH.flue&&hashS('terrain',cx*23+9,cy*23+5)<0.05){
+   for(let tr=0;tr<10;tr++){
+    const lx=rS('terrain',6,CHUNK-9),ly=rS('terrain',26,CHUNK-4);
+    if(t[ly*CHUNK+lx]!==0||t[ly*CHUNK+lx+1]!==0)continue;               // open air to enter from
+    if(t[(ly-1)*CHUNK+lx]===0||t[(ly-1)*CHUNK+lx+1]===0)continue;       // rock above to bore into
+    const h=(B0[1]==='fungal'?12+rS('terrain',0,3):16+rS('terrain',0,4));
+    for(let y=1;y<=h;y++){t[(ly-y)*CHUNK+lx]=0;t[(ly-y)*CHUNK+lx+1]=0}
+    for(let y=h+1;y<=h+3;y++)for(let x=-1;x<=2;x++)t[(ly-y)*CHUNK+lx+x]=0; // 4x3 top chamber
+    t[(ly-1)*CHUNK+lx-1]=10;t[(ly-1)*CHUNK+lx+2]=10;                     // teal rim at the mouth
+    spawns.push({x:(cx*CHUNK+lx-1)*TILE+8,y:(cy*CHUNK+ly-h-1)*TILE+8,type:'chest'});break}}
+  // ---- THE TRAVERSE ---- a sealed gallery with a fire pit at its waist. The band's own heat
+  // prices the crossing. Rock is terrain; the vent kind is the band's own.
+  if(SH.trav&&hashS('terrain',cx*43+7,cy*43+19)<0.05){
+   for(let tr=0;tr<10;tr++){
+    const rw=16,rh=6,lx=rS('terrain',4,CHUNK-rw-4),ly=rS('terrain',4,CHUNK-rh-4);
+    let buried=true;
+    for(let y=-1;y<=rh;y++)for(let x=-1;x<=rw;x++){if(t[(ly+y)*CHUNK+lx+x]===0)buried=false}
+    if(!buried)continue;
+    for(let y=1;y<rh-2;y++)for(let x=1;x<rw-1;x++)t[(ly+y)*CHUNK+lx+x]=0; // 14x3 gallery
+    for(let x=5;x<11;x++)t[(ly+rh-2)*CHUNK+lx+x]=0;                       // 6-wide pit, 1 deep
+    t[(ly+1)*CHUNK+lx]=10;t[(ly+2)*CHUNK+lx]=10;                          // teal side-door
+    spawns.push({x:(cx*CHUNK+lx+rw-2)*TILE+8,y:(cy*CHUNK+ly+rh-3)*TILE+8,type:'chest'});
+    spawns.push({x:(cx*CHUNK+lx+8)*TILE+8,y:(cy*CHUNK+ly+rh-2)*TILE+8,type:'vent',vent:SH.vent});
+    break}}
   // BOSS ARENA: one miniboss per biome band, deterministic per chunk
   const bname=BIOME_BOSS[B0[1]];
   if(bname&&hashS('boss',cx*17+11,cy*17+6)<0.045){
@@ -2115,7 +2198,10 @@ function drawChunk(c,cx,cy){
   if(hashS('flux',cx*CHUNK+lx,cy*CHUNK+ly)<0.3){g.fillStyle='#00000018';g.fillRect(lx*TILE,ly*TILE,TILE,TILE)}
   g.fillStyle='#00000030';g.fillRect(lx*TILE,ly*TILE+TILE-2,TILE,2);
   if(T.ore){g.fillStyle='#ffffff70';g.fillRect(lx*TILE+5,ly*TILE+5,3,3);g.fillRect(lx*TILE+10,ly*TILE+9,2,2)}
-  if(T.secret){g.fillStyle='#00000028';g.fillRect(lx*TILE+2,ly*TILE+3,1,TILE-6);g.fillRect(lx*TILE+TILE-3,ly*TILE+3,1,TILE-6)}
+  if(T.secret){g.fillStyle='#00000028';g.fillRect(lx*TILE+2,ly*TILE+3,1,TILE-6);g.fillRect(lx*TILE+TILE-3,ly*TILE+3,1,TILE-6);
+   // shard-teal glints top and bottom: ONE visual language — teal means somebody cut this.
+   // Baked once per chunk canvas, zero per-frame cost. Subtle at rest, unmistakable once learned.
+   g.fillStyle='#3fc9c13d';g.fillRect(lx*TILE+6,ly*TILE,4,1);g.fillRect(lx*TILE+6,ly*TILE+TILE-1,4,1)}
  }
  c.dirty=false}
 function sweepChunks(){ // evict offscreen chunk canvases (~2.3MB each) — tiles stay
@@ -3736,8 +3822,23 @@ function upVents(dt){
   if(v.t<=0){v.t=v.kind==='flame'?2.6:3.4;
    const dm=depthDmg(v.y);
    if(v.kind==='flame')addHaz(v.x,v.y-10,34,1.9,7*dm,{burn:6*dm},'#ff8a3f',0,'fire');
+   // grit (caves): the teaching vent — plain damage, no status, brief, honest. volt (ruins):
+   // tiny chip + shock 1.3 FLAT — shock is a multiplier status and never depth-scales; the
+   // room itself flanks you by making the band's archers hit 30% harder where you stand.
+   else if(v.kind==='grit')addHaz(v.x,v.y-8,26,1.0,6*dm,null,'#8a7a62',0,'cloud');
+   else if(v.kind==='volt')addHaz(v.x,v.y-8,30,1.4,2*dm,{shock:1.3},'#e6d34a',0,'shock');
    else addHaz(v.x,v.y-6,46,4.5,4*dm,{chill:0.7},'#c98fe0',0,'cloud');
-   burst(v.x,v.y,v.kind==='flame'?'#ff8a3f':'#c98fe0',6)}}}
+   burst(v.x,v.y,v.kind==='flame'?'#ff8a3f':v.kind==='grit'?'#8a7a62':v.kind==='volt'?'#e6d34a':'#c98fe0',6)}}}
+// The proximity cue for cut stone: a slow scan around the player for tile 10, a teal wink,
+// and the once-per-save lesson. Sim-side ONLY — it mutates PART and rolls RNG (chance()),
+// which the render is forbidden. 165 getTile per 0.6s, window centered so chunks exist.
+let SECRETT=0;
+function upSecrets(dt){SECRETT-=dt;if(SECRETT>0)return;SECRETT=0.6;
+ const tx0=Math.floor(P.x/TILE)-7,ty0=Math.floor(P.y/TILE)-5;
+ for(let ty=ty0;ty<ty0+11;ty++)for(let tx=tx0;tx<tx0+15;tx++)
+  if(getTile(tx,ty)===10){
+   if(chance(0.5))burst(tx*TILE+8,ty*TILE+8,'#3fc9c1',2);
+   hint('hidden',`That seam is cut, not cracked — strike it (${pr('mel')})`);return}}
 function upPickups(dt){
  for(let i=PICK.length-1;i>=0;i--){const k=PICK[i];k.t-=dt;
   k.vy=(k.vy||0)+GRAV*0.6*dt;k.x+=(k.vx||0)*dt;
@@ -4019,7 +4120,7 @@ function newRun(){
  P.maxfuel=maxFuel();P.fuel=P.maxfuel;P.noFall=0;P.flying=false;P.levT=0;P.burrowT=0;GRAPPLE=null;
  P.pd=0;P.airDash=1;P.dodgeAir=0;P.grapCd=0;P.thunkT=0;P.lastDodge=-9;
  P.stormN=0;P.lode=null;P.kickW=0;   // wave-4 run state: stormcall charge, lodestone anchor
- MOVE_CK=0;tipDismiss();TIPQ.length=0;   // dismiss, not null — a held tip toast must not haunt the death screen
+ MOVE_CK=0;tipDismiss();TIPQ.length=0;SECRETT=0;   // dismiss, not null — a held tip toast must not haunt the death screen
  shake=0;HS={t:0,dur:0,frac:1,pre:0};TSCALE=1;FLASH=0;CALLOUT=null;HURT=null;
  UIROOT=null;MODAL=false;PANEL_FN=null;PANEL_Q.length=0;
  closePanel(true);
@@ -5441,7 +5542,7 @@ function sim(dt){
  else{if(PREVr&&isShield('ranged')&&HOLDr<=0.18)doRanged();HOLDr=0}
  P.block=(HELD.mel&&isShield('melee')&&HOLDm>0.18)||(HELD.rng&&isShield('ranged')&&HOLDr>0.18);
  PREVm=HELD.mel;PREVr=HELD.rng;
- upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upHaz(dt);upVents(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);upTips(dt);
+ upPlayer(dt);spawnFromChunks();upEnemies(dt);upProj(dt);upHaz(dt);upVents(dt);upSecrets(dt);flushSpawns();upSentry(dt);upDecoy(dt);upPickups(dt);upTips(dt);
  if(!P.dead){if(auraHas('regrowth'))P.hp=Math.min(P.maxhp,P.hp+2*dt);
   if(auraHas('staticfield')&&(staticT-=dt)<=0){staticT=1.6;   // Static Field: periodic shock pulse
    burst(P.x,P.y,'#e6d34a',8);

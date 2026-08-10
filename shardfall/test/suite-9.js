@@ -278,7 +278,7 @@ console.log('\n-- integration --');
     WEAVE[k] = 0; CHUNKS.clear();
     const c = genChunk(20, 30);
     if (c.tiles.length !== CHUNK * CHUNK) broken.push(k + ':size');
-    if (c.spawns.some(s => s.type !== 'chest' && s.type !== 'shrine' && !ENEMIES[s.type])) broken.push(k + ':spawn');
+    if (c.spawns.some(s => s.type !== 'chest' && s.type !== 'shrine' && s.type !== 'vent' && !ENEMIES[s.type])) broken.push(k + ':spawn');
   }
   A(broken.length === 0, 'a zeroed strand still generates a legal world' + (broken.length ? ': ' + broken.join(',') : ''));
   deriveWeave(SEED); CHUNKS.clear();

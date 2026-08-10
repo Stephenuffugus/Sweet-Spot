@@ -79,13 +79,14 @@ console.log('\n-- calibration --');
 // ---------- 3. ROOMS ----------
 console.log('\n-- rooms --');
 {
-  A(ROOMS.length >= 5, 'there is a template set (' + ROOMS.length + ' rooms)');
+  A(ROOMS.length >= 14, 'there is a template set (' + ROOMS.length + ' rooms)');
   let ragged = [];
   for (let i = 0; i < ROOMS.length; i++) {
-    const R = ROOMS[i], w = R[0].length;
+    const R = ROOMS[i].g, w = R[0].length;
     if (R.some(r => r.length !== w)) ragged.push(i);
     for (const row of R) for (const ch of row) if ('#.='.indexOf(ch) < 0) ragged.push(i + ':' + ch);
     if (w >= CHUNK - 1 || R.length >= CHUNK - 1) ragged.push(i + ':too big for a chunk');
+    if (ROOMS[i].b && !BIOMES.some(B => B[1] === ROOMS[i].b)) ragged.push(i + ':band');
   }
   A(ragged.length === 0, 'every template is rectangular, legal and fits in a chunk' +
     (ragged.length ? ': ' + ragged.join(',') : ''));
@@ -100,6 +101,16 @@ console.log('\n-- rooms --');
   console.log('   ruins: ' + stamped + '/' + checked + ' chunks carry a room');
   A(stamped > checked * 0.25, 'rooms are common in the ruins, not a rarity');
   A(BSHAPE.caves.rooms === undefined, 'and the caves are still caves');
+  // every rooms-band has a non-empty pool, and its gate actually stamps somewhere
+  for (const b of ['fungal', 'forge', 'abyss']) {
+    A(ROOMS.some(R => !R.b || R.b === b), b + ' has templates in its pool');
+    const [by0] = bandRange(b);
+    const bcy = Math.floor(by0 / CHUNK) + 1;
+    let st = 0;
+    for (let cx = 6; cx < 30; cx++) for (let cy = bcy; cy < bcy + 6; cy++)
+      if (hashS('terrain', cx * 29 + 3, cy * 29 + 11) < BSHAPE[b].rooms) st++;
+    A(st > 0, b + ' stamps rooms at its own rate (' + st + ')');
+  }
   // a stamped room must leave a floor you can stand on and air you can stand in
   CHUNKS.clear();
   let foundFloorAndAir = false;
@@ -116,8 +127,36 @@ console.log('\n-- rooms --');
 // ---------- 4. VENTS: THE BAND ITSELF IS DOING SOMETHING ----------
 console.log('\n-- vents --');
 {
-  A(BSHAPE.fungal.vent === 'spore' && BSHAPE.forge.vent === 'flame', 'two bands declare a vent');
-  A(!BSHAPE.caves.vent && !BSHAPE.ruins.vent, 'and the others do not');
+  A(BSHAPE.fungal.vent === 'spore' && BSHAPE.forge.vent === 'flame'
+    && BSHAPE.caves.vent === 'grit' && BSHAPE.ruins.vent === 'volt', 'four bands declare a vent');
+  A(!BSHAPE.surface.vent && !BSHAPE.abyss.vent, 'and the others do not — the abyss is empty on purpose');
+  // density is a band knob: sparse where it teaches (caves), dense where it prices (forge)
+  A((BSHAPE.caves.ventP || 0.42) < 0.42 && (BSHAPE.forge.ventP || 0.42) > 0.42,
+    'vent density is a band knob, sparse where it teaches');
+  {
+    let cv = 0, fv = 0;
+    for (let cx = 6; cx < 56; cx++) for (let cy = 2; cy < 4; cy++) {
+      if (hashS('terrain', cx * 37 + 13, cy * 37 + 29) < BSHAPE.caves.ventP) cv++;
+      if (hashS('terrain', cx * 37 + 13, cy * 37 + 29) < BSHAPE.forge.ventP) fv++;
+    }
+    A(cv < fv, 'the caves gate passes fewer chunks than the forge gate (' + cv + ' vs ' + fv + ')');
+  }
+  // grit is honest (damage, no status); volt's shock is a FLAT multiplier at every depth
+  {
+    VENTS.length = 0; HAZ.length = 0;
+    VENTS.push({ x: P.x + 40, y: P.y, kind: 'grit', t: 0 });
+    upVents(DT);
+    A(HAZ.length === 1 && HAZ[0].dmg > 0 && HAZ[0].st === null, 'grit hits plainly — the teaching vent carries no status');
+    for (const d of [600, 2600]) {
+      VENTS.length = 0; HAZ.length = 0;
+      VENTS.push({ x: P.x + 40, y: (SURFACE + d) * TILE, kind: 'volt', t: 0 });
+      P.y = (SURFACE + d) * TILE;
+      upVents(DT);
+      A(HAZ.length === 1 && HAZ[0].st && HAZ[0].st.shock === 1.3,
+        'volt shock is 1.3 FLAT at ' + d + 'm (multiplier statuses never depth-scale)');
+    }
+    P.y = (SURFACE + 600) * TILE;
+  }
   CHUNKS.clear();
   let vents = 0;
   const [y0] = bandRange('fungal');
@@ -179,6 +218,18 @@ console.log('\n-- band identity --');
   A(BSHAPE.forge.heat > 0 && !BSHAPE.ruins.heat, 'and that comes from the band table, not a branch');
   A(BSHAPE.abyss.dark > 1, 'the abyss is darker by declaration');
   A(!BSHAPE.caves.dark, 'the caves are not');
+  A(BSHAPE.fungal.dark < 1 && BSHAPE.abyss.dark > 1, 'the Bloom glows; the abyss does not');
+  // the abyss taxes flight too — at less than half the forge's rate, priced not punished
+  A(BSHAPE.abyss.heat > 0 && BSHAPE.abyss.heat < BSHAPE.forge.heat, 'the dark drinks charge, gentler than the forge');
+  META.moves = { draught: 1 }; MOVE_CK = 1e9;   // pin the deed watermark — a live GLIDE grant mid-hover cuts drain 0.68x and erases the heat delta
+  const abyssFuel = hover(2700);
+  console.log('   abyss hover fuel: ' + abyssFuel.toFixed(0));
+  A(abyssFuel < ruinsFuel - 3, 'hovering in the abyss costs more than the ruins');
+  A(abyssFuel > forgeFuel, 'and less than the forge');
+  META.moves = {};
+  standIn(2700); P.fuel = 0; P.onG = true;
+  for (let i = 0; i < 120; i++) { P.onG = true; upPlayer(DT) }
+  A(P.fuel > 0, 'the abyss ground still refills');
   // every band must claim at least one mechanical identity beyond a palette
   for (const b of BIOMES) {
     const name = b[1], S = BSHAPE[name]; if (!S || !S.air) continue;
@@ -255,6 +306,60 @@ console.log('\n-- traversability --');
     if (air === 0) sealed++;
   }
   A(sealed === 0, 'no fully sealed chunk anywhere in the descent');
+}
+
+// ---------- POCKETS: soft-gated treasure, terrain-strand shape ----------
+console.log('\n-- pockets --');
+{
+  A(BSHAPE.caves.under === 1 && BSHAPE.fungal.flue === 1 && BSHAPE.abyss.flue === 1 && BSHAPE.forge.trav === 1,
+    'the four hosting bands declare their pockets');
+  A(!BSHAPE.surface.under && !BSHAPE.ruins.flue && !BSHAPE.ruins.under && !BSHAPE.ruins.trav,
+    'and nobody else does');
+  // a sweep of each hosting band finds at least one pocket, and it carries treasure
+  function sweep(band, flagGate) {
+    const [y0] = bandRange(band); const cy0 = Math.floor(y0 / CHUNK) + 1;
+    CHUNKS.clear();
+    for (let cx = 4; cx < 30; cx++) for (let cy = cy0; cy < cy0 + 6; cy++) {
+      if (!flagGate(cx, cy)) continue;
+      const c = genChunk(cx, cy);
+      let t10 = 0; for (let i = 0; i < c.tiles.length; i++) if (c.tiles[i] === 10) t10++;
+      // pocket rims are 2 tile-10 tiles in a chunk that FAILED the cache gate
+      if (t10 >= 2 && hashS('terrain', cx * 19 + 3, cy * 19 + 8) >= 0.14) {
+        return { c, cx, cy };
+      }
+    }
+    return null;
+  }
+  const uc = sweep('caves', (cx, cy) => hashS('terrain', cx * 41 + 11, cy * 41 + 7) < 0.055);
+  A(!!uc, 'the caves grow an undercut somewhere');
+  if (uc) A(uc.c.spawns.some(s => s.type === 'chest'), 'and it holds a chest');
+  const fl = sweep('fungal', (cx, cy) => hashS('terrain', cx * 23 + 9, cy * 23 + 5) < 0.05);
+  A(!!fl, 'the Bloom grows a flue somewhere');
+  if (fl) A(fl.c.spawns.some(s => s.type === 'chest'), 'with a chest at the top');
+  const tv = sweep('forge', (cx, cy) => hashS('terrain', cx * 43 + 7, cy * 43 + 19) < 0.05);
+  A(!!tv, 'the forge works a traverse somewhere');
+  if (tv) {
+    A(tv.c.spawns.some(s => s.type === 'chest'), 'with a chest past the fire');
+    A(tv.c.spawns.filter(s => s.type === 'vent').length >= 1, 'and the pit holds a live vent');
+  }
+  // pocket walls are never bedrock — a pocket is soft-gated by geometry, not sealed by law
+  if (uc) {
+    let bed = 0; for (let i = 0; i < uc.c.tiles.length; i++) if (uc.c.tiles[i] === 3) bed++;
+    // bedrock only exists at the world floor; a caves chunk should carry none at all
+    A(bed === 0, 'no pocket wall is bedrock');
+  }
+  // pocket solidity is TERRAIN property: identical under poi/ore/spawn rerolls
+  if (uc) {
+    const solidOf = c => { let sig = ''; for (let i = 0; i < c.tiles.length; i += 7) sig += (c.tiles[i] === 0 ? 0 : 1); return sig };
+    const base = solidOf(uc.c);
+    const savedW = {};
+    for (const k of ['poi', 'ore', 'spawn']) { savedW[k] = WEAVE[k]; WEAVE[k] = (WEAVE[k] ^ 0x5a5a5a5) >>> 0; }
+    CHUNKS.clear();
+    const re = genChunk(uc.cx, uc.cy);
+    A(solidOf(re) === base, 'pocket rock ignores poi/ore/spawn rerolls (the strand charter holds)');
+    for (const k of ['poi', 'ore', 'spawn']) WEAVE[k] = savedW[k];
+    CHUNKS.clear();
+  }
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
