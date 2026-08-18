@@ -5,6 +5,9 @@
 // failure mode that matters here (it is the entire game). Navigations go network-first with a
 // cache fallback; everything else is cache-first because icons never change.
 const CACHE = 'shardfall-v12';
+/* Only ever delete caches that belong to THIS app. `caches` is shared by the
+   whole origin, so an unfiltered sweep deletes every sibling app's cache too. */
+const OWNED = /^shardfall\-/;
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'];
 
 self.addEventListener('install', e => {
@@ -19,7 +22,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && OWNED.test(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

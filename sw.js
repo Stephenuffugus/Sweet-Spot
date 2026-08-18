@@ -1,6 +1,9 @@
 // Sweet Spot service worker — cache-first app shell for offline play.
 // Bump CACHE whenever any cached asset changes, to force clients to re-fetch.
 const CACHE = 'sweet-spot-v1';
+/* Only ever delete caches that belong to THIS app. `caches` is shared by the
+   whole origin, so an unfiltered sweep deletes every sibling app's cache too. */
+const OWNED = /^sweet\-spot\-/;
 
 const ASSETS = [
   './',
@@ -27,7 +30,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && OWNED.test(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
